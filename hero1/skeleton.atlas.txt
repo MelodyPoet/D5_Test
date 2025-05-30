@@ -1,0 +1,142 @@
+
+skeleton.png
+size: 672,1014
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+AncientBattlegroundCells
+  rotate: false
+  xy: 2, 30
+  size: 128, 39
+  orig: 128, 48
+  offset: 0, 9
+  index: -1
+AncientBattlegroundCombatEnv_Front_Layer_1_7
+  rotate: true
+  xy: 248, 372
+  size: 640, 148
+  orig: 640, 148
+  offset: 0, 0
+  index: -1
+AncientBattlegroundRewardEnv_BackClose_Layer_1
+  rotate: true
+  xy: 548, 426
+  size: 586, 122
+  orig: 640, 148
+  offset: 0, 12
+  index: -1
+ShogunCastlePhase3Env_Sky_Layer_1
+  rotate: true
+  xy: 398, 372
+  size: 640, 148
+  orig: 640, 148
+  offset: 0, 0
+  index: -1
+attackbutton
+  rotate: true
+  xy: 2, 323
+  size: 689, 244
+  orig: 689, 244
+  offset: 0, 0
+  index: -1
+hero
+  rotate: false
+  xy: 382, 2
+  size: 235, 368
+  orig: 235, 368
+  offset: 0, 0
+  index: -1
+僵尸
+  rotate: true
+  xy: 2, 71
+  size: 250, 378
+  orig: 250, 378
+  offset: 0, 0
+  index: -1
+
+skeleton2.png
+size: 132,772
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+res/Cubemap/Cubemap
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+res/Cubemap/Cubemap_0
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+res/Cubemap/Cubemap_1
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+res/Cubemap/Cubemap_2
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+res/Cubemap/Cubemap_3
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+res/Cubemap/Cubemap_4
+  rotate: false
+  xy: 2, 2
+  size: 128, 768
+  orig: 128, 768
+  offset: 0, 0
+  index: -1
+
+skeleton3.png
+size: 1026,1026
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+res/Resources/fonts & materials/LiberationSans SDF Atlas
+  rotate: false
+  xy: 2, 2
+  size: 1022, 1022
+  orig: 1024, 1024
+  offset: 1, 1
+  index: -1
+
+skeleton4.png
+size: 53,16
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+res/Resources/graphics/fonts/Numbers_4x5px
+  rotate: false
+  xy: 2, 2
+  size: 49, 5
+  orig: 50, 5
+  offset: 0, 0
+  index: -1
+
+skeleton5.png
+size: 1191,598
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+res/Resources/graphics/tiles/Tiles
+  rotate: false
+  xy: 2, 2
+  size: 1187, 594
+  orig: 1200, 600
+  offset: 1, 3
+  index: -1

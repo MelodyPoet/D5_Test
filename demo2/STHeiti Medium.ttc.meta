@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: 69b0d19c168224d8da6224421ffd057e
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: 3
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Heiti TC
+  fallbackFontReferences: []
+  customCharacters: "\u62DB\u5F0F\u8BF4\u660E\u91CD\u65B0\u6311\u6218\u5173\u95ED\u51FB\u653B\u6740\u5251\u672F\u56DE\u9A6C\u67AA\u72C2\u66B4\u5C04\u65CB
+    \u98CE\u65A9\u7A81\u523A\u65E0\u6548\u4E0B\u4E00\u6CE20123456789%\u4F24\u5BB3\u6267\u884C\u8FDC\u7A0B\u6B66\u5668\u957F\u77ED\u8F6C\u8EAB\u524D\u8FDB\u540E\u9000\u52A8\u5F00\u59CB\u5E2E\u52A9\u7BAD\u51B2\u950B\u64A4\u79BB\u5931\u8D25\u80DC\u5229+X"
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
