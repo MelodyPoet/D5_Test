@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 6946099325076628137}
   - component: {fileID: 4175035825324337969}
   - component: {fileID: 938172523630810073}
+  - component: {fileID: 2748956949446477776}
   m_Layer: 7
   m_Name: EnemyTemplate
   m_TagString: Enemy
@@ -283,6 +284,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   idleAnimation: idle
   walkAnimation: walk
+  moveToIdleAnimation: m_to_i
   attackMeleeAnimation: attack_melee
   attackRangedAnimation: attack_ranged
   castSpellAnimation: cast_spell
@@ -306,10 +308,25 @@ MonoBehaviour:
   animationMapping:
     idleAnimation: idle_3
     walkAnimation: walk_shield
+    moveToIdleAnimation: m_to_i
     attackAnimation: sword_attack
     hitAnimation: hit
     deathAnimation: dead
     castAnimation: cast
+--- !u!114 &2748956949446477776
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1110104639557568765}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d749e201cb2a4554a8255d7ab1aa867b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  decisionDelay: 1
+  actionDelay: 0.5
 --- !u!1 &1302596216031906752
 GameObject:
   m_ObjectHideFlags: 0

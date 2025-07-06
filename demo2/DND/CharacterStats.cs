@@ -2,11 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace DND5E
-{
+namespace DND5E {
     [System.Serializable]
-    public class CharacterStats
-    {
+    public class CharacterStats {
         // 六大属性
         public int Strength = 10;
         public int Dexterity = 10;
@@ -32,8 +30,7 @@ namespace DND5E
         public bool ChaSaveProficient = false;
 
         // 技能列表
-        public enum Skill
-        {
+        public enum Skill {
             Athletics,      // 运动 (力量)
             Acrobatics,     // 杂技 (敏捷)
             SleightOfHand,  // 手上功夫 (敏捷)
@@ -58,13 +55,11 @@ namespace DND5E
         public List<Skill> ProficientSkills = new List<Skill>();
 
         // 获取豁免加值
-        public int GetSavingThrowBonus(string ability, int proficiencyBonus)
-        {
+        public int GetSavingThrowBonus(string ability, int proficiencyBonus) {
             int abilityMod = 0;
             bool isProficient = false;
 
-            switch(ability.ToLower())
-            {
+            switch (ability.ToLower()) {
                 case "str":
                 case "strength":
                     abilityMod = StrMod;
@@ -106,13 +101,11 @@ namespace DND5E
         }
 
         // 获取技能加值
-        public int GetSkillBonus(Skill skill, int proficiencyBonus)
-        {
+        public int GetSkillBonus(Skill skill, int proficiencyBonus) {
             int abilityMod = 0;
 
             // 确定技能对应的属性调整值
-            switch(skill)
-            {
+            switch (skill) {
                 case Skill.Athletics:
                     abilityMod = StrMod;
                     break;
@@ -153,8 +146,7 @@ namespace DND5E
         }
 
         // 随机生成属性（4d6取3）
-        public void RollStats()
-        {
+        public void RollStats() {
             Strength = RollAbilityScore();
             Dexterity = RollAbilityScore();
             Constitution = RollAbilityScore();
@@ -163,11 +155,9 @@ namespace DND5E
             Charisma = RollAbilityScore();
         }
 
-        private int RollAbilityScore()
-        {
+        private int RollAbilityScore() {
             int[] rolls = new int[4];
-            for(int i = 0; i < 4; i++)
-            {
+            for (int i = 0; i < 4; i++) {
                 rolls[i] = Random.Range(1, 7);
             }
 
@@ -176,8 +166,7 @@ namespace DND5E
         }
 
         // 标准数组分配
-        public void UseStandardArray()
-        {
+        public void UseStandardArray() {
             // DND5e标准数组: 15, 14, 13, 12, 10, 8
             Strength = 15;
             Dexterity = 14;
@@ -188,15 +177,13 @@ namespace DND5E
         }
 
         // 计算生命值
-        public int CalculateHitPoints(int level, int hitDie, bool isFirstLevel = false)
-        {
+        public int CalculateHitPoints(int level, int hitDie, bool isFirstLevel = false) {
             if (level <= 0) return 0;
 
             int hp = 0;
 
             // 1级时生命值为生命骰最大值+体质调整值
-            if (isFirstLevel)
-            {
+            if (isFirstLevel) {
                 hp = hitDie + ConMod;
                 level--;
             }
@@ -209,21 +196,18 @@ namespace DND5E
         }
 
         // 计算被动察觉
-        public int PassivePerception(int proficiencyBonus)
-        {
+        public int PassivePerception(int proficiencyBonus) {
             return 10 + GetSkillBonus(Skill.Perception, proficiencyBonus);
         }
 
         // 计算先攻加值
-        public int InitiativeBonus()
-        {
+        public int InitiativeBonus() {
             return DexMod;
         }
     }
 
     // 角色职业枚举
-    public enum CharacterClass
-    {
+    public enum CharacterClass {
         Fighter,    // 战士
         Rogue,      // 盗贼
         Wizard,     // 法师
@@ -239,8 +223,7 @@ namespace DND5E
     }
 
     // 伤害类型枚举
-    public enum DamageType
-    {
+    public enum DamageType {
         Slashing,   // 挥砍
         Piercing,   // 穿刺
         Bludgeoning,// 钝击
@@ -257,8 +240,7 @@ namespace DND5E
     }
 
     // 状态效果类型枚举
-    public enum StatusEffectType
-    {
+    public enum StatusEffectType {
         Blinded,        // 目盲
         Charmed,        // 魅惑
         Deafened,       // 耳聋
@@ -278,8 +260,7 @@ namespace DND5E
 }
 
 // 角色属性组件
-public class CharacterStats : MonoBehaviour
-{
+public class CharacterStats : MonoBehaviour {
     // DND5e角色属性
     public DND5E.CharacterStats stats = new DND5E.CharacterStats();
 
@@ -310,138 +291,26 @@ public class CharacterStats : MonoBehaviour
     public List<DND5E.DamageType> immunities = new List<DND5E.DamageType>();
 
     // 状态效果
-    public List<DND5E.StatusEffectType> statusEffects = new List<DND5E.StatusEffectType>();
-
-    // 获取角色在UI中显示的实际名称
-    public string GetDisplayName()
-    {
+    public List<DND5E.StatusEffectType> statusEffects = new List<DND5E.StatusEffectType>();    // 获取角色在UI中显示的实际名称
+    public string GetDisplayName() {
         // 如果已经设置了displayName，直接返回
-        if (!string.IsNullOrEmpty(displayName))
-        {
+        if (!string.IsNullOrEmpty(displayName)) {
             return displayName;
         }
 
-        // 根据角色类型查找对应的UI组件
-        bool isEnemy = gameObject.CompareTag("Enemy");
-        bool isAlly = characterName.Contains("队友") || characterName.Contains("NPC");
-        GameObject statusCanvasObj = GameObject.Find("Status");
-
-        if (statusCanvasObj != null)
-        {
-            Transform statusTemplate = null;
-
-            if (isEnemy)
-            {
-                // 查找敌人状态UI
-                statusTemplate = statusCanvasObj.transform.Find("EnemyStatusTemplate");
-            }
-            else if (isAlly)
-            {
-                // 查找队友状态UI
-                statusTemplate = statusCanvasObj.transform.Find("AllyStatusTemplate01");
-            }
-            else
-            {
-                // 查找主角状态UI
-                statusTemplate = statusCanvasObj.transform.Find("CharacterStatusTemplate");
-            }
-
-            if (statusTemplate != null)
-            {
-                string targetComponentName = "";
-
-                // 根据角色类型确定要查找的组件名称
-                if (isEnemy)
-                {
-                    targetComponentName = "Text Ene1RealName"; // 敌人
-                }
-                else if (isAlly)
-                {
-                    targetComponentName = "TextAll1RealName"; // 队友
-                }
-                else
-                {
-                    targetComponentName = "Text Cha1RealName"; // 主角
-                }
-
-                // 查找特定的名称组件
-                Transform nameTextTrans = statusTemplate.Find(targetComponentName);
-                if (nameTextTrans != null)
-                {
-                    UnityEngine.UI.Text textComponent = nameTextTrans.GetComponent<UnityEngine.UI.Text>();
-                    if (textComponent != null && !string.IsNullOrEmpty(textComponent.text))
-                    {
-                        // 保存UI中的名称
-                        displayName = textComponent.text;
-                        Debug.Log($"【重要】从UI组件 {targetComponentName} 中获取到角色名称: {displayName} (模板: {statusTemplate.name})");
-                        return displayName;
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"找到 {targetComponentName} 组件，但无法获取文本或文本为空");
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning($"在 {statusTemplate.name} 下未找到 {targetComponentName} 组件");
-                }
-
-                // 如果没找到特定组件，尝试查找通用的名称组件（兼容性）
-                string[] fallbackNames = { "NameText", "RealName", "Name" };
-                foreach (string fallbackName in fallbackNames)
-                {
-                    Transform fallbackTrans = statusTemplate.Find(fallbackName);
-                    if (fallbackTrans != null)
-                    {
-                        UnityEngine.UI.Text textComponent = fallbackTrans.GetComponent<UnityEngine.UI.Text>();
-                        if (textComponent != null && !string.IsNullOrEmpty(textComponent.text))
-                        {
-                            displayName = textComponent.text;
-                            Debug.Log($"从备用UI组件 {fallbackName} 中获取到角色名称: {displayName}");
-                            return displayName;
-                        }
-                    }
-                }
-
-                // 最后尝试查找包含关键词的组件
-                foreach (Transform child in statusTemplate)
-                {
-                    if (child.name.Contains("RealName") || child.name.Contains("NameText") || child.name.Contains("Name"))
-                    {
-                        UnityEngine.UI.Text textComponent = child.GetComponent<UnityEngine.UI.Text>();
-                        if (textComponent != null && !string.IsNullOrEmpty(textComponent.text))
-                        {
-                            displayName = textComponent.text;
-                            Debug.Log($"从匹配UI组件 {child.name} 中获取到角色名称: {displayName}");
-                            return displayName;
-                        }
-                    }
-                }
-
-                Debug.LogWarning($"在 {statusTemplate.name} 下未找到任何有效的名称文本组件");
-            }
-            else
-            {
-                string templateName = isEnemy ? "EnemyStatusTemplate" : (isAlly ? "AllyStatusTemplate01" : "CharacterStatusTemplate");
-                Debug.LogWarning($"未找到状态UI模板: {templateName}");
-            }
-        }
-
-        // 如果无法从UI获取，返回默认名称
-        string characterType = isEnemy ? "敌人" : (isAlly ? "队友" : "主角");
-        Debug.LogWarning($"无法从UI获取 {characterType} 的真实名称，使用默认名称: {characterName}");
+        // 不再查找Status Canvas，直接使用角色名称
+        // 这避免了因为UI组件缺失导致的查找卡死问题
+        Debug.Log($"GetDisplayName: 使用角色名称 {characterName} 作为显示名称");
         return characterName;
     }
 
     // 初始化角色属性
-    public void InitializeByClass()
-    {
+    public void InitializeByClass() {
         // 设置熟练加值
         proficiencyBonus = 2; // 1-4级为+2
 
         // 根据职业设置属性
-        switch(characterClass)
-        {
+        switch (characterClass) {
             case DND5E.CharacterClass.Fighter:
                 stats.UseStandardArray();
                 stats.StrSaveProficient = true;
@@ -498,7 +367,7 @@ public class CharacterStats : MonoBehaviour
                 stats.ProficientSkills.Add(DND5E.CharacterStats.Skill.History);
                 break;
 
-            // 其他职业...
+                // 其他职业...
         }
 
         // 初始化生命值
@@ -506,27 +375,22 @@ public class CharacterStats : MonoBehaviour
     }
 
     // 检查是否有特定状态效果
-    public bool HasStatusEffect(DND5E.StatusEffectType type)
-    {
+    public bool HasStatusEffect(DND5E.StatusEffectType type) {
         return statusEffects.Contains(type);
     }
 
     // 添加状态效果
-    public void AddStatusEffect(DND5E.StatusEffectType type)
-    {
-        if (!statusEffects.Contains(type))
-        {
+    public void AddStatusEffect(DND5E.StatusEffectType type) {
+        if (!statusEffects.Contains(type)) {
             statusEffects.Add(type);
 
             // 如果是闪避状态，更新AC
-            if (type == DND5E.StatusEffectType.Dodging)
-            {
+            if (type == DND5E.StatusEffectType.Dodging) {
                 UpdateArmorClass();
             }
 
             // 添加战斗日志
-            if (DND_BattleUI.Instance != null)
-            {
+            if (DND_BattleUI.Instance != null) {
                 string effectName = GetStatusEffectName(type);
                 DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 获得了 {effectName} 状态");
             }
@@ -534,10 +398,8 @@ public class CharacterStats : MonoBehaviour
     }
 
     // 获取状态效果的中文名称
-    private string GetStatusEffectName(DND5E.StatusEffectType type)
-    {
-        switch (type)
-        {
+    private string GetStatusEffectName(DND5E.StatusEffectType type) {
+        switch (type) {
             case DND5E.StatusEffectType.Blinded: return "目盲";
             case DND5E.StatusEffectType.Charmed: return "魅惑";
             case DND5E.StatusEffectType.Deafened: return "耳聋";
@@ -558,40 +420,33 @@ public class CharacterStats : MonoBehaviour
     }
 
     // 移除状态效果
-    public void RemoveStatusEffect(DND5E.StatusEffectType type)
-    {
+    public void RemoveStatusEffect(DND5E.StatusEffectType type) {
         bool removed = statusEffects.Remove(type);
 
         // 如果移除了闪避状态，更新AC
-        if (removed && type == DND5E.StatusEffectType.Dodging)
-        {
+        if (removed && type == DND5E.StatusEffectType.Dodging) {
             UpdateArmorClass();
         }
 
         // 添加战斗日志
-        if (removed && DND_BattleUI.Instance != null)
-        {
+        if (removed && DND_BattleUI.Instance != null) {
             string effectName = GetStatusEffectName(type);
-            if (type == DND5E.StatusEffectType.Dodging)
-            {
+            if (type == DND5E.StatusEffectType.Dodging) {
                 DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 退出防御姿态，AC恢复正常");
             }
-            else
-            {
+            else {
                 DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 的 {effectName} 状态已结束");
             }
         }
     }
 
     // 更新护甲等级，考虑状态效果
-    public void UpdateArmorClass()
-    {
+    public void UpdateArmorClass() {
         // 从基础AC开始
         armorClass = baseArmorClass;
 
         // 应用状态效果的修正
-        if (HasStatusEffect(DND5E.StatusEffectType.Dodging))
-        {
+        if (HasStatusEffect(DND5E.StatusEffectType.Dodging)) {
             // 防御姿态提供+2 AC
             armorClass += 2;
             Debug.Log($"{GetDisplayName()} 处于防御姿态，AC+2，当前AC: {armorClass}");
@@ -600,44 +455,36 @@ public class CharacterStats : MonoBehaviour
         // 可以在这里添加其他影响AC的状态效果
 
         // 更新UI
-        if (DND_BattleUI.Instance != null)
-        {
+        if (DND_BattleUI.Instance != null) {
             DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
         }
     }
 
     // 受到伤害
-    public void TakeDamage(int damage, DND5E.DamageType damageType)
-    {
+    public void TakeDamage(int damage, DND5E.DamageType damageType) {
         // 检查免疫
-        if (immunities.Contains(damageType))
-        {
+        if (immunities.Contains(damageType)) {
             Debug.Log($"{GetDisplayName()} 免疫 {damageType} 伤害!");
             return;
         }
 
         // 检查抗性和弱点
-        if (resistances.Contains(damageType))
-        {
+        if (resistances.Contains(damageType)) {
             damage = Mathf.Max(1, damage / 2);
             Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性!");
         }
-        else if (vulnerabilities.Contains(damageType))
-        {
+        else if (vulnerabilities.Contains(damageType)) {
             damage *= 2;
             Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有弱点!");
         }
 
         // 先扣除临时生命值
-        if (temporaryHitPoints > 0)
-        {
-            if (temporaryHitPoints >= damage)
-            {
+        if (temporaryHitPoints > 0) {
+            if (temporaryHitPoints >= damage) {
                 temporaryHitPoints -= damage;
                 damage = 0;
             }
-            else
-            {
+            else {
                 damage -= temporaryHitPoints;
                 temporaryHitPoints = 0;
             }
@@ -650,111 +497,93 @@ public class CharacterStats : MonoBehaviour
         Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
         // 显示伤害数字
-        if (DamageNumberManager.Instance != null && damage > 0)
-        {
+        if (DamageNumberManager.Instance != null && damage > 0) {
             DamageNumberManager.Instance.ShowDamageNumber(transform, damage, false);
         }
 
         // 添加战斗日志
-        if (DND_BattleUI.Instance != null)
-        {
+        if (DND_BattleUI.Instance != null) {
             // 构建伤害描述
             string damageDescription = $"{damage} 点{damageType}伤害";
 
             // 如果有抗性或弱点，添加说明
-            if (resistances.Contains(damageType))
-            {
+            if (resistances.Contains(damageType)) {
                 damageDescription += "（抗性减半）";
             }
-            else if (vulnerabilities.Contains(damageType))
-            {
+            else if (vulnerabilities.Contains(damageType)) {
                 damageDescription += "（弱点加倍）";
             }
 
             // 如果有临时生命值抵消了部分伤害，添加说明
-            if (temporaryHitPoints > 0)
-            {
+            if (temporaryHitPoints > 0) {
                 damageDescription += "（部分被临时生命值抵消）";
             }
 
             // 添加战斗日志
             int currentRound = 0;
-            if (CombatManager.Instance != null)
-            {
+            if (CombatManager.Instance != null) {
                 currentRound = CombatManager.Instance.currentRound;
             }
             DND_BattleUI.Instance.AddCombatLog($"[回合 {currentRound}] {GetDisplayName()} 受到 {damageDescription}，剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
             // 如果生命值降为0，添加倒地日志
-            if (currentHitPoints <= 0)
-            {
+            if (currentHitPoints <= 0) {
                 DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 已倒地！");
             }
         }
 
         // 确保UI更新
-        try
-        {
-            if (DND_BattleUI.Instance != null)
-            {
+        try {
+            if (DND_BattleUI.Instance != null) {
                 Debug.Log($"在CharacterStats.TakeDamage中更新UI: {GetDisplayName()} 血量从 {oldHitPoints} 减少到 {currentHitPoints}");
                 DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
             }
-            else
-            {
+            else {
                 Debug.LogWarning("DND_BattleUI.Instance为null，无法更新UI");
             }
         }
-        catch (System.Exception e)
-        {
+        catch (System.Exception e) {
             Debug.LogError($"更新UI时出错: {e.Message}\n{e.StackTrace}");
         }
 
         // 检查是否失去意识
-        if (currentHitPoints <= 0)
-        {
+        if (currentHitPoints <= 0) {
             AddStatusEffect(DND5E.StatusEffectType.Unconscious);
             Debug.Log($"{GetDisplayName()} 失去意识!");
 
             // 再次确保UI更新
-            if (DND_BattleUI.Instance != null)
-            {
+            if (DND_BattleUI.Instance != null) {
                 DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
             }
         }
     }
 
     // 恢复生命值
-    public void HealDamage(int amount)
-    {
+    public void HealDamage(int amount) {
         currentHitPoints = Mathf.Min(maxHitPoints, currentHitPoints + amount);
         Debug.Log($"{GetDisplayName()} 恢复 {amount} 点生命值! 当前生命值: {currentHitPoints}/{maxHitPoints}");
 
         // 更新UI中的血量显示
-        if (DND_BattleUI.Instance != null)
-        {
+        if (DND_BattleUI.Instance != null) {
             DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
         }
 
         // 如果恢复意识
-        if (currentHitPoints > 0 && HasStatusEffect(DND5E.StatusEffectType.Unconscious))
-        {
+        if (currentHitPoints > 0 && HasStatusEffect(DND5E.StatusEffectType.Unconscious)) {
             RemoveStatusEffect(DND5E.StatusEffectType.Unconscious);
             Debug.Log($"{GetDisplayName()} 恢复意识!");
         }
     }
 
     // 添加临时生命值
-    public void AddTemporaryHitPoints(int amount)
-    {
+    public void AddTemporaryHitPoints(int amount) {
         // 临时生命值不叠加，取较高值
         temporaryHitPoints = Mathf.Max(temporaryHitPoints, amount);
         Debug.Log($"{GetDisplayName()} 获得 {amount} 点临时生命值! 当前临时生命值: {temporaryHitPoints}");
     }
 
     // 进行技能检定
-    public int SkillCheck(DND5E.CharacterStats.Skill skill)
-    {
+    public int SkillCheck(DND5E.CharacterStats.Skill skill) {
         int bonus = stats.GetSkillBonus(skill, proficiencyBonus);
         int roll = Random.Range(1, 21);
         int total = roll + bonus;
@@ -764,8 +593,7 @@ public class CharacterStats : MonoBehaviour
     }
 
     // 进行豁免检定
-    public int SavingThrow(string ability)
-    {
+    public int SavingThrow(string ability) {
         int bonus = stats.GetSavingThrowBonus(ability, proficiencyBonus);
         int roll = Random.Range(1, 21);
         int total = roll + bonus;
@@ -775,12 +603,10 @@ public class CharacterStats : MonoBehaviour
     }
 
     // 进行攻击掷骰
-    public int AttackRoll(string ability, bool hasAdvantage = false, bool hasDisadvantage = false)
-    {
+    public int AttackRoll(string ability, bool hasAdvantage = false, bool hasDisadvantage = false) {
         int abilityMod = 0;
 
-        switch(ability.ToLower())
-        {
+        switch (ability.ToLower()) {
             case "str":
             case "strength":
                 abilityMod = stats.StrMod;
@@ -802,24 +628,21 @@ public class CharacterStats : MonoBehaviour
         // 掷骰
         int roll = 0;
 
-        if(hasAdvantage && !hasDisadvantage)
-        {
+        if (hasAdvantage && !hasDisadvantage) {
             // 优势：掷两次取高
             int roll1 = Random.Range(1, 21);
             int roll2 = Random.Range(1, 21);
             roll = Mathf.Max(roll1, roll2);
             Debug.Log($"{GetDisplayName()} 以优势进行攻击掷骰: {roll1} 和 {roll2}, 取 {roll}");
         }
-        else if(!hasAdvantage && hasDisadvantage)
-        {
+        else if (!hasAdvantage && hasDisadvantage) {
             // 劣势：掷两次取低
             int roll1 = Random.Range(1, 21);
             int roll2 = Random.Range(1, 21);
             roll = Mathf.Min(roll1, roll2);
             Debug.Log($"{GetDisplayName()} 以劣势进行攻击掷骰: {roll1} 和 {roll2}, 取 {roll}");
         }
-        else
-        {
+        else {
             // 正常：掷一次
             roll = Random.Range(1, 21);
             Debug.Log($"{GetDisplayName()} 进行攻击掷骰: {roll}");
@@ -829,19 +652,17 @@ public class CharacterStats : MonoBehaviour
         Debug.Log($"攻击掷骰结果: {roll} + {attackBonus} = {total}");
 
         // 自然20重击，自然1失误
-        if(roll == 20) Debug.Log("重击!");
-        if(roll == 1) Debug.Log("失误!");
+        if (roll == 20) Debug.Log("重击!");
+        if (roll == 1) Debug.Log("失误!");
 
         return total;
     }
 
     // 计算伤害
-    public int CalculateDamage(string ability, string damageFormula)
-    {
+    public int CalculateDamage(string ability, string damageFormula) {
         int abilityMod = 0;
 
-        switch(ability.ToLower())
-        {
+        switch (ability.ToLower()) {
             case "str":
             case "strength":
                 abilityMod = stats.StrMod;
@@ -860,15 +681,14 @@ public class CharacterStats : MonoBehaviour
 
         // 解析伤害公式，例如 "1d8"
         string[] parts = damageFormula.Split('d');
-        if(parts.Length != 2) return abilityMod;
+        if (parts.Length != 2) return abilityMod;
 
         int diceCount = int.Parse(parts[0]);
         int diceType = int.Parse(parts[1]);
 
         // 掷骰
         int damageRoll = 0;
-        for(int i = 0; i < diceCount; i++)
-        {
+        for (int i = 0; i < diceCount; i++) {
             damageRoll += Random.Range(1, diceType + 1);
         }
 
