@@ -1,0 +1,24 @@
+# DND5E横版战斗系统 - 禁用测试文件
+# 防止测试和演示脚本被意外恢复
+
+# 测试脚本
+**/HorizontalFormation/*Tester*.cs
+**/HorizontalFormation/*Test*.cs
+**/HorizontalFormation/*Demo*.cs
+**/HorizontalFormation/*Setup*.cs
+**/HorizontalFormation/*Integrator*.cs
+**/HorizontalFormation/*Upgrader*.cs
+
+# 具体文件名
+**/HorizontalFormation/HorizontalFormationTester.cs
+**/HorizontalFormation/LinearFormationDemo.cs
+**/HorizontalFormation/LinearFormationTestScene.cs
+**/HorizontalFormation/LinearFormationIntegrationTest.cs
+**/HorizontalFormation/QuickSetupLinearFormation.cs
+**/HorizontalFormation/LinearFormationSceneIntegrator.cs
+**/HorizontalFormation/DNDSceneUpgrader.cs
+
+# 测试相关文档
+**/HorizontalFormation/*Test*.md
+**/HorizontalFormation/*Demo*.md
+**/HorizontalFormation/Unity_Testing_Guide.md

@@ -257,6 +257,12 @@ namespace DND5E {
         Unconscious,    // 昏迷
         Dodging         // 闪避中
     }
+
+    // 战斗阵营枚举
+    public enum BattleSide {
+        Player,    // 玩家方
+        Enemy      // 敌人方
+    }
 }
 
 // 角色属性组件
@@ -281,6 +287,9 @@ public class CharacterStats : MonoBehaviour {
     public int temporaryHitPoints = 0;
     public int hitDice = 8; // 生命骰
     public int proficiencyBonus = 2; // 熟练加值
+
+    // 战斗阵营属性
+    public BattleSide battleSide = BattleSide.Player; // 默认为玩家方
 
     // 速度
     public int speed = 30; // 单位：尺
