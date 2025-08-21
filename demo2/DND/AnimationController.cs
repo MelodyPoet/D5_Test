@@ -2,8 +2,7 @@ using UnityEngine;
 using Spine.Unity; // 需要引用Spine-Unity包
 using System.Reflection; // 用于反射
 
-public class AnimationController : MonoBehaviour
-{
+public class AnimationController : MonoBehaviour {
     // Spine骨骼动画组件
     private SkeletonAnimation skeletonAnimation;
 
@@ -23,8 +22,7 @@ public class AnimationController : MonoBehaviour
     private string currentAnimation = "idle";
 
     // 动画状态枚举
-    private enum AnimationState
-    {
+    private enum AnimationState {
         Idle,
         Walking,
         TransitionToIdle,
@@ -41,13 +39,11 @@ public class AnimationController : MonoBehaviour
     public delegate void AnimationCompleteHandler(string animationName);
     public event AnimationCompleteHandler OnAnimationComplete;
 
-    private void Awake()
-    {
+    private void Awake() {
         // 获取SkeletonAnimation组件
         skeletonAnimation = GetComponent<SkeletonAnimation>();
 
-        if (skeletonAnimation == null)
-        {
+        if (skeletonAnimation == null) {
             Debug.LogError("SkeletonAnimation组件未找到! 请确保已添加Spine骨骼动画组件。", gameObject);
             return;
         }
@@ -60,14 +56,12 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放指定动画
-    public void PlayAnimation(string animationName, bool loop = false)
-    {
+    public void PlayAnimation(string animationName, bool loop = false) {
         if (skeletonAnimation == null) return;
 
         // 检查动画是否存在
-        var animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
-        if (animation == null)
-        {
+        Spine.Animation animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
+        if (animation == null) {
             Debug.LogWarning($"动画 {animationName} 不存在! 请检查Spine资产中的动画名称。", gameObject);
             return;
         }
@@ -80,14 +74,12 @@ public class AnimationController : MonoBehaviour
     }
 
     // 添加动画到队列
-    public void AddAnimation(string animationName, bool loop = false, float delay = 0)
-    {
+    public void AddAnimation(string animationName, bool loop = false, float delay = 0) {
         if (skeletonAnimation == null) return;
 
         // 检查动画是否存在
-        var animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
-        if (animation == null)
-        {
+        Spine.Animation animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
+        if (animation == null) {
             Debug.LogWarning($"动画 {animationName} 不存在! 请检查Spine资产中的动画名称。", gameObject);
             return;
         }
@@ -97,16 +89,14 @@ public class AnimationController : MonoBehaviour
     }
 
     // 动画完成事件处理
-    private void HandleAnimationComplete(Spine.TrackEntry trackEntry)
-    {
+    private void HandleAnimationComplete(Spine.TrackEntry trackEntry) {
         string animName = trackEntry.Animation.Name;
 
         // 触发完成事件
         OnAnimationComplete?.Invoke(animName);
 
         // 检查是否是死亡动画
-        if (animName == deathAnimation)
-        {
+        if (animName == deathAnimation) {
             // 如果是死亡动画，不要自动切换回待机状态
             Debug.Log($"{gameObject.name} 死亡动画播放完成，保持死亡状态");
             currentState = AnimationState.Death;
@@ -114,17 +104,14 @@ public class AnimationController : MonoBehaviour
         }
 
         // 检查是否是移动到待机的过渡动画
-        if (animName == moveToIdleAnimation)
-        {
+        if (animName == moveToIdleAnimation) {
             // 过渡动画完成，切换到待机动画
-            if (!IsCharacterDead())
-            {
+            if (!IsCharacterDead()) {
                 PlayAnimation(idleAnimation, true);
                 currentState = AnimationState.Idle;
                 Debug.Log($"{gameObject.name} 过渡动画完成，切换到待机动画");
             }
-            else
-            {
+            else {
                 PlayAnimation(deathAnimation, false);
                 currentState = AnimationState.Death;
             }
@@ -132,18 +119,15 @@ public class AnimationController : MonoBehaviour
         }
 
         // 如果是非循环动画完成且不是死亡动画，自动恢复到待机状态
-        if (animName != idleAnimation && !trackEntry.Loop)
-        {
+        if (animName != idleAnimation && !trackEntry.Loop) {
             // 检查角色是否已死亡
-            if (IsCharacterDead())
-            {
+            if (IsCharacterDead()) {
                 // 如果角色已死亡，播放死亡动画
                 Debug.Log($"{gameObject.name} 已死亡，播放死亡动画而不是待机动画");
                 PlayAnimation(deathAnimation, false);
                 currentState = AnimationState.Death;
             }
-            else
-            {
+            else {
                 // 角色未死亡，恢复待机状态
                 PlayAnimation(idleAnimation, true);
                 currentState = AnimationState.Idle;
@@ -152,25 +136,20 @@ public class AnimationController : MonoBehaviour
     }
 
     // 获取当前动画名称
-    public string GetCurrentAnimation()
-    {
+    public string GetCurrentAnimation() {
         return currentAnimation;
     }
 
     // 检查角色是否已死亡
-    private bool IsCharacterDead()
-    {
+    private bool IsCharacterDead() {
         // 尝试获取父对象上的CharacterStats组件
-        var charStats = GetComponentInParent<MonoBehaviour>();
-        if (charStats != null && charStats.GetType().Name == "CharacterStats")
-        {
+        MonoBehaviour charStats = GetComponentInParent<MonoBehaviour>();
+        if (charStats != null && charStats.GetType().Name == "CharacterStats") {
             // 使用反射获取currentHitPoints属性
-            var property = charStats.GetType().GetProperty("currentHitPoints");
-            if (property != null)
-            {
-                var hitPoints = property.GetValue(charStats);
-                if (hitPoints != null && hitPoints is int currentHP && currentHP <= 0)
-                {
+            System.Reflection.PropertyInfo property = charStats.GetType().GetProperty("currentHitPoints");
+            if (property != null) {
+                object hitPoints = property.GetValue(charStats);
+                if (hitPoints != null && hitPoints is int currentHP && currentHP <= 0) {
                     return true;
                 }
             }
@@ -179,18 +158,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放待机动画
-    public void PlayIdle()
-    {
+    public void PlayIdle() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放待机动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放待机动画
             PlayAnimation(idleAnimation, true);
             currentState = AnimationState.Idle;
@@ -198,18 +174,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放行走动画
-    public void PlayWalk()
-    {
+    public void PlayWalk() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放行走动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放行走动画
             PlayAnimation(walkAnimation, true);
             currentState = AnimationState.Walking;
@@ -217,37 +190,31 @@ public class AnimationController : MonoBehaviour
     }
 
     // 停止行走动画并播放过渡动画
-    public void StopWalkWithTransition()
-    {
+    public void StopWalkWithTransition() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放过渡动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else if (currentState == AnimationState.Walking)
-        {
+        else if (currentState == AnimationState.Walking) {
             // 检查过渡动画是否存在
-            var transitionAnim = skeletonAnimation.Skeleton.Data.FindAnimation(moveToIdleAnimation);
-            if (transitionAnim != null)
-            {
+            Spine.Animation transitionAnim = skeletonAnimation.Skeleton.Data.FindAnimation(moveToIdleAnimation);
+            if (transitionAnim != null) {
                 // 播放过渡动画
                 PlayAnimation(moveToIdleAnimation, false);
                 currentState = AnimationState.TransitionToIdle;
                 Debug.Log($"{gameObject.name} 播放移动到待机的过渡动画: {moveToIdleAnimation}");
             }
-            else
-            {
+            else {
                 // 如果过渡动画不存在，直接播放待机动画
                 Debug.LogWarning($"{gameObject.name} 过渡动画 {moveToIdleAnimation} 不存在，直接切换到待机动画");
                 PlayAnimation(idleAnimation, true);
                 currentState = AnimationState.Idle;
             }
         }
-        else
-        {
+        else {
             // 如果当前不是行走状态，直接播放待机动画
             PlayAnimation(idleAnimation, true);
             currentState = AnimationState.Idle;
@@ -255,18 +222,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放近战攻击动画
-    public void PlayMeleeAttack()
-    {
+    public void PlayMeleeAttack() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放攻击动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放近战攻击动画
             PlayAnimation(attackMeleeAnimation, false);
             currentState = AnimationState.Attacking;
@@ -274,18 +238,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放远程攻击动画
-    public void PlayRangedAttack()
-    {
+    public void PlayRangedAttack() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放攻击动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放远程攻击动画
             PlayAnimation(attackRangedAnimation, false);
             currentState = AnimationState.Attacking;
@@ -293,18 +254,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放施法动画
-    public void PlayCastSpell()
-    {
+    public void PlayCastSpell() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放施法动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放施法动画
             PlayAnimation(castSpellAnimation, false);
             currentState = AnimationState.Casting;
@@ -312,18 +270,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放受击动画
-    public void PlayHit()
-    {
+    public void PlayHit() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放受击动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放受击动画
             PlayAnimation(hitAnimation, false);
             currentState = AnimationState.Hit;
@@ -331,8 +286,7 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放死亡动画
-    public void PlayDeath()
-    {
+    public void PlayDeath() {
         // 直接播放死亡动画，不需要检查
         PlayAnimation(deathAnimation, false);
         currentState = AnimationState.Death;
@@ -340,18 +294,15 @@ public class AnimationController : MonoBehaviour
     }
 
     // 播放闪避动画
-    public void PlayDodge()
-    {
+    public void PlayDodge() {
         // 检查角色是否已死亡
-        if (IsCharacterDead())
-        {
+        if (IsCharacterDead()) {
             // 如果角色已死亡，播放死亡动画
             Debug.Log($"{gameObject.name} 已死亡，不播放闪避动画");
             PlayAnimation(deathAnimation, false);
             currentState = AnimationState.Death;
         }
-        else
-        {
+        else {
             // 角色未死亡，播放闪避动画
             PlayAnimation(dodgeAnimation, false);
             currentState = AnimationState.Dodge;
@@ -359,21 +310,18 @@ public class AnimationController : MonoBehaviour
     }
 
     // 获取动画持续时间
-    public float GetAnimationDuration(string animationName)
-    {
+    public float GetAnimationDuration(string animationName) {
         if (skeletonAnimation == null) return 0f;
 
-        var animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
+        Spine.Animation animation = skeletonAnimation.Skeleton.Data.FindAnimation(animationName);
         if (animation == null) return 0f;
 
         return animation.Duration;
     }
 
-    private void OnDestroy()
-    {
+    private void OnDestroy() {
         // 取消注册事件
-        if (skeletonAnimation != null)
-        {
+        if (skeletonAnimation != null) {
             skeletonAnimation.AnimationState.Complete -= HandleAnimationComplete;
         }
     }

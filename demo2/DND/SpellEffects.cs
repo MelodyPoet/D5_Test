@@ -5,8 +5,7 @@ using System.Collections.Generic;
 /// <summary>
 /// 处理法术视觉效果的类
 /// </summary>
-public class SpellEffects : MonoBehaviour
-{
+public class SpellEffects : MonoBehaviour {
     // 单例实例
     public static SpellEffects Instance { get; private set; }
 
@@ -27,28 +26,23 @@ public class SpellEffects : MonoBehaviour
     // 法术预制体字典，用于动态加载
     private Dictionary<string, GameObject> spellPrefabs = new Dictionary<string, GameObject>();
 
-    private void Awake()
-    {
+    private void Awake() {
         // 单例模式
-        if (Instance == null)
-        {
+        if (Instance == null) {
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
             // 添加SpellEffects标签，用于查找
-            if (gameObject.tag == "Untagged")
-            {
+            if (gameObject.tag == "Untagged") {
                 gameObject.tag = "SpellEffects";
             }
         }
-        else
-        {
+        else {
             Destroy(gameObject);
         }
     }
 
-    private void Start()
-    {
+    private void Start() {
         // 初始化法术预制体字典
         InitializeSpellPrefabs();
     }
@@ -56,27 +50,22 @@ public class SpellEffects : MonoBehaviour
     /// <summary>
     /// 初始化法术预制体字典
     /// </summary>
-    private void InitializeSpellPrefabs()
-    {
+    private void InitializeSpellPrefabs() {
         // 只使用在Inspector中设置的预制体
-        if (arcaneBlastPrefab != null)
-        {
+        if (arcaneBlastPrefab != null) {
             spellPrefabs["ArcaneBlast"] = arcaneBlastPrefab;
             Debug.Log($"使用Inspector中设置的奥术冲击预制体: {arcaneBlastPrefab.name}");
         }
-        else
-        {
+        else {
             Debug.LogWarning("Inspector中未设置奥术冲击预制体，法术效果可能无法正常显示");
         }
 
         // 初始化闪避效果预制体
-        if (dodgeEffectPrefab != null)
-        {
+        if (dodgeEffectPrefab != null) {
             spellPrefabs["DodgeEffect"] = dodgeEffectPrefab;
             Debug.Log($"使用Inspector中设置的闪避效果预制体: {dodgeEffectPrefab.name}");
         }
-        else
-        {
+        else {
             Debug.LogWarning("Inspector中未设置闪避效果预制体，闪避效果可能无法正常显示");
         }
 
@@ -90,24 +79,20 @@ public class SpellEffects : MonoBehaviour
     /// <param name="damage">伤害值</param>
     /// <param name="damageType">伤害类型</param>
     /// <param name="onHitCallback">命中回调</param>
-    public void PlayArcaneBlast(GameObject caster, GameObject target, int damage, DND5E.DamageType damageType, System.Action<GameObject, int, DND5E.DamageType> onHitCallback = null)
-    {
-        if (caster == null || target == null)
-        {
+    public void PlayArcaneBlast(GameObject caster, GameObject target, int damage, DND5E.DamageType damageType, System.Action<GameObject, int, DND5E.DamageType> onHitCallback = null) {
+        if (caster == null || target == null) {
             Debug.LogError("施法者或目标为空，无法播放奥术冲击效果");
             return;
         }
 
         // 获取奥术冲击预制体
         GameObject prefab = GetSpellPrefab("ArcaneBlast");
-        if (prefab == null)
-        {
+        if (prefab == null) {
             Debug.LogWarning("奥术冲击预制体不存在，请在Inspector中设置arcaneBlastPrefab");
 
             // 直接应用伤害，不播放特效（回退机制）
             CharacterStats targetStats = target.GetComponent<CharacterStats>();
-            if (targetStats != null)
-            {
+            if (targetStats != null) {
                 targetStats.TakeDamage(damage, damageType);
                 Debug.Log($"奥术冲击命中 {targetStats.characterName}，造成 {damage} 点 {damageType} 伤害!");
 
@@ -149,8 +134,7 @@ public class SpellEffects : MonoBehaviour
     /// <summary>
     /// 移动法术效果并处理命中
     /// </summary>
-    private IEnumerator MoveSpellEffect(GameObject spellEffect, GameObject target, int damage, DND5E.DamageType damageType, System.Action<GameObject, int, DND5E.DamageType> onHitCallback)
-    {
+    private IEnumerator MoveSpellEffect(GameObject spellEffect, GameObject target, int damage, DND5E.DamageType damageType, System.Action<GameObject, int, DND5E.DamageType> onHitCallback) {
         if (spellEffect == null || target == null)
             yield break;
 
@@ -171,8 +155,7 @@ public class SpellEffects : MonoBehaviour
         Vector3 startPosition = spellEffect.transform.position;
 
         // 移动法术效果
-        while (Time.time - startTime < moveTime)
-        {
+        while (Time.time - startTime < moveTime) {
             // 如果目标或法术效果被销毁，退出循环
             if (spellEffect == null || target == null)
                 yield break;
@@ -188,8 +171,7 @@ public class SpellEffects : MonoBehaviour
             spellEffect.transform.position = Vector3.Lerp(startPosition, targetPosition, t);
 
             // 更新朝向
-            if (targetPosition != spellEffect.transform.position)
-            {
+            if (targetPosition != spellEffect.transform.position) {
                 spellEffect.transform.rotation = Quaternion.LookRotation(targetPosition - spellEffect.transform.position);
             }
 
@@ -197,18 +179,15 @@ public class SpellEffects : MonoBehaviour
         }
 
         // 确保法术效果到达目标位置
-        if (spellEffect != null)
-        {
+        if (spellEffect != null) {
             spellEffect.transform.position = targetPosition;
         }
 
         // 处理命中效果
-        if (target != null)
-        {
+        if (target != null) {
             // 播放命中粒子效果（如果有）
             ParticleSystem[] particleSystems = spellEffect.GetComponentsInChildren<ParticleSystem>();
-            foreach (ParticleSystem ps in particleSystems)
-            {
+            foreach (ParticleSystem ps in particleSystems) {
                 // 停止发射新粒子
                 ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
 
@@ -225,14 +204,12 @@ public class SpellEffects : MonoBehaviour
             AnimationController targetAnimController = null;
 
             // 如果没有DND_CharacterAdapter，尝试获取AnimationController
-            if (targetAdapter == null)
-            {
+            if (targetAdapter == null) {
                 targetAnimController = target.GetComponent<AnimationController>();
             }
 
             // 应用伤害
-            if (targetStats != null)
-            {
+            if (targetStats != null) {
                 targetStats.TakeDamage(damage, damageType);
                 Debug.Log($"奥术冲击命中 {targetStats.characterName}，造成 {damage} 点 {damageType} 伤害!");
             }
@@ -241,36 +218,30 @@ public class SpellEffects : MonoBehaviour
             yield return new WaitForSeconds(0.1f);
 
             // 播放目标受击动画
-            if (targetAdapter != null)
-            {
+            if (targetAdapter != null) {
                 targetAdapter.TakeDamage();
                 Debug.Log($"播放 {target.name} 的受击动画");
             }
-            else if (targetAnimController != null)
-            {
+            else if (targetAnimController != null) {
                 targetAnimController.PlayHit();
                 Debug.Log($"使用AnimationController播放目标受击动画: {targetAnimController.hitAnimation}");
             }
 
             // 确保UI更新
-            if (DND_BattleUI.Instance != null && targetStats != null)
-            {
+            if (DND_BattleUI.Instance != null && targetStats != null) {
                 DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
             }
 
             // 检查目标是否死亡
-            if (targetStats != null && targetStats.currentHitPoints <= 0)
-            {
+            if (targetStats != null && targetStats.currentHitPoints <= 0) {
                 yield return new WaitForSeconds(0.5f); // 给受击动画更多时间
 
-                if (targetAdapter != null)
-                {
+                if (targetAdapter != null) {
                     // 使用DND_CharacterAdapter播放死亡动画
                     targetAdapter.PlayDeathAnimation();
                     Debug.Log($"使用DND_CharacterAdapter播放目标死亡动画: {targetAdapter.animationMapping.deathAnimation}");
                 }
-                else if (targetAnimController != null)
-                {
+                else if (targetAnimController != null) {
                     // 如果没有DND_CharacterAdapter，使用AnimationController
                     targetAnimController.PlayDeath();
                     Debug.Log($"使用AnimationController播放目标死亡动画: {targetAnimController.deathAnimation}");
@@ -279,8 +250,7 @@ public class SpellEffects : MonoBehaviour
         }
 
         // 延迟销毁投射法术效果
-        if (spellEffect != null)
-        {
+        if (spellEffect != null) {
             Destroy(spellEffect, projectileDestroyDelay);
         }
     }
@@ -290,26 +260,22 @@ public class SpellEffects : MonoBehaviour
     /// </summary>
     /// <param name="spellName">法术名称</param>
     /// <returns>法术预制体</returns>
-    private GameObject GetSpellPrefab(string spellName)
-    {
+    private GameObject GetSpellPrefab(string spellName) {
         // 检查字典中是否有该法术预制体
-        if (spellPrefabs.TryGetValue(spellName, out GameObject prefab) && prefab != null)
-        {
+        if (spellPrefabs.TryGetValue(spellName, out GameObject prefab) && prefab != null) {
             Debug.Log($"从字典中获取到法术 {spellName} 的预制体");
             return prefab;
         }
 
         // 如果是奥术冲击，直接使用arcaneBlastPrefab
-        if (spellName == "ArcaneBlast" && arcaneBlastPrefab != null)
-        {
+        if (spellName == "ArcaneBlast" && arcaneBlastPrefab != null) {
             Debug.Log("使用arcaneBlastPrefab作为奥术冲击预制体");
             spellPrefabs[spellName] = arcaneBlastPrefab;
             return arcaneBlastPrefab;
         }
 
         // 如果是闪避效果，直接使用dodgeEffectPrefab
-        if (spellName == "DodgeEffect" && dodgeEffectPrefab != null)
-        {
+        if (spellName == "DodgeEffect" && dodgeEffectPrefab != null) {
             Debug.Log("使用dodgeEffectPrefab作为闪避效果预制体");
             spellPrefabs[spellName] = dodgeEffectPrefab;
             return dodgeEffectPrefab;
@@ -323,21 +289,17 @@ public class SpellEffects : MonoBehaviour
     /// 处理SendMessage调用的PlayArcaneBlast方法（接收SpellData参数）
     /// </summary>
     /// <param name="spellData">法术数据</param>
-    public void PlayArcaneBlastWrapper(SpellData spellData)
-    {
-        if (spellData == null)
-        {
+    public void PlayArcaneBlastWrapper(SpellData spellData) {
+        if (spellData == null) {
             Debug.LogError("PlayArcaneBlastWrapper: spellData为null");
             return;
         }
 
-        try
-        {
+        try {
             // 调用原始方法
             PlayArcaneBlast(spellData.caster, spellData.target, spellData.damage, spellData.damageType, null);
         }
-        catch (System.Exception e)
-        {
+        catch (System.Exception e) {
             Debug.LogError($"PlayArcaneBlastWrapper: 调用PlayArcaneBlast方法时出错: {e.Message}");
         }
     }
@@ -347,17 +309,14 @@ public class SpellEffects : MonoBehaviour
     /// </summary>
     /// <param name="character">使用闪避的角色</param>
     /// <param name="duration">效果持续时间（秒），如果为0则使用默认设置</param>
-    public void PlayDodgeEffect(GameObject character, float duration = 0f)
-    {
-        if (character == null)
-        {
+    public void PlayDodgeEffect(GameObject character, float duration = 0f) {
+        if (character == null) {
             Debug.LogError("【闪避特效】角色为空，无法播放闪避效果");
             return;
         }
 
         // 如果没有指定持续时间，使用默认设置
-        if (duration <= 0f)
-        {
+        if (duration <= 0f) {
             duration = instantEffectDuration;
         }
 
@@ -369,8 +328,7 @@ public class SpellEffects : MonoBehaviour
         GameObject prefab = GetSpellPrefab("DodgeEffect");
         Debug.Log($"【防御姿态特效】获取DodgeEffect预制体: {(prefab != null ? prefab.name : "null")}");
 
-        if (prefab == null)
-        {
+        if (prefab == null) {
             Debug.LogError("【防御姿态特效】防御姿态效果预制体不存在，无法播放效果");
             Debug.LogError("【防御姿态特效】请检查SpellEffects组件的Inspector面板，确保设置了dodgeEffectPrefab");
 
@@ -386,8 +344,7 @@ public class SpellEffects : MonoBehaviour
         Debug.Log($"【防御姿态特效】特效生成位置: {spawnPosition}");
 
         // 实例化防御姿态效果
-        try
-        {
+        try {
             GameObject dodgeEffect = Instantiate(prefab, spawnPosition, Quaternion.identity);
 
             // 将效果附加到角色上，跟随角色移动
@@ -396,13 +353,11 @@ public class SpellEffects : MonoBehaviour
 
             // 添加防御姿态状态效果
             CharacterStats characterStats = character.GetComponent<CharacterStats>();
-            if (characterStats != null)
-            {
+            if (characterStats != null) {
                 characterStats.AddStatusEffect(DND5E.StatusEffectType.Dodging);
                 Debug.Log($"【防御姿态特效】{characterStats.GetDisplayName()} 进入防御姿态，AC+2，持续到下回合开始");
             }
-            else
-            {
+            else {
                 Debug.LogWarning($"【防御姿态特效】角色 {characterName} 没有CharacterStats组件，无法添加状态效果");
             }
 
@@ -410,10 +365,9 @@ public class SpellEffects : MonoBehaviour
             ParticleSystem[] particleSystems = dodgeEffect.GetComponentsInChildren<ParticleSystem>();
             Debug.Log($"【防御姿态特效】找到 {particleSystems.Length} 个粒子系统");
 
-            foreach (ParticleSystem ps in particleSystems)
-            {
+            foreach (ParticleSystem ps in particleSystems) {
                 // 设置粒子系统的持续时间
-                var main = ps.main;
+                ParticleSystem.MainModule main = ps.main;
                 main.duration = duration;
 
                 // 播放粒子效果
@@ -425,8 +379,7 @@ public class SpellEffects : MonoBehaviour
             Destroy(dodgeEffect, duration);
             Debug.Log($"【防御姿态特效】防御姿态效果将在 {duration} 秒后销毁");
         }
-        catch (System.Exception e)
-        {
+        catch (System.Exception e) {
             Debug.LogError($"【防御姿态特效】实例化防御姿态效果时出错: {e.Message}\n{e.StackTrace}");
         }
     }
@@ -435,21 +388,17 @@ public class SpellEffects : MonoBehaviour
     /// 处理SendMessage调用的PlayDodgeEffect方法
     /// </summary>
     /// <param name="character">使用闪避的角色</param>
-    public void PlayDodgeEffectWrapper(GameObject character)
-    {
-        if (character == null)
-        {
+    public void PlayDodgeEffectWrapper(GameObject character) {
+        if (character == null) {
             Debug.LogError("PlayDodgeEffectWrapper: character为null");
             return;
         }
 
-        try
-        {
+        try {
             // 调用原始方法，使用默认持续时间设置
             PlayDodgeEffect(character);
         }
-        catch (System.Exception e)
-        {
+        catch (System.Exception e) {
             Debug.LogError($"PlayDodgeEffectWrapper: 调用PlayDodgeEffect方法时出错: {e.Message}");
         }
     }
@@ -461,17 +410,14 @@ public class SpellEffects : MonoBehaviour
     /// <param name="effectName">效果名称（用于查找预制体）</param>
     /// <param name="duration">效果持续时间，如果为0则使用默认设置</param>
     /// <param name="statusEffect">要添加的状态效果（可选）</param>
-    public void PlayInstantEffect(GameObject character, string effectName, float duration = 0f, DND5E.StatusEffectType? statusEffect = null)
-    {
-        if (character == null)
-        {
+    public void PlayInstantEffect(GameObject character, string effectName, float duration = 0f, DND5E.StatusEffectType? statusEffect = null) {
+        if (character == null) {
             Debug.LogError($"【即时效果】角色为空，无法播放{effectName}效果");
             return;
         }
 
         // 如果没有指定持续时间，使用默认设置
-        if (duration <= 0f)
-        {
+        if (duration <= 0f) {
             duration = instantEffectDuration;
         }
 
@@ -480,8 +426,7 @@ public class SpellEffects : MonoBehaviour
 
         // 获取效果预制体
         GameObject prefab = GetSpellPrefab(effectName);
-        if (prefab == null)
-        {
+        if (prefab == null) {
             Debug.LogError($"【即时效果】{effectName}效果预制体不存在，无法播放效果");
             return;
         }
@@ -490,8 +435,7 @@ public class SpellEffects : MonoBehaviour
         Vector3 spawnPosition = character.transform.position;
         spawnPosition.y = character.transform.position.y + buffEffectHeight;
 
-        try
-        {
+        try {
             // 实例化效果
             GameObject effect = Instantiate(prefab, spawnPosition, Quaternion.identity);
 
@@ -499,11 +443,9 @@ public class SpellEffects : MonoBehaviour
             effect.transform.SetParent(character.transform, true);
 
             // 添加状态效果（如果指定）
-            if (statusEffect.HasValue)
-            {
+            if (statusEffect.HasValue) {
                 CharacterStats characterStats = character.GetComponent<CharacterStats>();
-                if (characterStats != null)
-                {
+                if (characterStats != null) {
                     characterStats.AddStatusEffect(statusEffect.Value);
                     Debug.Log($"【即时效果】{characterStats.GetDisplayName()} 获得{statusEffect.Value}状态效果");
                 }
@@ -511,9 +453,8 @@ public class SpellEffects : MonoBehaviour
 
             // 设置粒子系统的持续时间
             ParticleSystem[] particleSystems = effect.GetComponentsInChildren<ParticleSystem>();
-            foreach (ParticleSystem ps in particleSystems)
-            {
-                var main = ps.main;
+            foreach (ParticleSystem ps in particleSystems) {
+                ParticleSystem.MainModule main = ps.main;
                 main.duration = duration;
                 ps.Play();
             }
@@ -522,8 +463,7 @@ public class SpellEffects : MonoBehaviour
             Destroy(effect, duration);
             Debug.Log($"【即时效果】{effectName}效果将在 {duration} 秒后销毁");
         }
-        catch (System.Exception e)
-        {
+        catch (System.Exception e) {
             Debug.LogError($"【即时效果】实例化{effectName}效果时出错: {e.Message}");
         }
     }
@@ -531,8 +471,7 @@ public class SpellEffects : MonoBehaviour
     /// <summary>
     /// 回退机制：播放受击动画（当没有特效预制体时）
     /// </summary>
-    private IEnumerator PlayFallbackHitEffects(GameObject target, CharacterStats targetStats)
-    {
+    private IEnumerator PlayFallbackHitEffects(GameObject target, CharacterStats targetStats) {
         // 等待一小段时间，确保有时间准备播放受击动画
         yield return new WaitForSeconds(0.1f);
 
@@ -541,20 +480,17 @@ public class SpellEffects : MonoBehaviour
         AnimationController targetAnimController = target.GetComponent<AnimationController>();
 
         // 播放受击动画
-        if (targetAdapter != null)
-        {
+        if (targetAdapter != null) {
             targetAdapter.TakeDamage();
             Debug.Log($"播放 {target.name} 的受击动画（回退机制）");
         }
-        else if (targetAnimController != null)
-        {
+        else if (targetAnimController != null) {
             targetAnimController.PlayHit();
             Debug.Log($"使用AnimationController播放目标受击动画（回退机制）: {targetAnimController.hitAnimation}");
         }
 
         // 确保UI更新
-        if (DND_BattleUI.Instance != null && targetStats != null)
-        {
+        if (DND_BattleUI.Instance != null && targetStats != null) {
             DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
         }
     }

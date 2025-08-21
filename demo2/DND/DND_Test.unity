@@ -176,6 +176,10 @@ MonoBehaviour:
   playerParty:
   - {fileID: 4286918360062315237, guid: 68434df3ed361f441a0f418d9205a7ed, type: 3}
   - {fileID: 5487972192688071486, guid: d36edcf2564a6f644960c617bea719d4, type: 3}
+  playerPrefabs: []
+  enemyPrefabs: []
+  playerPartySize: 3
+  usePlayerPrefabs: 0
   formationManager: {fileID: 273197987}
   autoBattleAI: {fileID: 164080472}
 --- !u!1 &164080471

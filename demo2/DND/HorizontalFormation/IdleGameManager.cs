@@ -28,6 +28,18 @@ public class IdleGameManager : MonoBehaviour {
     [Tooltip("玩家队伍配置：直接拖入场景中的玩家角色")]
     public List<CharacterStats> playerParty = new List<CharacterStats>();
 
+    [Header("预制体配置")]
+    [Tooltip("玩家角色预制体列表")]
+    public List<GameObject> playerPrefabs = new List<GameObject>();
+    [Tooltip("敌人角色预制体列表")]
+    public List<GameObject> enemyPrefabs = new List<GameObject>();
+
+    [Header("队伍生成设置")]
+    [Tooltip("玩家队伍人数")]
+    public int playerPartySize = 3;
+    [Tooltip("是否使用预制体生成玩家队伍（否则使用手动配置）")]
+    public bool usePlayerPrefabs = false;
+
     [Header("系统组件")]
     public HorizontalBattleFormationManager formationManager;
     public AutoBattleAI autoBattleAI;
@@ -65,6 +77,11 @@ public class IdleGameManager : MonoBehaviour {
 
         accumulatedRewards = new IdleRewards();
         nextEncounterTime = Time.time + encounterInterval;
+
+        // 如果启用预制体生成且玩家队伍为空，则生成玩家队伍
+        if (usePlayerPrefabs && playerParty.Count == 0) {
+            GeneratePlayerParty();
+        }
     }    /// <summary>
          /// 设置UI
          /// </summary>
@@ -318,10 +335,46 @@ public class IdleGameManager : MonoBehaviour {
     /// 创建随机敌人
     /// </summary>
     private CharacterStats CreateRandomEnemy(int level) {
-        // 这里应该根据敌人模板创建敌人
-        // 暂时返回null，需要敌人创建系统
-        Debug.Log($"创建等级 {level} 的敌人");
-        return null;
+        GameObject enemyObj;
+
+        // 如果有敌人预制体，使用预制体创建
+        if (enemyPrefabs.Count > 0) {
+            GameObject prefab = enemyPrefabs[Random.Range(0, enemyPrefabs.Count)];
+            enemyObj = Instantiate(prefab);
+            enemyObj.name = $"敌人_等级{level}";
+        }
+        else {
+            // 否则创建空GameObject
+            enemyObj = new GameObject($"敌人_等级{level}");
+        }
+
+        // 获取或添加CharacterStats组件
+        CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
+        if (enemyStats == null) {
+            enemyStats = enemyObj.AddComponent<CharacterStats>();
+        }
+
+        // 设置敌人属性
+        enemyStats.characterName = $"野生怪物 等级{level}";
+        enemyStats.level = level;
+        enemyStats.battleSide = BattleSide.Enemy;
+
+        // 根据等级设置血量和属性
+        enemyStats.maxHitPoints = 30 + (level * 10);
+        enemyStats.currentHitPoints = enemyStats.maxHitPoints;
+        enemyStats.armorClass = 10 + level;
+
+        // 设置基础属性（随等级增长）
+        enemyStats.stats.Strength = 12 + level;
+        enemyStats.stats.Dexterity = 10 + level;
+        enemyStats.stats.Constitution = 14 + level;
+        enemyStats.proficiencyBonus = 2 + (level / 4);
+
+        // 设置标签
+        enemyObj.tag = "Enemy";
+
+        Debug.Log($"创建等级 {level} 的敌人: {enemyStats.characterName}");
+        return enemyStats;
     }
 
     /// <summary>
@@ -472,6 +525,68 @@ public class IdleGameManager : MonoBehaviour {
         }
 
         Debug.Log($"查找完成，玩家队伍共 {playerParty.Count} 人");
+    }
+
+    /// <summary>
+    /// 从预制体生成玩家队伍
+    /// </summary>
+    private void GeneratePlayerParty() {
+        if (playerPrefabs.Count == 0) {
+            Debug.LogWarning("玩家预制体列表为空，无法生成队伍！");
+            return;
+        }
+
+        playerParty.Clear();
+
+        for (int i = 0; i < playerPartySize; i++) {
+            // 随机选择预制体
+            GameObject prefab = playerPrefabs[Random.Range(0, playerPrefabs.Count)];
+
+            // 实例化预制体
+            GameObject playerObj = Instantiate(prefab);
+            playerObj.name = $"玩家角色_{i + 1}";
+
+            // 获取CharacterStats组件
+            CharacterStats stats = playerObj.GetComponent<CharacterStats>();
+            if (stats == null) {
+                // 如果预制体没有CharacterStats，添加一个
+                stats = playerObj.AddComponent<CharacterStats>();
+                InitializePlayerStats(stats, i + 1);
+            }
+
+            // 确保是玩家阵营
+            stats.battleSide = BattleSide.Player;
+            stats.characterName = $"勇士{i + 1}";
+
+            // 设置标签
+            playerObj.tag = "Player";
+
+            // 添加到队伍
+            playerParty.Add(stats);
+
+            Debug.Log($"生成玩家角色: {stats.characterName}");
+        }
+
+        Debug.Log($"玩家队伍生成完成，共 {playerParty.Count} 人");
+    }
+
+    /// <summary>
+    /// 初始化玩家角色属性
+    /// </summary>
+    private void InitializePlayerStats(CharacterStats stats, int characterIndex) {
+        stats.level = 1;
+        stats.maxHitPoints = 80 + (characterIndex * 10);
+        stats.currentHitPoints = stats.maxHitPoints;
+        stats.armorClass = 14 + characterIndex;
+        stats.proficiencyBonus = 2;
+
+        // 设置基础属性
+        stats.stats.Strength = 14 + characterIndex;
+        stats.stats.Dexterity = 12 + characterIndex;
+        stats.stats.Constitution = 16 + characterIndex;
+        stats.stats.Intelligence = 10 + characterIndex;
+        stats.stats.Wisdom = 12 + characterIndex;
+        stats.stats.Charisma = 10 + characterIndex;
     }
 
     /// <summary>
