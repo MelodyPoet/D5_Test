@@ -40,9 +40,10 @@ public class DND_BattleSceneSetup : MonoBehaviour {
     [Tooltip("自身高亮预制体 - 绿色高亮效果，用于闪避时高亮自己")]
     public GameObject selfHighlightPrefab;
 
-    [Header("UI 相关")]
-    [Tooltip("场景中已放置的 DND_BattleUI 组件引用，可以直接将含 ActionPanel 的 Canvas 拖到此处")]
-    public DND_BattleUI battleUIReference;
+    [Header("UI 相关 - 已弃用")]
+    [Tooltip("UI组件已弃用 - 挂机游戏不需要UI交互")]
+    [System.Obsolete("battleUIReference已弃用！挂机游戏不需要UI交互，详见DEVELOPMENT_STANDARDS.md")]
+    public GameObject deprecatedUIReference; // 保持序列化兼容性
 
     // 生成的角色列表
     private List<GameObject> spawnedPlayers = new List<GameObject>();

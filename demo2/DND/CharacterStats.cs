@@ -398,11 +398,7 @@ public class CharacterStats : MonoBehaviour {
                 UpdateArmorClass();
             }
 
-            // 添加战斗日志
-            if (DND_BattleUI.Instance != null) {
-                string effectName = GetStatusEffectName(type);
-                DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 获得了 {effectName} 状态");
-            }
+            // 战斗日志已转移至挂机系统自动记录
         }
     }
 
@@ -437,16 +433,7 @@ public class CharacterStats : MonoBehaviour {
             UpdateArmorClass();
         }
 
-        // 添加战斗日志
-        if (removed && DND_BattleUI.Instance != null) {
-            string effectName = GetStatusEffectName(type);
-            if (type == DND5E.StatusEffectType.Dodging) {
-                DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 退出防御姿态，AC恢复正常");
-            }
-            else {
-                DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 的 {effectName} 状态已结束");
-            }
-        }
+        // 战斗日志已转移至挂机系统自动记录
     }
 
     // 更新护甲等级，考虑状态效果
@@ -463,10 +450,7 @@ public class CharacterStats : MonoBehaviour {
 
         // 可以在这里添加其他影响AC的状态效果
 
-        // 更新UI
-        if (DND_BattleUI.Instance != null) {
-            DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
-        }
+        // UI更新已转移至挂机系统自动处理
     }
 
     // 受到伤害
@@ -510,8 +494,8 @@ public class CharacterStats : MonoBehaviour {
             DamageNumberManager.Instance.ShowDamageNumber(transform, damage, false);
         }
 
-        // 添加战斗日志
-        if (DND_BattleUI.Instance != null) {
+        // 战斗日志已转移至挂机系统自动记录
+        {
             // 构建伤害描述
             string damageDescription = $"{damage} 点{damageType}伤害";
 
@@ -528,42 +512,22 @@ public class CharacterStats : MonoBehaviour {
                 damageDescription += "（部分被临时生命值抵消）";
             }
 
-            // 添加战斗日志
-            int currentRound = 0;
-            if (CombatManager.Instance != null) {
-                currentRound = CombatManager.Instance.currentRound;
-            }
-            DND_BattleUI.Instance.AddCombatLog($"[回合 {currentRound}] {GetDisplayName()} 受到 {damageDescription}，剩余生命值: {currentHitPoints}/{maxHitPoints}");
+            // 战斗日志已转移至挂机系统自动记录
+            Debug.Log($"{GetDisplayName()} 受到 {damageDescription}，剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
-            // 如果生命值降为0，添加倒地日志
+            // 如果生命值降为0，记录倒地信息
             if (currentHitPoints <= 0) {
-                DND_BattleUI.Instance.AddCombatLog($"{GetDisplayName()} 已倒地！");
+                Debug.Log($"{GetDisplayName()} 已倒地！");
             }
         }
 
-        // 确保UI更新
-        try {
-            if (DND_BattleUI.Instance != null) {
-                Debug.Log($"在CharacterStats.TakeDamage中更新UI: {GetDisplayName()} 血量从 {oldHitPoints} 减少到 {currentHitPoints}");
-                DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
-            }
-            else {
-                Debug.LogWarning("DND_BattleUI.Instance为null，无法更新UI");
-            }
-        }
-        catch (System.Exception e) {
-            Debug.LogError($"更新UI时出错: {e.Message}\n{e.StackTrace}");
-        }
+        // UI更新已转移至挂机系统自动处理
+        // UI更新已转移至挂机系统自动处理
 
         // 检查是否失去意识
         if (currentHitPoints <= 0) {
             AddStatusEffect(DND5E.StatusEffectType.Unconscious);
             Debug.Log($"{GetDisplayName()} 失去意识!");
-
-            // 再次确保UI更新
-            if (DND_BattleUI.Instance != null) {
-                DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
-            }
         }
     }
 
@@ -572,10 +536,7 @@ public class CharacterStats : MonoBehaviour {
         currentHitPoints = Mathf.Min(maxHitPoints, currentHitPoints + amount);
         Debug.Log($"{GetDisplayName()} 恢复 {amount} 点生命值! 当前生命值: {currentHitPoints}/{maxHitPoints}");
 
-        // 更新UI中的血量显示
-        if (DND_BattleUI.Instance != null) {
-            DND_BattleUI.Instance.UpdateCharacterStatusUI(this);
-        }
+        // UI更新已转移至挂机系统自动处理
 
         // 如果恢复意识
         if (currentHitPoints > 0 && HasStatusEffect(DND5E.StatusEffectType.Unconscious)) {

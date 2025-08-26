@@ -228,9 +228,7 @@ public class SpellEffects : MonoBehaviour {
             }
 
             // 确保UI更新
-            if (DND_BattleUI.Instance != null && targetStats != null) {
-                DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
-            }
+            // UI更新已转移至挂机系统自动处理
 
             // 检查目标是否死亡
             if (targetStats != null && targetStats.currentHitPoints <= 0) {
@@ -490,8 +488,6 @@ public class SpellEffects : MonoBehaviour {
         }
 
         // 确保UI更新
-        if (DND_BattleUI.Instance != null && targetStats != null) {
-            DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
-        }
+        // UI更新已转移至挂机系统自动处理
     }
 }

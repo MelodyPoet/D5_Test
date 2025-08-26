@@ -5,19 +5,16 @@ using UnityEngine;
 
 // 用于传递法术数据的结构体
 [System.Serializable]
-public class SpellData
-{
+public class SpellData {
     public GameObject caster;
     public GameObject target;
     public int damage;
     public DND5E.DamageType damageType;
 }
 
-namespace DND5E
-{
+namespace DND5E {
     // 法术学派枚举
-    public enum SpellSchool
-    {
+    public enum SpellSchool {
         Abjuration,     // 防护系
         Conjuration,    // 咒法系
         Divination,     // 预言系
@@ -29,8 +26,7 @@ namespace DND5E
     }
 
     // 法术施放时间枚举
-    public enum CastingTime
-    {
+    public enum CastingTime {
         Action,         // 动作
         BonusAction,    // 附赠动作
         Reaction,       // 反应
@@ -41,8 +37,7 @@ namespace DND5E
 
     // 法术成分枚举
     [System.Flags]
-    public enum SpellComponent
-    {
+    public enum SpellComponent {
         None = 0,
         Verbal = 1,     // 言语成分
         Somatic = 2,    // 姿势成分
@@ -50,16 +45,14 @@ namespace DND5E
     }
 
     // 法术持续时间类型枚举
-    public enum DurationType
-    {
+    public enum DurationType {
         Instantaneous,  // 瞬间
         Concentration,  // 专注
         NonConcentration // 非专注
     }
 
     // 法术范围类型枚举
-    public enum AreaOfEffectType
-    {
+    public enum AreaOfEffectType {
         None,           // 无范围效果
         Sphere,         // 球形
         Cube,           // 立方体
@@ -70,8 +63,7 @@ namespace DND5E
 
     // 法术类
     [System.Serializable]
-    public class Spell
-    {
+    public class Spell {
         // 基本信息
         public string name;                   // 法术名称
         public string description;            // 法术描述
@@ -118,23 +110,20 @@ namespace DND5E
         public int levelScalingInterval = 3;  // 等级缩放间隔（每X级增加1个骰子）
 
         // 构造函数
-        public Spell(string name, int level, SpellSchool school)
-        {
+        public Spell(string name, int level, SpellSchool school) {
             this.name = name;
             this.level = level;
             this.school = school;
         }
 
         // 获取法术描述
-        public string GetFullDescription()
-        {
+        public string GetFullDescription() {
             string desc = $"{name}\n";
             desc += $"{level}环 {school} 法术\n";
 
             // 施法时间
             desc += $"施法时间: ";
-            switch(castingTime)
-            {
+            switch (castingTime) {
                 case CastingTime.Action:
                     desc += "1个动作";
                     break;
@@ -159,9 +148,9 @@ namespace DND5E
             // 施法成分
             desc += "成分: ";
             List<string> componentsList = new List<string>();
-            if((components & SpellComponent.Verbal) != 0) componentsList.Add("言语(V)");
-            if((components & SpellComponent.Somatic) != 0) componentsList.Add("姿势(S)");
-            if((components & SpellComponent.Material) != 0) componentsList.Add($"材料(M: {materialComponents})");
+            if ((components & SpellComponent.Verbal) != 0) componentsList.Add("言语(V)");
+            if ((components & SpellComponent.Somatic) != 0) componentsList.Add("姿势(S)");
+            if ((components & SpellComponent.Material) != 0) componentsList.Add($"材料(M: {materialComponents})");
             desc += string.Join(", ", componentsList) + "\n";
 
             // 施法距离
@@ -169,26 +158,25 @@ namespace DND5E
 
             // 持续时间
             desc += "持续时间: ";
-            switch(durationType)
-            {
+            switch (durationType) {
                 case DurationType.Instantaneous:
                     desc += "瞬间";
                     break;
                 case DurationType.Concentration:
-                    if(duration <= 10)
+                    if (duration <= 10)
                         desc += $"专注，至多{duration}回合";
-                    else if(duration <= 600)
-                        desc += $"专注，至多{duration/10}分钟";
+                    else if (duration <= 600)
+                        desc += $"专注，至多{duration / 10}分钟";
                     else
-                        desc += $"专注，至多{duration/600}小时";
+                        desc += $"专注，至多{duration / 600}小时";
                     break;
                 case DurationType.NonConcentration:
-                    if(duration <= 10)
+                    if (duration <= 10)
                         desc += $"{duration}回合";
-                    else if(duration <= 600)
-                        desc += $"{duration/10}分钟";
+                    else if (duration <= 600)
+                        desc += $"{duration / 10}分钟";
                     else
-                        desc += $"{duration/600}小时";
+                        desc += $"{duration / 600}小时";
                     break;
             }
             desc += "\n\n";
@@ -202,42 +190,35 @@ namespace DND5E
 
     // 法术列表类
     [System.Serializable]
-    public class SpellList
-    {
+    public class SpellList {
         public List<Spell> knownSpells = new List<Spell>();
         public int[] spellSlots = new int[9]; // 索引0对应1环法术位
 
         // 添加法术
-        public void AddSpell(Spell spell)
-        {
+        public void AddSpell(Spell spell) {
             knownSpells.Add(spell);
         }
 
         // 移除法术
-        public void RemoveSpell(Spell spell)
-        {
+        public void RemoveSpell(Spell spell) {
             knownSpells.Remove(spell);
         }
 
         // 获取特定环级的法术
-        public List<Spell> GetSpellsByLevel(int level)
-        {
+        public List<Spell> GetSpellsByLevel(int level) {
             return knownSpells.FindAll(s => s.level == level);
         }
 
         // 获取特定学派的法术
-        public List<Spell> GetSpellsBySchool(SpellSchool school)
-        {
+        public List<Spell> GetSpellsBySchool(SpellSchool school) {
             return knownSpells.FindAll(s => s.school == school);
         }
 
         // 使用法术位
-        public bool UseSpellSlot(int level)
-        {
-            if(level <= 0 || level > 9) return false;
+        public bool UseSpellSlot(int level) {
+            if (level <= 0 || level > 9) return false;
 
-            if(spellSlots[level - 1] > 0)
-            {
+            if (spellSlots[level - 1] > 0) {
                 spellSlots[level - 1]--;
                 return true;
             }
@@ -246,9 +227,8 @@ namespace DND5E
         }
 
         // 恢复法术位
-        public void RestoreSpellSlot(int level, int amount = 1)
-        {
-            if(level <= 0 || level > 9) return;
+        public void RestoreSpellSlot(int level, int amount = 1) {
+            if (level <= 0 || level > 9) return;
 
             // 计算最大法术位（这里需要根据职业和等级来确定）
             int maxSlots = 4; // 临时值，实际应该根据职业和等级计算
@@ -257,8 +237,7 @@ namespace DND5E
         }
 
         // 恢复所有法术位（长休息）
-        public void RestoreAllSpellSlots()
-        {
+        public void RestoreAllSpellSlots() {
             // 这里需要根据职业和等级来确定每环的最大法术位
             // 临时值，实际应该根据职业和等级计算
             spellSlots[0] = 4; // 1环
@@ -274,8 +253,7 @@ namespace DND5E
     }
 
     // 法术系统组件
-    public class SpellSystem : MonoBehaviour
-    {
+    public class SpellSystem : MonoBehaviour {
         // 法术列表
         public SpellList spellList = new SpellList();
 
@@ -286,26 +264,22 @@ namespace DND5E
         private string characterName = "角色";
         private ActionSystem actionSystem;
 
-        private void Awake()
-        {
+        private void Awake() {
             // 获取行动系统
             actionSystem = GetComponent<ActionSystem>();
-            if(actionSystem == null)
-            {
+            if (actionSystem == null) {
                 Debug.LogWarning("SpellSystem需要ActionSystem组件!");
                 actionSystem = gameObject.AddComponent<ActionSystem>();
             }
 
             // 尝试获取角色名称
-            if(TryGetComponent(out MonoBehaviour charComponent))
-            {
+            if (TryGetComponent(out MonoBehaviour charComponent)) {
                 characterName = charComponent.name;
             }
 
             // 获取角色属性
             global::CharacterStats charStats = GetComponent<global::CharacterStats>();
-            if (charStats != null && charStats.characterClass == DND5E.CharacterClass.Fighter)
-            {
+            if (charStats != null && charStats.characterClass == DND5E.CharacterClass.Fighter) {
                 // 战士不应该有法术
                 return; // 直接返回，不初始化法术列表
             }
@@ -314,25 +288,20 @@ namespace DND5E
             InitializeAllAvailableSpells();
 
             // 检查预制体上是否已经设置了已知法术
-            if (spellList.knownSpells.Count > 0)
-            {
+            if (spellList.knownSpells.Count > 0) {
                 // 构建法术名称列表
                 List<string> spellNames = new List<string>();
-                foreach (var spell in spellList.knownSpells)
-                {
+                foreach (var spell in spellList.knownSpells) {
                     spellNames.Add(spell.name);
 
                     // 确保法术范围正确设置
-                    if (spell.range <= 0)
-                    {
+                    if (spell.range <= 0) {
                         // 尝试从allAvailableSpells中获取正确的法术对象
-                        if (allAvailableSpells.TryGetValue(spell.name, out Spell correctSpell))
-                        {
+                        if (allAvailableSpells.TryGetValue(spell.name, out Spell correctSpell)) {
                             spell.range = correctSpell.range;
                             Debug.Log($"修正法术 {spell.name} 的范围为 {spell.range} 尺");
                         }
-                        else
-                        {
+                        else {
                             // 如果找不到，设置一个默认值
                             spell.range = 30; // 根据自定义5E规则，统一为30尺
                             Debug.Log($"无法找到法术 {spell.name} 的正确范围，设置默认值30尺");
@@ -343,23 +312,19 @@ namespace DND5E
                 // 初始化法术位
                 spellList.RestoreAllSpellSlots();
             }
-            else
-            {
+            else {
                 Debug.LogWarning($"预制体 {characterName} 没有设置已知法术，请在Unity编辑器中设置");
             }
         }
 
         // 初始化所有可用法术（现在只用于范围修复，不再硬编码法术）
-        private void InitializeAllAvailableSpells()
-        {
+        private void InitializeAllAvailableSpells() {
             // 清空字典
             allAvailableSpells.Clear();
 
             // 从预制体上的已知法术列表构建字典，用于范围修复
-            foreach (var spell in spellList.knownSpells)
-            {
-                if (!allAvailableSpells.ContainsKey(spell.name))
-                {
+            foreach (var spell in spellList.knownSpells) {
+                if (!allAvailableSpells.ContainsKey(spell.name)) {
                     allAvailableSpells.Add(spell.name, spell);
                 }
             }
@@ -367,32 +332,27 @@ namespace DND5E
         }
 
         // 恢复法术位
-        public void RestoreSpellSlots()
-        {
+        public void RestoreSpellSlots() {
             // 初始化法术位
             spellList.RestoreAllSpellSlots();
             Debug.Log($"为 {characterName} 恢复了所有法术位");
         }
 
         // 检查是否可以施放法术
-        public bool CanCastSpell(Spell spell)
-        {
+        public bool CanCastSpell(Spell spell) {
             // 检查法术是否在已知法术列表中
             bool spellKnown = spellList.knownSpells.Contains(spell);
             Debug.Log($"法术 {spell.name} 是否在已知法术列表中: {spellKnown}");
 
-            if (!spellKnown)
-            {
+            if (!spellKnown) {
                 Debug.LogWarning($"{characterName} 不知道法术 {spell.name}!");
                 return false;
             }
 
             // 检查法术位（戏法除外）
-            if (spell.level > 0)
-            {
+            if (spell.level > 0) {
                 // 检查是否有足够的法术位
-                if (spellList.spellSlots[spell.level - 1] <= 0)
-                {
+                if (spellList.spellSlots[spell.level - 1] <= 0) {
                     Debug.LogWarning($"{characterName} 没有足够的 {spell.level} 环法术位!");
                     return false;
                 }
@@ -400,8 +360,7 @@ namespace DND5E
 
             // 检查施法时间
             ActionType actionType = ActionType.Action;
-            switch (spell.castingTime)
-            {
+            switch (spell.castingTime) {
                 case CastingTime.Action:
                     actionType = ActionType.Action;
                     break;
@@ -418,8 +377,7 @@ namespace DND5E
 
             // 检查是否有足够的动作
             bool hasRequiredAction = false;
-            switch (actionType)
-            {
+            switch (actionType) {
                 case ActionType.Action:
                     hasRequiredAction = actionSystem.hasAction;
                     break;
@@ -434,8 +392,7 @@ namespace DND5E
                     return false;
             }
 
-            if (!hasRequiredAction)
-            {
+            if (!hasRequiredAction) {
                 Debug.LogWarning($"{characterName} 没有足够的 {actionType} 来施放 {spell.name}!");
                 return false;
             }
@@ -446,8 +403,7 @@ namespace DND5E
         }
 
         // 施放法术
-        public bool CastSpell(Spell spell, GameObject target)
-        {
+        public bool CastSpell(Spell spell, GameObject target) {
             // 确保在施法前恢复默认光标
             Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
             Cursor.visible = true;
@@ -458,19 +414,16 @@ namespace DND5E
             Debug.Log($"当前已知法术数量: {spellList.knownSpells.Count}");
 
             // 列出所有已知法术
-            if (spellList.knownSpells.Count > 0)
-            {
+            if (spellList.knownSpells.Count > 0) {
                 // 构建法术名称列表
                 List<string> spellNames = new List<string>();
-                foreach (var spellItem in spellList.knownSpells)
-                {
+                foreach (var spellItem in spellList.knownSpells) {
                     spellNames.Add(spellItem.name);
                 }
                 string knownSpellsList = string.Join(", ", spellNames);
                 Debug.Log($"已知法术列表: {knownSpellsList}");
             }
-            else
-            {
+            else {
                 Debug.LogWarning("已知法术列表为空!");
             }
 
@@ -478,17 +431,14 @@ namespace DND5E
             bool spellKnown = spellList.knownSpells.Contains(spell);
             Debug.Log($"法术 {spell.name} 是否在已知法术列表中: {spellKnown}");
 
-            if(!spellKnown)
-            {
+            if (!spellKnown) {
                 Debug.LogWarning($"{characterName} 不知道法术 {spell.name}!");
                 return false;
             }
 
             // 检查法术位（戏法除外）
-            if(spell.level > 0)
-            {
-                if(!spellList.UseSpellSlot(spell.level))
-                {
+            if (spell.level > 0) {
+                if (!spellList.UseSpellSlot(spell.level)) {
                     Debug.LogWarning($"{characterName} 没有足够的 {spell.level} 环法术位!");
                     return false;
                 }
@@ -496,8 +446,7 @@ namespace DND5E
 
             // 检查施法时间
             ActionType actionType = ActionType.Action;
-            switch(spell.castingTime)
-            {
+            switch (spell.castingTime) {
                 case CastingTime.Action:
                     actionType = ActionType.Action;
                     break;
@@ -513,14 +462,12 @@ namespace DND5E
             }
 
             // 使用行动
-            if(!actionSystem.UseAction(actionType))
-            {
+            if (!actionSystem.UseAction(actionType)) {
                 return false;
             }
 
             // 检查施法距离
-            if(target != null)
-            {
+            if (target != null) {
                 float distance = Vector3.Distance(transform.position, target.transform.position);
 
                 // 详细记录法术范围信息
@@ -528,18 +475,15 @@ namespace DND5E
                 Debug.Log($"与目标的距离: {distance}尺");
 
                 // 如果法术范围为0，尝试修复
-                if (spell.range <= 0)
-                {
+                if (spell.range <= 0) {
                     Debug.LogWarning($"法术 {spell.name} 的施法范围为0或负值，尝试修复...");
 
                     // 尝试从allAvailableSpells中获取正确的法术对象
-                    if (allAvailableSpells.TryGetValue(spell.name, out Spell correctSpell))
-                    {
+                    if (allAvailableSpells.TryGetValue(spell.name, out Spell correctSpell)) {
                         Debug.Log($"从allAvailableSpells中找到了法术 {spell.name}，其范围为: {correctSpell.range}尺");
                         spell.range = correctSpell.range;
                     }
-                    else
-                    {
+                    else {
                         // 如果找不到，设置一个默认值
                         Debug.LogWarning($"无法从allAvailableSpells中找到法术 {spell.name}，设置默认范围为30尺");
                         spell.range = 30; // 根据自定义5E规则，统一为30尺
@@ -549,21 +493,17 @@ namespace DND5E
                 }
 
                 // 再次检查距离
-                if(distance > spell.range)
-                {
+                if (distance > spell.range) {
                     string rangeMessage = $"目标超出 {spell.name} 的施法范围 ({distance:F1} > {spell.range})!";
                     Debug.LogWarning(rangeMessage);
 
                     // 在战斗日志中添加提示
-                    if (DND_BattleUI.Instance != null)
-                    {
-                        DND_BattleUI.Instance.AddCombatLog(rangeMessage);
-                    }
+                    // 战斗日志已转移至挂机系统自动记录
+                    Debug.Log(rangeMessage);
 
                     return false;
                 }
-                else
-                {
+                else {
                     Debug.Log($"目标在 {spell.name} 的施法范围内 ({distance:F1} <= {spell.range})");
                 }
             }
@@ -572,8 +512,7 @@ namespace DND5E
             Debug.Log($"{characterName} 施放 {spell.name}!");
 
             // 如果有目标，让施法者面朝目标
-            if (target != null)
-            {
+            if (target != null) {
                 FaceTarget(target);
             }
 
@@ -583,28 +522,19 @@ namespace DND5E
             // 获取施法者和目标的CharacterStats组件
             global::CharacterStats casterStats = GetComponent<global::CharacterStats>();
             global::CharacterStats targetStats = null;
-            if (target != null)
-            {
+            if (target != null) {
                 targetStats = target.GetComponent<global::CharacterStats>();
             }
 
-            // 在战斗日志中记录施法信息
-            if (DND_BattleUI.Instance != null)
+            // 战斗日志已转移至挂机系统自动记录
             {
-                int currentRound = 0;
-                if (CombatManager.Instance != null)
-                {
-                    currentRound = CombatManager.Instance.currentRound;
-                }
-
                 string casterName = casterStats != null ? casterStats.GetDisplayName() : characterName;
                 string targetName = targetStats != null ? targetStats.GetDisplayName() : "未知目标";
 
-                DND_BattleUI.Instance.AddCombatLog($"[回合 {currentRound}] {casterName} 施放 {spell.name}");
+                Debug.Log($"{casterName} 施放 {spell.name}");
 
-                if (target != null)
-                {
-                    DND_BattleUI.Instance.AddCombatLog($"目标: {targetName}");
+                if (target != null) {
+                    Debug.Log($"目标: {targetName}");
                 }
             }
 
@@ -614,39 +544,33 @@ namespace DND5E
             Debug.Log("SpellSystem确保施法后恢复默认光标");
 
             // 处理法术效果
-            if(spell.dealsDamage)
-            {
+            if (spell.dealsDamage) {
                 // 获取伤害公式
                 string damageFormula = spell.damageFormula;
                 string originalDamageFormula = damageFormula; // 保存原始公式用于显示
 
                 // 通用的等级缩放处理（如果法术配置了等级缩放）
-                if(spell.scalesWithLevel)
-                {
+                if (spell.scalesWithLevel) {
                     // 获取施法者等级
                     int casterLevel = 1;
                     global::CharacterStats characterStatsComponent = GetComponent<global::CharacterStats>();
-                    if(characterStatsComponent != null)
-                    {
+                    if (characterStatsComponent != null) {
                         casterLevel = characterStatsComponent.level;
                         Debug.Log($"从CharacterStats组件获取到施法者等级: {casterLevel}");
                     }
-                    else
-                    {
+                    else {
                         Debug.LogWarning("无法获取CharacterStats组件，使用默认施法者等级: 1");
                     }
 
                     // 根据配置的等级间隔计算额外骰子
                     int extraDice = 0;
-                    if (spell.levelScalingInterval > 0)
-                    {
+                    if (spell.levelScalingInterval > 0) {
                         extraDice = (casterLevel - 1) / spell.levelScalingInterval;
                     }
 
                     // 解析原始伤害公式，获取骰子类型
                     string[] diceParts = spell.damageFormula.Split('d');
-                    if (diceParts.Length == 2)
-                    {
+                    if (diceParts.Length == 2) {
                         int baseDiceCount = int.Parse(diceParts[0]);
                         string diceType = diceParts[1].Split('+')[0]; // 处理可能的加值部分
 
@@ -656,25 +580,21 @@ namespace DND5E
 
                         Debug.Log($"{spell.name} - 施法者等级: {casterLevel}, 原始公式: {spell.damageFormula}, 调整后: {damageFormula}");
                     }
-                    else
-                    {
+                    else {
                         Debug.LogWarning($"无法解析{spell.name}的伤害公式: {spell.damageFormula}，使用原始公式");
                     }
                 }
 
                 // 如果需要攻击掷骰（如奥术冲击）
-                if (spell.requiresAttackRoll && target != null && targetStats != null)
-                {
+                if (spell.requiresAttackRoll && target != null && targetStats != null) {
                     // 获取施法者的CharacterStats组件
                     global::CharacterStats attackCasterStats = GetComponent<global::CharacterStats>();
-                    if (attackCasterStats != null)
-                    {
+                    if (attackCasterStats != null) {
                         // 确定施法关键属性加值
                         int abilityMod = 0;
                         string abilityName = "int"; // 默认使用智力
 
-                        switch (attackCasterStats.characterClass)
-                        {
+                        switch (attackCasterStats.characterClass) {
                             case DND5E.CharacterClass.Wizard:
                                 abilityMod = attackCasterStats.stats.IntMod;
                                 abilityName = "int";
@@ -707,32 +627,26 @@ namespace DND5E
                         if (profBonus != 0) attackFormula += $" + 熟练({profBonus})";
 
                         // 添加到战斗日志
-                        if (DND_BattleUI.Instance != null)
-                        {
+                        if (DND_BattleUI.Instance != null) {
                             string attackTypeStr = spell.isRangedAttack ? "远程法术" : "近战法术";
                             DND_BattleUI.Instance.AddCombatLog($"法术攻击检定: {attackFormula} = {attackRoll} vs AC {targetStats.armorClass}");
                         }
 
                         // 检查是否命中
-                        if (attackRoll >= targetStats.armorClass)
-                        {
+                        if (attackRoll >= targetStats.armorClass) {
                             // 命中
-                            if (DND_BattleUI.Instance != null)
-                            {
+                            if (DND_BattleUI.Instance != null) {
                                 DND_BattleUI.Instance.AddCombatLog($"法术命中!");
                             }
                         }
-                        else
-                        {
+                        else {
                             // 未命中
-                            if (DND_BattleUI.Instance != null)
-                            {
+                            if (DND_BattleUI.Instance != null) {
                                 DND_BattleUI.Instance.AddCombatLog($"法术未命中!");
                             }
 
                             // 显示Miss文本
-                            if (DamageNumberManager.Instance != null && target != null)
-                            {
+                            if (DamageNumberManager.Instance != null && target != null) {
                                 DamageNumberManager.Instance.ShowMissText(target.transform);
                             }
 
@@ -749,10 +663,8 @@ namespace DND5E
                 string spellAbilityName = "int"; // 默认使用智力
 
                 global::CharacterStats spellCasterStats = GetComponent<global::CharacterStats>();
-                if (spellCasterStats != null)
-                {
-                    switch (spellCasterStats.characterClass)
-                    {
+                if (spellCasterStats != null) {
+                    switch (spellCasterStats.characterClass) {
                         case DND5E.CharacterClass.Wizard:
                             spellAbilityMod = spellCasterStats.stats.IntMod;
                             spellAbilityName = "int";
@@ -774,12 +686,10 @@ namespace DND5E
                 }
 
                 // 如果需要豁免检定
-                if(spell.requiresSavingThrow && target != null && targetStats != null)
-                {
+                if (spell.requiresSavingThrow && target != null && targetStats != null) {
                     // 计算豁免DC
                     int saveDC = 8; // 基础DC
-                    if (spellCasterStats != null)
-                    {
+                    if (spellCasterStats != null) {
                         saveDC += spellAbilityMod + spellCasterStats.proficiencyBonus;
                     }
 
@@ -790,8 +700,7 @@ namespace DND5E
                     string saveAbility = "dex"; // 默认敏捷
                     string saveAbilityName = "敏捷";
 
-                    switch (spell.savingThrowAbility.ToLower())
-                    {
+                    switch (spell.savingThrowAbility.ToLower()) {
                         case "str":
                             saveAbility = "str";
                             saveAbilityName = "力量";
@@ -823,61 +732,51 @@ namespace DND5E
                     bool savingThrowSuccess = saveResult >= saveDC;
 
                     // 添加到战斗日志
-                    if (DND_BattleUI.Instance != null)
-                    {
+                    if (DND_BattleUI.Instance != null) {
                         string casterName = casterStatsForName != null ? casterStatsForName.GetDisplayName() : characterName;
                         string targetName = targetStats.GetDisplayName();
 
                         DND_BattleUI.Instance.AddCombatLog($"{targetName} 进行 {saveAbilityName} 豁免检定: {saveResult} vs DC {saveDC}");
                     }
 
-                    if(savingThrowSuccess)
-                    {
+                    if (savingThrowSuccess) {
                         damage /= 2;
 
-                        if (DND_BattleUI.Instance != null)
-                        {
+                        if (DND_BattleUI.Instance != null) {
                             DND_BattleUI.Instance.AddCombatLog($"豁免成功，伤害减半!");
                         }
                     }
-                    else
-                    {
+                    else {
                         Debug.Log($"目标豁免失败，受到全额伤害: {damage}");
 
-                        if (DND_BattleUI.Instance != null)
-                        {
+                        if (DND_BattleUI.Instance != null) {
                             DND_BattleUI.Instance.AddCombatLog($"豁免失败，受到全额伤害!");
                         }
                     }
                 }
 
                 // 造成伤害
-                if (target != null)
-                {
+                if (target != null) {
                     // 尝试播放法术特效（基于法术名称动态查找）
                     bool effectPlayed = TryPlaySpellEffect(spell, target, damage);
 
-                    if (!effectPlayed)
-                    {
+                    if (!effectPlayed) {
                         // 如果没有特效或特效播放失败，直接造成伤害
                         ApplyDirectSpellDamage(spell, target, damage, originalDamageFormula, spellAbilityMod, spellAbilityName);
                     }
                 }
-                else
-                {
+                else {
                     Debug.LogWarning("目标为空，无法造成伤害!");
                 }
             }
 
             // 处理治疗法术
-            if(spell.heals && target != null && targetStats != null)
-            {
+            if (spell.heals && target != null && targetStats != null) {
                 ApplySpellHealing(spell, target, targetStats);
             }
 
             // 应用状态效果
-            if(spell.statusEffects.Count > 0 && target != null && targetStats != null)
-            {
+            if (spell.statusEffects.Count > 0 && target != null && targetStats != null) {
                 ApplySpellStatusEffects(spell, target, targetStats);
             }
 
@@ -887,46 +786,39 @@ namespace DND5E
         /// <summary>
         /// 尝试播放法术特效
         /// </summary>
-        private bool TryPlaySpellEffect(Spell spell, GameObject target, int damage)
-        {
+        private bool TryPlaySpellEffect(Spell spell, GameObject target, int damage) {
             // 查找SpellEffects组件
             SpellEffects spellEffectsComponent = SpellEffects.Instance;
-            if (spellEffectsComponent == null)
-            {
+            if (spellEffectsComponent == null) {
                 spellEffectsComponent = FindObjectOfType<SpellEffects>();
             }
 
-            if (spellEffectsComponent == null)
-            {
+            if (spellEffectsComponent == null) {
                 Debug.LogWarning($"未找到SpellEffects组件，无法播放{spell.name}特效");
                 return false;
             }
 
             // 根据法术名称动态调用对应的特效方法
-            try
-            {
-                switch (spell.name)
-                {
+            try {
+                switch (spell.name) {
                     case "奥术冲击":
-                        if (spellEffectsComponent.arcaneBlastPrefab != null)
-                        {
+                        if (spellEffectsComponent.arcaneBlastPrefab != null) {
                             spellEffectsComponent.PlayArcaneBlast(gameObject, target, damage, spell.damageType, null);
                             return true;
                         }
                         break;
 
-                    // 可以在这里添加其他法术的特效处理
-                    // case "魔法飞弹":
-                    //     if (spellEffectsComponent.magicMissilePrefab != null)
-                    //     {
-                    //         spellEffectsComponent.PlayMagicMissile(gameObject, target, damage, spell.damageType, null);
-                    //         return true;
-                    //     }
-                    //     break;
+                        // 可以在这里添加其他法术的特效处理
+                        // case "魔法飞弹":
+                        //     if (spellEffectsComponent.magicMissilePrefab != null)
+                        //     {
+                        //         spellEffectsComponent.PlayMagicMissile(gameObject, target, damage, spell.damageType, null);
+                        //         return true;
+                        //     }
+                        //     break;
                 }
             }
-            catch (System.Exception e)
-            {
+            catch (System.Exception e) {
                 Debug.LogError($"播放{spell.name}特效时出错: {e.Message}");
             }
 
@@ -936,8 +828,7 @@ namespace DND5E
         /// <summary>
         /// 直接应用法术伤害（无特效）
         /// </summary>
-        private void ApplyDirectSpellDamage(Spell spell, GameObject target, int damage, string originalDamageFormula, int spellAbilityMod, string spellAbilityName)
-        {
+        private void ApplyDirectSpellDamage(Spell spell, GameObject target, int damage, string originalDamageFormula, int spellAbilityMod, string spellAbilityName) {
             global::CharacterStats targetStats = target.GetComponent<global::CharacterStats>();
             if (targetStats == null) return;
 
@@ -945,8 +836,7 @@ namespace DND5E
             DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
             AnimationController targetAnimController = null;
 
-            if (targetAdapter == null)
-            {
+            if (targetAdapter == null) {
                 targetAnimController = target.GetComponent<AnimationController>();
             }
 
@@ -960,14 +850,12 @@ namespace DND5E
         /// <summary>
         /// 记录伤害到战斗日志
         /// </summary>
-        private void RecordDamageToLog(string originalDamageFormula, int damage, int spellAbilityMod, string spellAbilityName, DND5E.DamageType damageType)
-        {
+        private void RecordDamageToLog(string originalDamageFormula, int damage, int spellAbilityMod, string spellAbilityName, DND5E.DamageType damageType) {
             if (DND_BattleUI.Instance == null) return;
 
             // 构建伤害公式字符串
             string[] diceParts = originalDamageFormula.Split('d');
-            if (diceParts.Length >= 2)
-            {
+            if (diceParts.Length >= 2) {
                 int diceCount = int.Parse(diceParts[0]);
                 string diceType = diceParts[1].Split('+')[0];
 
@@ -986,8 +874,7 @@ namespace DND5E
         /// <summary>
         /// 应用法术治疗
         /// </summary>
-        private void ApplySpellHealing(Spell spell, GameObject target, global::CharacterStats targetStats)
-        {
+        private void ApplySpellHealing(Spell spell, GameObject target, global::CharacterStats targetStats) {
             // 解析治疗公式
             int healing = RollDamage(spell.healingFormula);
             string originalHealingFormula = spell.healingFormula;
@@ -997,10 +884,8 @@ namespace DND5E
             string spellAbilityName = "wis";
 
             global::CharacterStats healCasterStats = GetComponent<global::CharacterStats>();
-            if (healCasterStats != null)
-            {
-                switch (healCasterStats.characterClass)
-                {
+            if (healCasterStats != null) {
+                switch (healCasterStats.characterClass) {
                     case DND5E.CharacterClass.Wizard:
                         spellAbilityMod = healCasterStats.stats.IntMod;
                         spellAbilityName = "int";
@@ -1022,16 +907,14 @@ namespace DND5E
             }
 
             // 记录治疗结果
-            if (DND_BattleUI.Instance != null)
-            {
+            if (DND_BattleUI.Instance != null) {
                 string casterName = GetComponent<global::CharacterStats>() != null ?
                     GetComponent<global::CharacterStats>().GetDisplayName() : characterName;
                 string targetName = targetStats.GetDisplayName();
 
                 // 构建治疗公式字符串
                 string[] diceParts = originalHealingFormula.Split('d');
-                if (diceParts.Length >= 2)
-                {
+                if (diceParts.Length >= 2) {
                     int diceCount = int.Parse(diceParts[0]);
                     string diceType = diceParts[1].Split('+')[0];
                     int diceRoll = healing;
@@ -1053,22 +936,19 @@ namespace DND5E
         /// <summary>
         /// 应用法术状态效果
         /// </summary>
-        private void ApplySpellStatusEffects(Spell spell, GameObject target, global::CharacterStats targetStats)
-        {
+        private void ApplySpellStatusEffects(Spell spell, GameObject target, global::CharacterStats targetStats) {
             // 获取施法者名称
             string casterName = GetComponent<global::CharacterStats>() != null ?
                 GetComponent<global::CharacterStats>().GetDisplayName() : characterName;
             string targetName = targetStats.GetDisplayName();
 
             // 记录状态效果信息
-            if (DND_BattleUI.Instance != null)
-            {
+            if (DND_BattleUI.Instance != null) {
                 DND_BattleUI.Instance.AddCombatLog($"{casterName} 对 {targetName} 施加状态效果: {string.Join(", ", spell.statusEffects)}");
             }
 
             // 应用状态效果
-            foreach (var effect in spell.statusEffects)
-            {
+            foreach (var effect in spell.statusEffects) {
                 targetStats.AddStatusEffect(effect);
             }
 
@@ -1076,27 +956,23 @@ namespace DND5E
         }
 
         // 让施法者面朝目标
-        private void FaceTarget(GameObject target)
-        {
+        private void FaceTarget(GameObject target) {
             if (target == null) return;
 
             // 计算朝向目标的方向
             Vector3 direction = (target.transform.position - transform.position).normalized;
 
-            if (direction.x != 0)
-            {
+            if (direction.x != 0) {
                 // 如果角色有SpriteRenderer，设置flipX
                 SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-                if (spriteRenderer != null)
-                {
+                if (spriteRenderer != null) {
                     spriteRenderer.flipX = direction.x < 0;
                     Debug.Log($"{characterName} 使用SpriteRenderer面朝目标，flipX: {spriteRenderer.flipX}");
                 }
 
                 // 如果角色有SkeletonAnimation，设置scale.x
                 Spine.Unity.SkeletonAnimation skeletonAnimation = GetComponent<Spine.Unity.SkeletonAnimation>();
-                if (skeletonAnimation != null)
-                {
+                if (skeletonAnimation != null) {
                     Vector3 scale = skeletonAnimation.transform.localScale;
                     scale.x = Mathf.Abs(scale.x) * (direction.x < 0 ? -1 : 1);
                     skeletonAnimation.transform.localScale = scale;
@@ -1106,12 +982,10 @@ namespace DND5E
         }
 
         // 播放施法动画
-        private void PlayCastAnimation()
-        {
+        private void PlayCastAnimation() {
             // 首先尝试使用DND_CharacterAdapter
             DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
-            if (characterAdapter != null)
-            {
+            if (characterAdapter != null) {
                 characterAdapter.PlayCastAnimation();
                 Debug.Log($"使用DND_CharacterAdapter播放施法动画: {characterAdapter.animationMapping.castAnimation}");
                 return;
@@ -1119,8 +993,7 @@ namespace DND5E
 
             // 如果没有DND_CharacterAdapter，尝试使用AnimationController
             AnimationController animController = GetComponent<AnimationController>();
-            if (animController != null)
-            {
+            if (animController != null) {
                 animController.PlayCastSpell();
                 Debug.Log($"使用AnimationController播放施法动画: {animController.castSpellAnimation}");
                 return;
@@ -1130,10 +1003,8 @@ namespace DND5E
         }
 
         // 统一的法术伤害应用方法
-        private void ApplySpellDamage(global::CharacterStats targetStats, int damage, DND5E.DamageType damageType, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController)
-        {
-            if (targetStats == null)
-            {
+        private void ApplySpellDamage(global::CharacterStats targetStats, int damage, DND5E.DamageType damageType, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController) {
+            if (targetStats == null) {
                 Debug.LogError("ApplySpellDamage: targetStats为null");
                 return;
             }
@@ -1147,42 +1018,35 @@ namespace DND5E
         }
 
         // 播放法术命中效果和处理死亡
-        private IEnumerator PlaySpellHitEffects(global::CharacterStats targetStats, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController)
-        {
+        private IEnumerator PlaySpellHitEffects(global::CharacterStats targetStats, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController) {
             // 等待一小段时间，确保有时间准备播放受击动画
             yield return new WaitForSeconds(0.1f);
 
             // 播放受击动画
-            if (targetAdapter != null)
-            {
+            if (targetAdapter != null) {
                 // 使用DND_CharacterAdapter的TakeDamage方法，它会播放受击动画，并在生命值为0时播放死亡动画
                 targetAdapter.TakeDamage();
                 Debug.Log($"调用 {targetStats.characterName} 的TakeDamage方法播放受击动画");
             }
-            else if (targetAnimController != null)
-            {
+            else if (targetAnimController != null) {
                 // 如果没有DND_CharacterAdapter，使用AnimationController
                 targetAnimController.PlayHit();
                 Debug.Log($"使用AnimationController播放目标受击动画: {targetAnimController.hitAnimation}");
             }                // 确保UI更新
-                if (DND_BattleUI.Instance != null)
-                {
-                    DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
-                }
+            if (DND_BattleUI.Instance != null) {
+                DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
+            }
 
             // 检查目标是否死亡
-            if (targetStats.currentHitPoints <= 0)
-            {
+            if (targetStats.currentHitPoints <= 0) {
                 yield return new WaitForSeconds(0.5f); // 给受击动画更多时间
 
-                if (targetAdapter != null)
-                {
+                if (targetAdapter != null) {
                     // 使用DND_CharacterAdapter播放死亡动画
                     targetAdapter.PlayDeathAnimation();
                     Debug.Log($"使用DND_CharacterAdapter播放目标死亡动画: {targetAdapter.animationMapping.deathAnimation}");
                 }
-                else if (targetAnimController != null)
-                {
+                else if (targetAnimController != null) {
                     // 如果没有DND_CharacterAdapter，使用AnimationController
                     targetAnimController.PlayDeath();
                     Debug.Log($"使用AnimationController播放目标死亡动画: {targetAnimController.deathAnimation}");
@@ -1191,34 +1055,29 @@ namespace DND5E
         }
 
         // 掷骰计算伤害
-        private int RollDamage(string damageFormula)
-        {
+        private int RollDamage(string damageFormula) {
             // 解析伤害公式，例如 "3d6+5"
             string[] parts = damageFormula.Split('+');
 
             int damage = 0;
 
             // 处理骰子部分
-            if(parts.Length > 0)
-            {
+            if (parts.Length > 0) {
                 string dicePart = parts[0];
                 string[] diceParts = dicePart.Split('d');
 
-                if(diceParts.Length == 2)
-                {
+                if (diceParts.Length == 2) {
                     int diceCount = int.Parse(diceParts[0]);
                     int diceType = int.Parse(diceParts[1]);
 
-                    for(int i = 0; i < diceCount; i++)
-                    {
+                    for (int i = 0; i < diceCount; i++) {
                         damage += Random.Range(1, diceType + 1);
                     }
                 }
             }
 
             // 处理固定加值部分
-            if(parts.Length > 1)
-            {
+            if (parts.Length > 1) {
                 damage += int.Parse(parts[1]);
             }
 

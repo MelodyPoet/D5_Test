@@ -3,15 +3,51 @@ using UnityEngine;
 using DND5E;
 
 /// <summary>
-/// 横版战斗阵型管理器 - 专注于spawn点和阵型管理
-/// 不再负责角色生成，只提供位置计算和排列服务
+/// 横版战斗阵型管理器 - 负责阵型配置和位置管理
+/// 提供清晰的中文标识阵型配置面板
 /// </summary>
 public class HorizontalBattleFormationManager : MonoBehaviour {
-    [Header("⚠️ 说明：BattleFormationManager专注于spawn点和阵型管理")]
-    [Header("⚠️ 角色生成请使用CombatManager API或手动配置")]
-    [Space(10)]
+    [Header("🔵 玩家阵型配置 (左侧)")]
+    [Space(5)]
 
-    [Header("自动位置计算")]
+    [Header("前排")]
+    [Tooltip("玩家前排左翼角色预制体")]
+    public GameObject 玩家前排左翼;
+    [Tooltip("玩家前排中锋角色预制体")]
+    public GameObject 玩家前排中锋;
+    [Tooltip("玩家前排右翼角色预制体")]
+    public GameObject 玩家前排右翼;
+
+    [Header("后排")]
+    [Tooltip("玩家后排左翼角色预制体")]
+    public GameObject 玩家后排左翼;
+    [Tooltip("玩家后排中路角色预制体")]
+    public GameObject 玩家后排中路;
+    [Tooltip("玩家后排右翼角色预制体")]
+    public GameObject 玩家后排右翼;
+
+    [Space(15)]
+    [Header("🔴 敌人阵型配置 (右侧)")]
+    [Space(5)]
+
+    [Header("前排")]
+    [Tooltip("敌人前排左翼角色预制体")]
+    public GameObject 敌人前排左翼;
+    [Tooltip("敌人前排中锋角色预制体")]
+    public GameObject 敌人前排中锋;
+    [Tooltip("敌人前排右翼角色预制体")]
+    public GameObject 敌人前排右翼;
+
+    [Header("后排")]
+    [Tooltip("敌人后排左翼角色预制体")]
+    public GameObject 敌人后排左翼;
+    [Tooltip("敌人后排中路角色预制体")]
+    public GameObject 敌人后排中路;
+    [Tooltip("敌人后排右翼角色预制体")]
+    public GameObject 敌人后排右翼;
+
+    [Space(15)]
+    [Header("⚙️ 阵型参数设置")]
     [Tooltip("战场宽度 - 整个战场的总宽度")]
     public float battlefieldWidth = 20f;
     [Tooltip("战场深度 - 前排到后排的X轴距离，控制前后排的深度间隔")]
@@ -57,14 +93,14 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
 
     /// <summary>
     /// 初始化战斗 - 仅负责spawn点生成，不再负责角色生成
-    /// 角色生成请直接调用CombatManager API或手动配置
+    /// 角色生成请直接调用IdleGameManager API或手动配置
     /// </summary>
     public void InitializeBattle() {
         Debug.Log("🏗️ BattleFormationManager初始化 - 专注于spawn点管理");
-        Debug.Log("⚠️ 注意：角色生成请使用CombatManager.StartExplorationToCombatSequence()或手动配置");
+        Debug.Log("⚠️ 注意：角色生成请使用IdleGameManager.GenerateInitialTeams()或手动配置");
 
         // 只负责生成spawn点，不生成角色
-        // 角色生成由CombatManager或其他系统负责
+        // 角色生成由IdleGameManager或其他挂机系统负责
     }
 
     /// <summary>
@@ -483,5 +519,97 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         // 重新初始化数组
         generatedPlayerSpawnPoints = new Transform[6];
         generatedEnemySpawnPoints = new Transform[6];
+    }
+
+    /// <summary>
+    /// 🎯 生成完整玩家阵型（根据预制体配置）
+    /// </summary>
+    public List<CharacterStats> GeneratePlayerFormation() {
+        List<CharacterStats> playerTeam = new List<CharacterStats>();
+        GameObject[] playerPrefabs = {
+            玩家前排左翼, 玩家前排中锋, 玩家前排右翼,
+            玩家后排左翼, 玩家后排中路, 玩家后排右翼
+        };
+
+        string[] positionNames = {
+            "玩家前排左翼", "玩家前排中锋", "玩家前排右翼",
+            "玩家后排左翼", "玩家后排中路", "玩家后排右翼"
+        };
+
+        for (int i = 0; i < playerPrefabs.Length; i++) {
+            if (playerPrefabs[i] != null) {
+                GameObject instance = Instantiate(playerPrefabs[i]);
+                instance.name = positionNames[i];
+
+                CharacterStats stats = instance.GetComponent<CharacterStats>();
+                if (stats == null) {
+                    stats = instance.AddComponent<CharacterStats>();
+                }
+
+                stats.battleSide = BattleSide.Player;
+                stats.characterName = positionNames[i];
+                instance.tag = "Player";
+
+                playerTeam.Add(stats);
+            }
+        }
+
+        // 排列阵型
+        ArrangeExistingTeam(playerTeam, BattleSide.Player);
+        Debug.Log($"🔵 生成玩家阵型完成，共 {playerTeam.Count} 人");
+        return playerTeam;
+    }
+
+    /// <summary>
+    /// 🎯 生成完整敌人阵型（根据预制体配置）
+    /// </summary>
+    public List<CharacterStats> GenerateEnemyFormation() {
+        List<CharacterStats> enemyTeam = new List<CharacterStats>();
+        GameObject[] enemyPrefabs = {
+            敌人前排左翼, 敌人前排中锋, 敌人前排右翼,
+            敌人后排左翼, 敌人后排中路, 敌人后排右翼
+        };
+
+        string[] positionNames = {
+            "敌人前排左翼", "敌人前排中锋", "敌人前排右翼",
+            "敌人后排左翼", "敌人后排中路", "敌人后排右翼"
+        };
+
+        for (int i = 0; i < enemyPrefabs.Length; i++) {
+            if (enemyPrefabs[i] != null) {
+                GameObject instance = Instantiate(enemyPrefabs[i]);
+                instance.name = positionNames[i];
+
+                CharacterStats stats = instance.GetComponent<CharacterStats>();
+                if (stats == null) {
+                    stats = instance.AddComponent<CharacterStats>();
+                }
+
+                stats.battleSide = BattleSide.Enemy;
+                stats.characterName = positionNames[i];
+                instance.tag = "Enemy";
+
+                enemyTeam.Add(stats);
+            }
+        }
+
+        // 排列阵型
+        ArrangeExistingTeam(enemyTeam, BattleSide.Enemy);
+        Debug.Log($"🔴 生成敌人阵型完成，共 {enemyTeam.Count} 人");
+        return enemyTeam;
+    }
+
+    /// <summary>
+    /// 🎯 获取阵型配置摘要（用于调试）
+    /// </summary>
+    public string GetFormationSummary() {
+        string summary = "🎯 当前阵型配置:\n";
+        summary += "🔵 玩家阵型:\n";
+        summary += $"  前排: {(玩家前排左翼?.name ?? "空")} | {(玩家前排中锋?.name ?? "空")} | {(玩家前排右翼?.name ?? "空")}\n";
+        summary += $"  后排: {(玩家后排左翼?.name ?? "空")} | {(玩家后排中路?.name ?? "空")} | {(玩家后排右翼?.name ?? "空")}\n";
+        summary += "🔴 敌人阵型:\n";
+        summary += $"  前排: {(敌人前排左翼?.name ?? "空")} | {(敌人前排中锋?.name ?? "空")} | {(敌人前排右翼?.name ?? "空")}\n";
+        summary += $"  后排: {(敌人后排左翼?.name ?? "空")} | {(敌人后排中路?.name ?? "空")} | {(敌人后排右翼?.name ?? "空")}\n";
+        return summary;
     }
 }

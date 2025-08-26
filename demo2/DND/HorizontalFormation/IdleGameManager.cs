@@ -24,21 +24,11 @@ public class IdleGameManager : MonoBehaviour {
     // public Slider progressSlider;
     // public Text rewardsText;
 
-    [Header("队伍配置")]
-    [Tooltip("玩家队伍配置：直接拖入场景中的玩家角色")]
-    public List<CharacterStats> playerParty = new List<CharacterStats>();
-
-    [Header("预制体配置")]
-    [Tooltip("玩家角色预制体列表")]
-    public List<GameObject> playerPrefabs = new List<GameObject>();
-    [Tooltip("敌人角色预制体列表")]
-    public List<GameObject> enemyPrefabs = new List<GameObject>();
-
     [Header("队伍生成设置")]
-    [Tooltip("玩家队伍人数")]
+    [Tooltip("是否使用阵型管理器生成队伍（推荐开启）")]
+    public bool useFormationManager = true;
+    [Tooltip("玩家队伍人数上限")]
     public int playerPartySize = 3;
-    [Tooltip("是否使用预制体生成玩家队伍（否则使用手动配置）")]
-    public bool usePlayerPrefabs = false;
 
     [Header("系统组件")]
     public HorizontalBattleFormationManager formationManager;
@@ -49,6 +39,10 @@ public class IdleGameManager : MonoBehaviour {
     private float nextEncounterTime;
     private Coroutine idleCoroutine;
     private IdleRewards accumulatedRewards;
+
+    // 当前活跃的队伍（运行时生成）
+    private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
+    private List<CharacterStats> currentEnemyTeam = new List<CharacterStats>();
 
     // 阶段配置
     private Dictionary<int, StageData> stageConfigs;
@@ -69,18 +63,23 @@ public class IdleGameManager : MonoBehaviour {
          /// 初始化挂机系统
          /// </summary>
     private void InitializeIdleSystem() {
-        if (formationManager == null)
-            formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+        // 强制手动引用验证 - 移除自动查找逻辑
+        if (formationManager == null) {
+            Debug.LogError("IdleGameManager: formationManager 引用未设置！请在Inspector中手动拖入HorizontalBattleFormationManager组件");
+            return;
+        }
 
-        if (autoBattleAI == null)
-            autoBattleAI = FindObjectOfType<AutoBattleAI>();
+        if (autoBattleAI == null) {
+            Debug.LogError("IdleGameManager: autoBattleAI 引用未设置！请在Inspector中手动拖入AutoBattleAI组件");
+            return;
+        }
 
         accumulatedRewards = new IdleRewards();
         nextEncounterTime = Time.time + encounterInterval;
 
-        // 如果启用预制体生成且玩家队伍为空，则生成玩家队伍
-        if (usePlayerPrefabs && playerParty.Count == 0) {
-            GeneratePlayerParty();
+        // 使用阵型管理器生成初始队伍
+        if (useFormationManager) {
+            GenerateInitialTeams();
         }
     }    /// <summary>
          /// 设置UI
@@ -189,6 +188,9 @@ public class IdleGameManager : MonoBehaviour {
             yield break;
         }
 
+        // 设置玩家队伍为走路动画状态
+        SetPlayerPartyAnimation(Role.ActState.MOVE, "walk");
+
         StageData stageData = stageConfigs[currentStage];
 
         // 更新探索进度
@@ -275,6 +277,11 @@ public class IdleGameManager : MonoBehaviour {
     private IEnumerator AutoBattleSequence(List<CharacterStats> playerParty, List<CharacterStats> enemyParty) {
         int round = 1;
 
+        // 战斗开始时设置所有角色为空闲动画
+        SetPlayerPartyAnimation(Role.ActState.IDLE);
+        SetEnemyPartyAnimation(enemyParty, Role.ActState.IDLE);
+        Debug.Log("🎬 战斗开始，所有角色切换到空闲动画");
+
         while (HasLivingMembers(playerParty) && HasLivingMembers(enemyParty)) {
             Debug.Log($"=== 自动战斗回合 {round} ===");            // 玩家回合
             foreach (CharacterStats player in playerParty) {
@@ -308,9 +315,52 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 生成敌人队伍
+    /// 生成敌人队伍（使用阵型管理器）
     /// </summary>
     private List<CharacterStats> GenerateEnemyParty() {
+        if (formationManager != null) {
+            // 使用阵型管理器生成敌人队伍
+            currentEnemyTeam = formationManager.GenerateEnemyFormation();
+
+            // 根据当前关卡调整敌人属性
+            if (stageConfigs.ContainsKey(currentStage)) {
+                StageData stageData = stageConfigs[currentStage];
+                AdjustEnemyLevels(currentEnemyTeam, stageData.enemyLevel);
+            }
+
+            return currentEnemyTeam;
+        }
+        else {
+            Debug.LogError("FormationManager未设置，使用旧方法生成敌人");
+            return GenerateEnemyParty_Legacy();
+        }
+    }
+
+    /// <summary>
+    /// 调整敌人队伍等级和属性
+    /// </summary>
+    private void AdjustEnemyLevels(List<CharacterStats> enemies, int targetLevel) {
+        foreach (CharacterStats enemy in enemies) {
+            if (enemy != null) {
+                enemy.level = targetLevel;
+                enemy.maxHitPoints = 30 + (targetLevel * 10);
+                enemy.currentHitPoints = enemy.maxHitPoints;
+                enemy.armorClass = 10 + targetLevel;
+
+                // 设置基础属性
+                enemy.stats.Strength = 12 + targetLevel;
+                enemy.stats.Dexterity = 10 + targetLevel;
+                enemy.stats.Constitution = 14 + targetLevel;
+                enemy.proficiencyBonus = 2 + (targetLevel / 4);
+            }
+        }
+        Debug.Log($"🔴 敌人队伍等级已调整为 {targetLevel}");
+    }
+
+    /// <summary>
+    /// 旧版敌人生成方法（备用）
+    /// </summary>
+    private List<CharacterStats> GenerateEnemyParty_Legacy() {
         List<CharacterStats> enemies = new List<CharacterStats>();
 
         if (!stageConfigs.ContainsKey(currentStage))
@@ -328,30 +378,41 @@ public class IdleGameManager : MonoBehaviour {
             }
         }
 
+        // 设置敌人队伍阵型位置（关键修复）
+        if (formationManager != null && enemies.Count > 0) {
+            // 首先将敌人放置在屏幕右侧外面的位置
+            StartCoroutine(EnemyEntranceAnimation(enemies));
+
+            formationManager.ArrangeExistingTeam(enemies, BattleSide.Enemy);
+            Debug.Log("✅ 敌人队伍已排列到右侧阵型位置");
+        }
+        else {
+            Debug.LogWarning("⚠️ 找不到HorizontalBattleFormationManager或敌人列表为空，敌人位置未设置");
+        }
+
         return enemies;
     }
 
     /// <summary>
-    /// 创建随机敌人
+    /// 创建随机敌人（旧版方法，现在使用阵型管理器）
     /// </summary>
     private CharacterStats CreateRandomEnemy(int level) {
         GameObject enemyObj;
 
-        // 如果有敌人预制体，使用预制体创建
-        if (enemyPrefabs.Count > 0) {
-            GameObject prefab = enemyPrefabs[Random.Range(0, enemyPrefabs.Count)];
-            enemyObj = Instantiate(prefab);
-            enemyObj.name = $"敌人_等级{level}";
-        }
-        else {
-            // 否则创建空GameObject
-            enemyObj = new GameObject($"敌人_等级{level}");
-        }
+        // 创建空GameObject（不再依赖enemyPrefabs）
+        enemyObj = new GameObject($"敌人_等级{level}");
 
         // 获取或添加CharacterStats组件
         CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
         if (enemyStats == null) {
             enemyStats = enemyObj.AddComponent<CharacterStats>();
+        }
+
+        // 确保有Role组件用于动画控制
+        Role roleComponent = enemyObj.GetComponent<Role>();
+        if (roleComponent == null) {
+            roleComponent = enemyObj.AddComponent<Role>();
+            Debug.Log($"为敌人 {enemyStats.characterName} 添加Role组件");
         }
 
         // 设置敌人属性
@@ -496,78 +557,20 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 从场景中查找并配置玩家队伍（辅助方法）
+    /// 🎯 生成初始队伍（使用阵型管理器）
     /// </summary>
-    [ContextMenu("从场景中查找玩家队伍")]
-    public void FindPlayerPartyFromScene() {
-        playerParty.Clear();
-
-        // 查找所有标签为Player和Ally的角色
-        GameObject[] playerObjects = GameObject.FindGameObjectsWithTag("Player");
-        GameObject[] allyObjects = GameObject.FindGameObjectsWithTag("Ally");
-
-        // 添加主角
-        foreach (GameObject obj in playerObjects) {
-            CharacterStats stats = obj.GetComponent<CharacterStats>();
-            if (stats != null && stats.currentHitPoints > 0) {
-                playerParty.Add(stats);
-                Debug.Log($"添加玩家角色: {stats.characterName}");
-            }
-        }
-
-        // 添加队友
-        foreach (GameObject obj in allyObjects) {
-            CharacterStats stats = obj.GetComponent<CharacterStats>();
-            if (stats != null && stats.currentHitPoints > 0) {
-                playerParty.Add(stats);
-                Debug.Log($"添加队友角色: {stats.characterName}");
-            }
-        }
-
-        Debug.Log($"查找完成，玩家队伍共 {playerParty.Count} 人");
-    }
-
-    /// <summary>
-    /// 从预制体生成玩家队伍
-    /// </summary>
-    private void GeneratePlayerParty() {
-        if (playerPrefabs.Count == 0) {
-            Debug.LogWarning("玩家预制体列表为空，无法生成队伍！");
+    private void GenerateInitialTeams() {
+        if (formationManager == null) {
+            Debug.LogError("FormationManager未设置，无法生成队伍！");
             return;
         }
 
-        playerParty.Clear();
+        // 生成玩家队伍
+        currentPlayerTeam = formationManager.GeneratePlayerFormation();
+        Debug.Log($"🔵 玩家队伍生成完成，共 {currentPlayerTeam.Count} 人");
 
-        for (int i = 0; i < playerPartySize; i++) {
-            // 随机选择预制体
-            GameObject prefab = playerPrefabs[Random.Range(0, playerPrefabs.Count)];
-
-            // 实例化预制体
-            GameObject playerObj = Instantiate(prefab);
-            playerObj.name = $"玩家角色_{i + 1}";
-
-            // 获取CharacterStats组件
-            CharacterStats stats = playerObj.GetComponent<CharacterStats>();
-            if (stats == null) {
-                // 如果预制体没有CharacterStats，添加一个
-                stats = playerObj.AddComponent<CharacterStats>();
-                InitializePlayerStats(stats, i + 1);
-            }
-
-            // 确保是玩家阵营
-            stats.battleSide = BattleSide.Player;
-            stats.characterName = $"勇士{i + 1}";
-
-            // 设置标签
-            playerObj.tag = "Player";
-
-            // 添加到队伍
-            playerParty.Add(stats);
-
-            Debug.Log($"生成玩家角色: {stats.characterName}");
-        }
-
-        Debug.Log($"玩家队伍生成完成，共 {playerParty.Count} 人");
+        // 显示当前阵型配置
+        Debug.Log(formationManager.GetFormationSummary());
     }
 
     /// <summary>
@@ -590,19 +593,118 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 获取有效的玩家队伍（单一配置方式）
+    /// 获取有效的玩家队伍（使用当前活跃队伍）
     /// </summary>
     private List<CharacterStats> GetValidPlayerParty() {
         List<CharacterStats> validPlayers = new List<CharacterStats>();
 
         // 过滤掉null和死亡的角色
-        foreach (CharacterStats player in playerParty) {
+        foreach (CharacterStats player in currentPlayerTeam) {
             if (player != null && player.currentHitPoints > 0) {
                 validPlayers.Add(player);
             }
         }
 
         return validPlayers;
+    }
+
+    /// <summary>
+    /// 设置玩家队伍动画状态（使用当前活跃队伍）
+    /// </summary>
+    private void SetPlayerPartyAnimation(Role.ActState actState, string animationName = null) {
+        foreach (CharacterStats player in currentPlayerTeam) {
+            if (player != null && player.gameObject != null) {
+                Role roleComponent = player.GetComponent<Role>();
+                if (roleComponent != null) {
+                    roleComponent.playAct(actState, animationName);
+                }
+                else {
+                    Debug.LogWarning($"角色 {player.characterName} 没有Role组件，无法播放动画");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 设置敌人队伍动画状态
+    /// </summary>
+    private void SetEnemyPartyAnimation(List<CharacterStats> enemies, Role.ActState actState, string animationName = null) {
+        foreach (CharacterStats enemy in enemies) {
+            if (enemy != null && enemy.gameObject != null) {
+                Role roleComponent = enemy.GetComponent<Role>();
+                if (roleComponent != null) {
+                    roleComponent.playAct(actState, animationName);
+                }
+                else {
+                    Debug.LogWarning($"敌人 {enemy.characterName} 没有Role组件，无法播放动画");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 敌人进入场景动画（从右侧屏幕外进入）
+    /// </summary>
+    private IEnumerator EnemyEntranceAnimation(List<CharacterStats> enemies) {
+        Debug.Log("🎬 敌人从右侧进入战场...");
+
+        // 先将所有敌人移动到屏幕右侧外面
+        foreach (CharacterStats enemy in enemies) {
+            if (enemy != null && enemy.gameObject != null) {
+                // 将敌人放在屏幕右侧外面
+                Vector3 offScreenPosition = enemy.transform.position;
+                offScreenPosition.x += 15f; // 移动到屏幕右侧
+                enemy.transform.position = offScreenPosition;
+
+                // 设置走路动画
+                Role roleComponent = enemy.GetComponent<Role>();
+                if (roleComponent != null) {
+                    roleComponent.playAct(Role.ActState.MOVE, "walk");
+                }
+            }
+        }
+
+        yield return new WaitForSeconds(0.5f);
+
+        // 敌人走向战斗位置的动画
+        float duration = 2f; // 进入动画持续时间
+        float elapsedTime = 0f;
+
+        List<Vector3> startPositions = new List<Vector3>();
+        List<Vector3> targetPositions = new List<Vector3>();
+
+        // 记录起始和目标位置
+        foreach (CharacterStats enemy in enemies) {
+            if (enemy != null) {
+                startPositions.Add(enemy.transform.position);
+                Vector3 targetPos = enemy.transform.position;
+                targetPos.x -= 15f; // 恢复到正常位置
+                targetPositions.Add(targetPos);
+            }
+        }
+
+        // 平滑移动动画
+        while (elapsedTime < duration) {
+            float t = elapsedTime / duration;
+
+            for (int i = 0; i < enemies.Count; i++) {
+                if (enemies[i] != null && i < startPositions.Count && i < targetPositions.Count) {
+                    enemies[i].transform.position = Vector3.Lerp(startPositions[i], targetPositions[i], t);
+                }
+            }
+
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        // 确保敌人到达最终位置
+        for (int i = 0; i < enemies.Count; i++) {
+            if (enemies[i] != null && i < targetPositions.Count) {
+                enemies[i].transform.position = targetPositions[i];
+            }
+        }
+
+        Debug.Log("✅ 敌人进入动画完成");
     }
 }
 
