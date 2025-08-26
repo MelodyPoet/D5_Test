@@ -896,20 +896,20 @@ namespace DND5E {
                 GetComponent<global::CharacterStats>().GetDisplayName() : characterName;
             string targetName = targetStats.GetDisplayName();
 
-                // 构建治疗公式字符串
-                string[] diceParts = originalHealingFormula.Split('d');
-                if (diceParts.Length >= 2) {
-                    int diceCount = int.Parse(diceParts[0]);
-                    string diceType = diceParts[1].Split('+')[0];
-                    int diceRoll = healing;
-                    if (spellAbilityMod > 0) diceRoll -= spellAbilityMod;
+            // 构建治疗公式字符串
+            string[] diceParts = originalHealingFormula.Split('d');
+            if (diceParts.Length >= 2) {
+                int diceCount = int.Parse(diceParts[0]);
+                string diceType = diceParts[1].Split('+')[0];
+                int diceRoll = healing;
+                if (spellAbilityMod > 0) diceRoll -= spellAbilityMod;
 
-                    string healingFormulaPretty = $"{diceCount}d{diceType}({diceRoll})";
-                    if (spellAbilityMod != 0) healingFormulaPretty += $" + {spellAbilityName}({spellAbilityMod})";
+                string healingFormulaPretty = $"{diceCount}d{diceType}({diceRoll})";
+                if (spellAbilityMod != 0) healingFormulaPretty += $" + {spellAbilityName}({spellAbilityMod})";
 
-                    Debug.Log($"{casterName} 治疗 {targetName}");
-                    Debug.Log($"治疗: {healingFormulaPretty} = {healing} 点生命值");
-                }
+                Debug.Log($"{casterName} 治疗 {targetName}");
+                Debug.Log($"治疗: {healingFormulaPretty} = {healing} 点生命值");
+            }
 
             // 治疗目标
             targetStats.HealDamage(healing);
