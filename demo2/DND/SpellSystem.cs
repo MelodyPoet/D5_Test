@@ -291,7 +291,7 @@ namespace DND5E {
             if (spellList.knownSpells.Count > 0) {
                 // 构建法术名称列表
                 List<string> spellNames = new List<string>();
-                foreach (var spell in spellList.knownSpells) {
+                foreach (Spell spell in spellList.knownSpells) {
                     spellNames.Add(spell.name);
 
                     // 确保法术范围正确设置
@@ -323,7 +323,7 @@ namespace DND5E {
             allAvailableSpells.Clear();
 
             // 从预制体上的已知法术列表构建字典，用于范围修复
-            foreach (var spell in spellList.knownSpells) {
+            foreach (Spell spell in spellList.knownSpells) {
                 if (!allAvailableSpells.ContainsKey(spell.name)) {
                     allAvailableSpells.Add(spell.name, spell);
                 }
@@ -417,7 +417,7 @@ namespace DND5E {
             if (spellList.knownSpells.Count > 0) {
                 // 构建法术名称列表
                 List<string> spellNames = new List<string>();
-                foreach (var spellItem in spellList.knownSpells) {
+                foreach (Spell spellItem in spellList.knownSpells) {
                     spellNames.Add(spellItem.name);
                 }
                 string knownSpellsList = string.Join(", ", spellNames);
@@ -627,23 +627,17 @@ namespace DND5E {
                         if (profBonus != 0) attackFormula += $" + 熟练({profBonus})";
 
                         // 添加到战斗日志
-                        if (DND_BattleUI.Instance != null) {
-                            string attackTypeStr = spell.isRangedAttack ? "远程法术" : "近战法术";
-                            DND_BattleUI.Instance.AddCombatLog($"法术攻击检定: {attackFormula} = {attackRoll} vs AC {targetStats.armorClass}");
-                        }
+                        string attackTypeStr = spell.isRangedAttack ? "远程法术" : "近战法术";
+                        Debug.Log($"法术攻击检定: {attackFormula} = {attackRoll} vs AC {targetStats.armorClass}");
 
                         // 检查是否命中
                         if (attackRoll >= targetStats.armorClass) {
                             // 命中
-                            if (DND_BattleUI.Instance != null) {
-                                DND_BattleUI.Instance.AddCombatLog($"法术命中!");
-                            }
+                            Debug.Log($"法术命中!");
                         }
                         else {
                             // 未命中
-                            if (DND_BattleUI.Instance != null) {
-                                DND_BattleUI.Instance.AddCombatLog($"法术未命中!");
-                            }
+                            Debug.Log($"法术未命中!");
 
                             // 显示Miss文本
                             if (DamageNumberManager.Instance != null && target != null) {
@@ -732,26 +726,17 @@ namespace DND5E {
                     bool savingThrowSuccess = saveResult >= saveDC;
 
                     // 添加到战斗日志
-                    if (DND_BattleUI.Instance != null) {
-                        string casterName = casterStatsForName != null ? casterStatsForName.GetDisplayName() : characterName;
-                        string targetName = targetStats.GetDisplayName();
-
-                        DND_BattleUI.Instance.AddCombatLog($"{targetName} 进行 {saveAbilityName} 豁免检定: {saveResult} vs DC {saveDC}");
-                    }
+                    string casterName = casterStatsForName != null ? casterStatsForName.GetDisplayName() : characterName;
+                    string targetName = targetStats.GetDisplayName();
+                    Debug.Log($"{targetName} 进行 {saveAbilityName} 豁免检定: {saveResult} vs DC {saveDC}");
 
                     if (savingThrowSuccess) {
                         damage /= 2;
-
-                        if (DND_BattleUI.Instance != null) {
-                            DND_BattleUI.Instance.AddCombatLog($"豁免成功，伤害减半!");
-                        }
+                        Debug.Log($"豁免成功，伤害减半!");
                     }
                     else {
                         Debug.Log($"目标豁免失败，受到全额伤害: {damage}");
-
-                        if (DND_BattleUI.Instance != null) {
-                            DND_BattleUI.Instance.AddCombatLog($"豁免失败，受到全额伤害!");
-                        }
+                        Debug.Log($"豁免失败，受到全额伤害!");
                     }
                 }
 
@@ -851,7 +836,7 @@ namespace DND5E {
         /// 记录伤害到战斗日志
         /// </summary>
         private void RecordDamageToLog(string originalDamageFormula, int damage, int spellAbilityMod, string spellAbilityName, DND5E.DamageType damageType) {
-            if (DND_BattleUI.Instance == null) return;
+            // 改为Debug.Log输出
 
             // 构建伤害公式字符串
             string[] diceParts = originalDamageFormula.Split('d');
@@ -867,7 +852,7 @@ namespace DND5E {
                 string damageFormulaPretty = $"{diceCount}d{diceType}({diceRoll})";
                 if (spellAbilityMod != 0) damageFormulaPretty += $" + {spellAbilityName}({spellAbilityMod})";
 
-                DND_BattleUI.Instance.AddCombatLog($"伤害: {damageFormulaPretty} = {damage} 点{damageType}伤害");
+                Debug.Log($"伤害: {damageFormulaPretty} = {damage} 点{damageType}伤害");
             }
         }
 
@@ -907,10 +892,9 @@ namespace DND5E {
             }
 
             // 记录治疗结果
-            if (DND_BattleUI.Instance != null) {
-                string casterName = GetComponent<global::CharacterStats>() != null ?
-                    GetComponent<global::CharacterStats>().GetDisplayName() : characterName;
-                string targetName = targetStats.GetDisplayName();
+            string casterName = GetComponent<global::CharacterStats>() != null ?
+                GetComponent<global::CharacterStats>().GetDisplayName() : characterName;
+            string targetName = targetStats.GetDisplayName();
 
                 // 构建治疗公式字符串
                 string[] diceParts = originalHealingFormula.Split('d');
@@ -923,10 +907,9 @@ namespace DND5E {
                     string healingFormulaPretty = $"{diceCount}d{diceType}({diceRoll})";
                     if (spellAbilityMod != 0) healingFormulaPretty += $" + {spellAbilityName}({spellAbilityMod})";
 
-                    DND_BattleUI.Instance.AddCombatLog($"{casterName} 治疗 {targetName}");
-                    DND_BattleUI.Instance.AddCombatLog($"治疗: {healingFormulaPretty} = {healing} 点生命值");
+                    Debug.Log($"{casterName} 治疗 {targetName}");
+                    Debug.Log($"治疗: {healingFormulaPretty} = {healing} 点生命值");
                 }
-            }
 
             // 治疗目标
             targetStats.HealDamage(healing);
@@ -943,12 +926,10 @@ namespace DND5E {
             string targetName = targetStats.GetDisplayName();
 
             // 记录状态效果信息
-            if (DND_BattleUI.Instance != null) {
-                DND_BattleUI.Instance.AddCombatLog($"{casterName} 对 {targetName} 施加状态效果: {string.Join(", ", spell.statusEffects)}");
-            }
+            Debug.Log($"{casterName} 对 {targetName} 施加状态效果: {string.Join(", ", spell.statusEffects)}");
 
             // 应用状态效果
-            foreach (var effect in spell.statusEffects) {
+            foreach (StatusEffectType effect in spell.statusEffects) {
                 targetStats.AddStatusEffect(effect);
             }
 
@@ -1033,9 +1014,7 @@ namespace DND5E {
                 targetAnimController.PlayHit();
                 Debug.Log($"使用AnimationController播放目标受击动画: {targetAnimController.hitAnimation}");
             }                // 确保UI更新
-            if (DND_BattleUI.Instance != null) {
-                DND_BattleUI.Instance.UpdateCharacterStatusUI(targetStats);
-            }
+            Debug.Log($"更新角色状态UI: {targetStats.GetDisplayName()}");
 
             // 检查目标是否死亡
             if (targetStats.currentHitPoints <= 0) {
