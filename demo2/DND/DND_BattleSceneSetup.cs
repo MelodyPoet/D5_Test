@@ -3,8 +3,18 @@ using UnityEngine;
 using DND5E;
 
 /// <summary>
-/// DND战斗场景设置 - 简化版本，支持手动配置生成点
-/// 通过在Inspector中直接设置角色预制体和生成点来配置战斗
+/// 攻击类型枚举
+/// </summary>
+public enum AttackType {
+    Melee,   // 近战攻击
+    Ranged,  // 远程攻击
+    Spell    // 法术攻击
+}
+
+/// <summary>
+/// DND战斗场景设置 - 核心场景角色生成器
+/// 专注于角色生成和位置设置，不包含弃用的UI和战斗逻辑
+/// 符合DEVELOPMENT_STANDARDS.md规范：只保留核心业务功能
 /// </summary>
 public class DND_BattleSceneSetup : MonoBehaviour {
     [System.Serializable]
@@ -60,17 +70,8 @@ public class DND_BattleSceneSetup : MonoBehaviour {
     private void InitializeManagers() {
         Debug.Log("[BattleSceneSetup] 开始初始化管理器");
 
-        // 确保单例管理器初始化
-        CombatManager existingCombatManager = FindObjectOfType<CombatManager>();
-        if (existingCombatManager == null) {
-            Debug.Log("[BattleSceneSetup] Creating CombatManager");
-            GameObject combatManagerObj = new GameObject("CombatManager");
-            CombatManager newCombatManager = combatManagerObj.AddComponent<CombatManager>();
-            Debug.Log($"[BattleSceneSetup] CombatManager created: {newCombatManager != null}");
-        }
-        else {
-            Debug.Log("[BattleSceneSetup] CombatManager already exists");
-        }
+        // 根据DEVELOPMENT_STANDARDS.md：CombatManager已弃用，挂机模式使用IdleGameManager
+        // 此脚本专注于角色生成，不处理战斗逻辑
 
         if (RangeManager.Instance == null) {
             Debug.Log("[BattleSceneSetup] Creating RangeManager");
@@ -134,13 +135,8 @@ public class DND_BattleSceneSetup : MonoBehaviour {
         StartBattle();
     }
     private void StartBattle() {
-        // 使用场景中已放置的 Battle UI
-        if (battleUIReference == null) {
-            battleUIReference = FindObjectOfType<DND_BattleUI>();
-        }
-        if (battleUIReference == null) {
-            Debug.LogError("[BattleSceneSetup] 未找到 DND_BattleUI，请确保场景中存在并在 Inspector 中赋值");
-        }
+        // 根据DEVELOPMENT_STANDARDS.md：UI组件和CombatManager已弃用
+        // 挂机模式使用IdleGameManager进行自动战斗，此脚本只负责角色生成
 
         // 收集所有角色的CharacterStats
         List<CharacterStats> allCharacters = new List<CharacterStats>();
@@ -150,19 +146,8 @@ public class DND_BattleSceneSetup : MonoBehaviour {
             if (player == null) continue;
             CharacterStats stats = player.GetComponent<CharacterStats>();
             if (stats != null) {
-                allCharacters.Add(stats); Debug.Log($"[BattleSceneSetup] 添加玩家到战斗: {stats.characterName}");
-
-                // 优先使用StatusUIManager注册Status UI
-                StatusUIManager statusUIManager = FindObjectOfType<StatusUIManager>();
-                if (statusUIManager != null) {
-                    statusUIManager.RegisterCharacter(stats);
-                    Debug.Log($"[BattleSceneSetup] 使用StatusUIManager为玩家 {stats.characterName} 注册Status UI");
-                }
-                // 回退到BattleUI的方法
-                else if (battleUIReference != null) {
-                    battleUIReference.RegisterCharacterStatusUI(stats);
-                    Debug.Log($"[BattleSceneSetup] 使用BattleUI为玩家 {stats.characterName} 注册Status UI");
-                }
+                allCharacters.Add(stats);
+                Debug.Log($"[BattleSceneSetup] 玩家角色生成完成: {stats.characterName}");
             }
         }
 
@@ -171,35 +156,18 @@ public class DND_BattleSceneSetup : MonoBehaviour {
             if (enemy == null) continue;
             CharacterStats stats = enemy.GetComponent<CharacterStats>();
             if (stats != null) {
-                allCharacters.Add(stats); Debug.Log($"[BattleSceneSetup] 添加敌人到战斗: {stats.characterName}");
-
-                // 优先使用StatusUIManager注册Status UI
-                StatusUIManager statusUIManager = FindObjectOfType<StatusUIManager>();
-                if (statusUIManager != null) {
-                    statusUIManager.RegisterCharacter(stats);
-                    Debug.Log($"[BattleSceneSetup] 使用StatusUIManager为敌人 {stats.characterName} 注册Status UI");
-                }
-                // 回退到BattleUI的方法
-                else if (battleUIReference != null) {
-                    battleUIReference.RegisterCharacterStatusUI(stats);
-                    Debug.Log($"[BattleSceneSetup] 使用BattleUI为敌人 {stats.characterName} 注册Status UI");
-                }
+                allCharacters.Add(stats);
+                Debug.Log($"[BattleSceneSetup] 敌人角色生成完成: {stats.characterName}");
             }
         }
 
-        // 启动战斗
+        // 角色生成完成，等待IdleGameManager处理战斗逻辑
         if (allCharacters.Count > 0) {
-            CombatManager combatManager = FindObjectOfType<CombatManager>();
-            if (combatManager != null) {
-                Debug.Log($"[BattleSceneSetup] 启动战斗，参与者数量: {allCharacters.Count}");
-                combatManager.StartCombat(allCharacters);
-            }
-            else {
-                Debug.LogError("[BattleSceneSetup] 无法找到 CombatManager 来启动战斗!");
-            }
+            Debug.Log($"[BattleSceneSetup] 场景设置完成，生成角色数量: {allCharacters.Count}");
+            Debug.Log("[BattleSceneSetup] 等待IdleGameManager接管战斗控制");
         }
         else {
-            Debug.LogWarning("[BattleSceneSetup] 没有角色参与战斗!");
+            Debug.LogWarning("[BattleSceneSetup] 没有成功生成任何角色!");
         }
     }
 
