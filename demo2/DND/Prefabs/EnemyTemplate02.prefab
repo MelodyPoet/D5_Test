@@ -17,7 +17,6 @@ GameObject:
   - component: {fileID: 8719517995773826923}
   - component: {fileID: 5436774491336728909}
   - component: {fileID: 5650847159347250148}
-  - component: {fileID: 2100252393448869644}
   - component: {fileID: 749977410099258097}
   m_Layer: 0
   m_Name: EnemyTemplate02
@@ -34,13 +33,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5992248824920210409}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!33 &5514492415062708840
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -228,6 +227,7 @@ MonoBehaviour:
   temporaryHitPoints: 0
   hitDice: 8
   proficiencyBonus: 2
+  battleSide: 0
   speed: 30
   resistances: 
   vulnerabilities: 
@@ -267,27 +267,6 @@ MonoBehaviour:
   spellList:
     knownSpells: []
     spellSlots: 000000000000000000000000000000000000000000000000000000000000000000000000
---- !u!114 &2100252393448869644
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5992248824920210409}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bf2737e7f45eefd43882afb0db9f63af, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  idleAnimation: idle
-  walkAnimation: walk
-  moveToIdleAnimation: m_to_i
-  attackMeleeAnimation: attack_melee
-  attackRangedAnimation: attack_ranged
-  castSpellAnimation: cast_spell
-  hitAnimation: hit
-  deathAnimation: death
-  dodgeAnimation: dodge
 --- !u!114 &749977410099258097
 MonoBehaviour:
   m_ObjectHideFlags: 0

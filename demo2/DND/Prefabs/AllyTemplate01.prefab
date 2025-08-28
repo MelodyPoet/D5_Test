@@ -18,7 +18,6 @@ GameObject:
   - component: {fileID: 4286918360062315237}
   - component: {fileID: 3990741744868786091}
   - component: {fileID: 6269424081250141595}
-  - component: {fileID: 1574901400545873357}
   - component: {fileID: 1994949910500310956}
   m_Layer: 6
   m_Name: AllyTemplate01
@@ -250,6 +249,7 @@ MonoBehaviour:
   temporaryHitPoints: 0
   hitDice: 8
   proficiencyBonus: 2
+  battleSide: 0
   speed: 30
   resistances: 
   vulnerabilities: 
@@ -314,26 +314,6 @@ MonoBehaviour:
       scalesWithLevel: 1
       levelScalingInterval: 3
     spellSlots: 000000000000000000000000000000000000000000000000000000000000000000000000
---- !u!114 &1574901400545873357
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7984810970041705236}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bf2737e7f45eefd43882afb0db9f63af, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  idleAnimation: idle
-  walkAnimation: walk
-  attackMeleeAnimation: attack_melee
-  attackRangedAnimation: attack_ranged
-  castSpellAnimation: cast_spell
-  hitAnimation: hit
-  deathAnimation: death
-  dodgeAnimation: dodge
 --- !u!114 &1994949910500310956
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -351,6 +331,7 @@ MonoBehaviour:
   animationMapping:
     idleAnimation: Wait
     walkAnimation: Walk
+    moveToIdleAnimation: m_to_i
     attackAnimation: Atk01
     hitAnimation: Dmg
     deathAnimation: Down

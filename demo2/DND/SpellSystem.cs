@@ -817,19 +817,14 @@ namespace DND5E {
             global::CharacterStats targetStats = target.GetComponent<global::CharacterStats>();
             if (targetStats == null) return;
 
-            // 获取目标适配器和动画控制器
+            // 获取目标适配器
             DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-            AnimationController targetAnimController = null;
-
-            if (targetAdapter == null) {
-                targetAnimController = target.GetComponent<AnimationController>();
-            }
 
             // 记录伤害结果到战斗日志
             RecordDamageToLog(originalDamageFormula, damage, spellAbilityMod, spellAbilityName, spell.damageType);
 
             // 应用伤害
-            ApplySpellDamage(targetStats, damage, spell.damageType, targetAdapter, targetAnimController);
+            ApplySpellDamage(targetStats, damage, spell.damageType, targetAdapter);
         }
 
         /// <summary>
@@ -972,19 +967,11 @@ namespace DND5E {
                 return;
             }
 
-            // 如果没有DND_CharacterAdapter，尝试使用AnimationController
-            AnimationController animController = GetComponent<AnimationController>();
-            if (animController != null) {
-                animController.PlayCastSpell();
-                Debug.Log($"使用AnimationController播放施法动画: {animController.castSpellAnimation}");
-                return;
-            }
-
-            Debug.LogWarning($"{characterName} 既没有DND_CharacterAdapter也没有AnimationController组件，无法播放施法动画");
+            Debug.LogError($"{characterName} 缺少DND_CharacterAdapter组件，无法播放施法动画！请为所有角色添加DND_CharacterAdapter组件");
         }
 
         // 统一的法术伤害应用方法
-        private void ApplySpellDamage(global::CharacterStats targetStats, int damage, DND5E.DamageType damageType, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController) {
+        private void ApplySpellDamage(global::CharacterStats targetStats, int damage, DND5E.DamageType damageType, DND_CharacterAdapter targetAdapter) {
             if (targetStats == null) {
                 Debug.LogError("ApplySpellDamage: targetStats为null");
                 return;
@@ -995,11 +982,11 @@ namespace DND5E {
             Debug.Log($"{characterName} 对目标造成 {damage} 点 {damageType} 伤害!");
 
             // 等待一小段时间，确保有时间准备播放受击动画
-            StartCoroutine(PlaySpellHitEffects(targetStats, targetAdapter, targetAnimController));
+            StartCoroutine(PlaySpellHitEffects(targetStats, targetAdapter));
         }
 
         // 播放法术命中效果和处理死亡
-        private IEnumerator PlaySpellHitEffects(global::CharacterStats targetStats, DND_CharacterAdapter targetAdapter, AnimationController targetAnimController) {
+        private IEnumerator PlaySpellHitEffects(global::CharacterStats targetStats, DND_CharacterAdapter targetAdapter) {
             // 等待一小段时间，确保有时间准备播放受击动画
             yield return new WaitForSeconds(0.1f);
 
@@ -1009,11 +996,11 @@ namespace DND5E {
                 targetAdapter.TakeDamage();
                 Debug.Log($"调用 {targetStats.characterName} 的TakeDamage方法播放受击动画");
             }
-            else if (targetAnimController != null) {
-                // 如果没有DND_CharacterAdapter，使用AnimationController
-                targetAnimController.PlayHit();
-                Debug.Log($"使用AnimationController播放目标受击动画: {targetAnimController.hitAnimation}");
-            }                // 确保UI更新
+            else {
+                Debug.LogError($"目标 {targetStats.characterName} 缺少DND_CharacterAdapter组件，无法播放受击动画！");
+            }
+
+            // 确保UI更新
             Debug.Log($"更新角色状态UI: {targetStats.GetDisplayName()}");
 
             // 检查目标是否死亡
@@ -1025,10 +1012,8 @@ namespace DND5E {
                     targetAdapter.PlayDeathAnimation();
                     Debug.Log($"使用DND_CharacterAdapter播放目标死亡动画: {targetAdapter.animationMapping.deathAnimation}");
                 }
-                else if (targetAnimController != null) {
-                    // 如果没有DND_CharacterAdapter，使用AnimationController
-                    targetAnimController.PlayDeath();
-                    Debug.Log($"使用AnimationController播放目标死亡动画: {targetAnimController.deathAnimation}");
+                else {
+                    Debug.LogError($"目标 {targetStats.characterName} 缺少DND_CharacterAdapter组件，无法播放死亡动画！");
                 }
             }
         }

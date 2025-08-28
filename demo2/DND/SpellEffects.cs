@@ -201,12 +201,6 @@ public class SpellEffects : MonoBehaviour {
             // 获取目标的CharacterStats组件和动画控制器
             CharacterStats targetStats = target.GetComponent<CharacterStats>();
             DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-            AnimationController targetAnimController = null;
-
-            // 如果没有DND_CharacterAdapter，尝试获取AnimationController
-            if (targetAdapter == null) {
-                targetAnimController = target.GetComponent<AnimationController>();
-            }
 
             // 应用伤害
             if (targetStats != null) {
@@ -222,9 +216,8 @@ public class SpellEffects : MonoBehaviour {
                 targetAdapter.TakeDamage();
                 Debug.Log($"播放 {target.name} 的受击动画");
             }
-            else if (targetAnimController != null) {
-                targetAnimController.PlayHit();
-                Debug.Log($"使用AnimationController播放目标受击动画: {targetAnimController.hitAnimation}");
+            else {
+                Debug.LogError($"目标 {target.name} 缺少DND_CharacterAdapter组件，无法播放受击动画！");
             }
 
             // 确保UI更新
@@ -239,10 +232,8 @@ public class SpellEffects : MonoBehaviour {
                     targetAdapter.PlayDeathAnimation();
                     Debug.Log($"使用DND_CharacterAdapter播放目标死亡动画: {targetAdapter.animationMapping.deathAnimation}");
                 }
-                else if (targetAnimController != null) {
-                    // 如果没有DND_CharacterAdapter，使用AnimationController
-                    targetAnimController.PlayDeath();
-                    Debug.Log($"使用AnimationController播放目标死亡动画: {targetAnimController.deathAnimation}");
+                else {
+                    Debug.LogError($"目标缺少DND_CharacterAdapter组件，无法播放死亡动画！");
                 }
             }
         }
@@ -475,16 +466,14 @@ public class SpellEffects : MonoBehaviour {
 
         // 获取动画组件
         DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-        AnimationController targetAnimController = target.GetComponent<AnimationController>();
 
         // 播放受击动画
         if (targetAdapter != null) {
             targetAdapter.TakeDamage();
             Debug.Log($"播放 {target.name} 的受击动画（回退机制）");
         }
-        else if (targetAnimController != null) {
-            targetAnimController.PlayHit();
-            Debug.Log($"使用AnimationController播放目标受击动画（回退机制）: {targetAnimController.hitAnimation}");
+        else {
+            Debug.LogError($"目标 {target.name} 缺少DND_CharacterAdapter组件，无法播放受击动画！");
         }
 
         // 确保UI更新

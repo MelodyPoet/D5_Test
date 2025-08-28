@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 // using UnityEngine.UI; // 如果项目没有UI模块，则注释掉
 using DND5E;
+using Spine.Unity; // 添加Spine命名空间
 
 /// <summary>
 /// 挂机模式管理器
@@ -48,9 +49,10 @@ public class IdleGameManager : MonoBehaviour {
     private Dictionary<int, StageData> stageConfigs;
 
     void Start() {
-        InitializeIdleSystem();
-        SetupUI();
+        // 🎯 修复：先初始化配置，再初始化系统
         LoadStageConfigs();
+        SetupUI();
+        InitializeIdleSystem();
     }
 
     void Update() {
@@ -80,6 +82,105 @@ public class IdleGameManager : MonoBehaviour {
         // 使用阵型管理器生成初始队伍
         if (useFormationManager) {
             GenerateInitialTeams();
+
+            // 队伍生成后，启动探索模式
+            if (currentPlayerTeam.Count > 0) {
+                Debug.Log("🎯 队伍生成完成，启动探索模式...");
+                StartExploreMode();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 启动探索模式（确保角色播放走路动画）
+    /// </summary>
+    private void StartExploreMode() {
+        // 启动挂机模式
+        idleModeEnabled = true;
+
+        // 立即设置玩家队伍为走路动画
+        SetPlayerPartyAnimation("walk");
+        Debug.Log("🎬 玩家队伍开始探索，播放走路动画");
+
+        // 🎯 关键修复：立即启动背景滚动
+        StartBackgroundScrolling();
+
+        // 开始挂机循环
+        if (idleCoroutine != null) {
+            StopCoroutine(idleCoroutine);
+        }
+        idleCoroutine = StartCoroutine(IdleGameLoop());
+    }
+
+    /// <summary>
+    /// 启动背景滚动（立即执行）
+    /// </summary>
+    private void StartBackgroundScrolling() {
+        // 通过ScrollLayer实现背景滚动（UV移动）
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        if (scrollLayers.Length > 0) {
+            Debug.Log($"🎬 找到 {scrollLayers.Length} 个ScrollLayer组件，开始启动背景滚动");
+            foreach (ScrollLayer layer in scrollLayers) {
+                if (layer != null) {
+                    layer.SetScrollSpeed(2f); // 设置滚动速度
+                    Debug.Log($"✅ 启动ScrollLayer: {layer.gameObject.name} - 滚动状态: {layer.IsScrolling()}");
+                }
+            }
+
+            // 等待一帧后再次检查
+            StartCoroutine(VerifyScrollingAfterDelay());
+        }
+        else {
+            Debug.LogError("❌ 未找到任何ScrollLayer组件！请检查以下设置:");
+            Debug.LogError("  1. Environment容器下是否有背景GameObject");
+            Debug.LogError("  2. 背景GameObject是否添加了ScrollLayer脚本");
+            Debug.LogError("  3. 背景GameObject是否有SpriteRenderer组件");
+        }
+    }
+
+    /// <summary>
+    /// 延迟验证滚动状态
+    /// </summary>
+    private System.Collections.IEnumerator VerifyScrollingAfterDelay() {
+        yield return new WaitForSeconds(0.1f);
+
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        Debug.Log("🔍 验证背景滚动状态:");
+
+        foreach (ScrollLayer layer in scrollLayers) {
+            if (layer != null) {
+                Debug.Log($"  - {layer.gameObject.name}: 滚动中={layer.IsScrolling()}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 停止背景滚动（战斗时）
+    /// </summary>
+    private void StopBackgroundScrolling() {
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        if (scrollLayers.Length > 0) {
+            Debug.Log("🛑 战斗开始，停止背景滚动");
+            foreach (ScrollLayer layer in scrollLayers) {
+                if (layer != null) {
+                    layer.StopScrolling();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 恢复背景滚动（探索时）
+    /// </summary>
+    private void ResumeBackgroundScrolling() {
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        if (scrollLayers.Length > 0) {
+            Debug.Log("🎬 战斗结束，恢复背景滚动");
+            foreach (ScrollLayer layer in scrollLayers) {
+                if (layer != null) {
+                    layer.SetScrollSpeed(2f);
+                }
+            }
         }
     }    /// <summary>
          /// 设置UI
@@ -180,16 +281,35 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 探索阶段
+    /// 探索阶段（确保持续播放走路动画和背景滚动）
     /// </summary>
     private IEnumerator ExploreStage() {
+        // 🛡️ 增强null检查
+        if (stageConfigs == null) {
+            Debug.LogError("ExploreStage: stageConfigs未初始化！");
+            yield break;
+        }
+
+        // 检查基础配置
         if (!stageConfigs.ContainsKey(currentStage)) {
             Debug.LogWarning($"未找到阶段 {currentStage} 的配置");
             yield break;
         }
 
-        // 设置玩家队伍为走路动画状态
-        SetPlayerPartyAnimation(Role.ActState.MOVE, "walk");
+        // 检查玩家队伍是否存在
+        if (currentPlayerTeam == null || currentPlayerTeam.Count == 0) {
+            Debug.LogWarning("ExploreStage: 玩家队伍为空，跳过动画设置");
+            yield break;
+        }
+
+        // 🎯 只有在非战斗状态时才设置走路动画
+        if (!isInBattle) {
+            // 确保玩家队伍持续播放走路动画
+            SetPlayerPartyAnimation("walk");
+        }
+
+        // 🎬 确保背景持续滚动（每次都检查）
+        EnsureBackgroundScrolling();
 
         StageData stageData = stageConfigs[currentStage];
 
@@ -201,6 +321,24 @@ public class IdleGameManager : MonoBehaviour {
         }
 
         yield return null;
+    }
+
+    /// <summary>
+    /// 确保背景滚动正常运行
+    /// </summary>
+    private void EnsureBackgroundScrolling() {
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        if (scrollLayers.Length > 0) {
+            foreach (ScrollLayer layer in scrollLayers) {
+                if (layer != null && !layer.IsScrolling()) {
+                    layer.SetScrollSpeed(2f);
+                    Debug.Log($"🔄 重新启动背景滚动: {layer.gameObject.name}");
+                }
+            }
+        }
+        else if (Time.frameCount % 300 == 0) { // 每5秒提醒一次
+            Debug.LogWarning("⚠️ 未找到ScrollLayer组件！请检查背景配置");
+        }
     }
 
     /// <summary>
@@ -260,10 +398,17 @@ public class IdleGameManager : MonoBehaviour {
         }
 
         // 生成敌人队伍
-        List<CharacterStats> enemyParty = GenerateEnemyParty();        // 使用现有角色列表初始化战斗
-        if (formationManager != null) {
-            formationManager.InitializeBattleWithExistingCharacters(validPlayerParty, enemyParty);
-        }
+        List<CharacterStats> enemyParty = GenerateEnemyParty();
+
+        // 播放敌人进场动画
+        Debug.Log("🎬 开始敌人进场动画...");
+        yield return StartCoroutine(EnemyEntranceAnimation(enemyParty));
+
+        // 🎯 敌人进场完成后，立即让玩家队伍切换到待机动画
+        SetPlayerPartyAnimation("idle");
+        Debug.Log("🎬 玩家队伍切换到待机动画，准备战斗");
+
+        // ⚠️ 不再重新排列位置，敌人已经在进场动画中定位好了
 
         // 开始自动战斗
         yield return StartCoroutine(AutoBattleSequence(validPlayerParty, enemyParty));
@@ -278,9 +423,12 @@ public class IdleGameManager : MonoBehaviour {
         int round = 1;
 
         // 战斗开始时设置所有角色为空闲动画
-        SetPlayerPartyAnimation(Role.ActState.IDLE);
-        SetEnemyPartyAnimation(enemyParty, Role.ActState.IDLE);
+        SetPlayerPartyAnimation("idle");
+        SetEnemyPartyAnimation(enemyParty, "idle");
         Debug.Log("🎬 战斗开始，所有角色切换到空闲动画");
+
+        // 🎯 战斗开始时停止背景滚动
+        StopBackgroundScrolling();
 
         while (HasLivingMembers(playerParty) && HasLivingMembers(enemyParty)) {
             Debug.Log($"=== 自动战斗回合 {round} ===");            // 玩家回合
@@ -312,6 +460,12 @@ public class IdleGameManager : MonoBehaviour {
             Debug.Log("玩家失败...");
             HandleBattleDefeat();
         }
+
+        // 🎬 战斗结束后恢复玩家走路动画和背景滚动
+        SetPlayerPartyAnimation("walk");
+        Debug.Log("🎬 战斗结束，玩家队伍恢复走路动画");
+
+        ResumeBackgroundScrolling();
     }
 
     /// <summary>
@@ -414,6 +568,28 @@ public class IdleGameManager : MonoBehaviour {
             roleComponent = enemyObj.AddComponent<Role>();
             Debug.Log($"为敌人 {enemyStats.characterName} 添加Role组件");
         }
+
+        // 🎯 验证prefab是否配置了必需的组件（不硬编码添加）
+        DND_CharacterAdapter adapter = enemyObj.GetComponent<DND_CharacterAdapter>();
+        if (adapter == null) {
+            Debug.LogError($"❌ 敌人预制体缺少DND_CharacterAdapter组件！请在prefab中预先配置此组件");
+            // 不创建有问题的敌人
+            DestroyImmediate(enemyObj);
+            return null;
+        }
+
+        SkeletonAnimation skeletonAnim = enemyObj.GetComponent<SkeletonAnimation>();
+        if (skeletonAnim == null) {
+            Debug.LogError($"❌ 敌人预制体缺少SkeletonAnimation组件！请在prefab中预先配置此组件和Spine数据");
+            // 不创建有问题的敌人
+            DestroyImmediate(enemyObj);
+            return null;
+        }
+
+        // 仅设置必要的运行时引用，其他属性通过prefab配置
+        adapter.characterStats = enemyStats;
+
+        Debug.Log($"✅ 敌人 {enemyStats.characterName} 的组件配置验证完成");
 
         // 设置敌人属性
         enemyStats.characterName = $"野生怪物 等级{level}";
@@ -598,6 +774,12 @@ public class IdleGameManager : MonoBehaviour {
     private List<CharacterStats> GetValidPlayerParty() {
         List<CharacterStats> validPlayers = new List<CharacterStats>();
 
+        // 防止空引用异常
+        if (currentPlayerTeam == null) {
+            Debug.LogWarning("GetValidPlayerParty: currentPlayerTeam为null");
+            return validPlayers;
+        }
+
         // 过滤掉null和死亡的角色
         foreach (CharacterStats player in currentPlayerTeam) {
             if (player != null && player.currentHitPoints > 0) {
@@ -609,17 +791,39 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 设置玩家队伍动画状态（使用当前活跃队伍）
+    /// 设置玩家队伍动画状态 - 统一使用DND_CharacterAdapter映射器
     /// </summary>
-    private void SetPlayerPartyAnimation(Role.ActState actState, string animationName = null) {
+    private void SetPlayerPartyAnimation(string animationType) {
+        // 防止空引用异常
+        if (currentPlayerTeam == null) {
+            Debug.LogWarning("SetPlayerPartyAnimation: currentPlayerTeam为null");
+            return;
+        }
+
         foreach (CharacterStats player in currentPlayerTeam) {
             if (player != null && player.gameObject != null) {
-                Role roleComponent = player.GetComponent<Role>();
-                if (roleComponent != null) {
-                    roleComponent.playAct(actState, animationName);
+                DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    switch (animationType.ToLower()) {
+                        case "idle":
+                            adapter.PlayAnimation(adapter.animationMapping.idleAnimation, true);
+                            Debug.Log($"✅ 玩家 {player.characterName} 播放待机动画: {adapter.animationMapping.idleAnimation}");
+                            break;
+                        case "walk":
+                            adapter.PlayWalkAnimation();
+                            Debug.Log($"✅ 玩家 {player.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
+                            break;
+                        case "stop_walk":
+                            adapter.StopWalkWithTransition();
+                            Debug.Log($"✅ 玩家 {player.characterName} 停止走路并过渡到待机动画");
+                            break;
+                        default:
+                            Debug.LogWarning($"未识别的动画类型: {animationType}");
+                            break;
+                    }
                 }
                 else {
-                    Debug.LogWarning($"角色 {player.characterName} 没有Role组件，无法播放动画");
+                    Debug.LogError($"❌ 玩家 {player.characterName} 缺少DND_CharacterAdapter组件！请为所有角色添加DND_CharacterAdapter组件");
                 }
             }
         }
@@ -628,15 +832,34 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 设置敌人队伍动画状态
     /// </summary>
-    private void SetEnemyPartyAnimation(List<CharacterStats> enemies, Role.ActState actState, string animationName = null) {
+    /// <summary>
+    /// 设置敌人队伍动画 - 统一使用DND_CharacterAdapter映射器
+    /// </summary>
+    private void SetEnemyPartyAnimation(List<CharacterStats> enemies, string animationType) {
         foreach (CharacterStats enemy in enemies) {
             if (enemy != null && enemy.gameObject != null) {
-                Role roleComponent = enemy.GetComponent<Role>();
-                if (roleComponent != null) {
-                    roleComponent.playAct(actState, animationName);
+                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    switch (animationType.ToLower()) {
+                        case "idle":
+                            adapter.PlayAnimation(adapter.animationMapping.idleAnimation, true);
+                            Debug.Log($"✅ 敌人 {enemy.characterName} 播放待机动画: {adapter.animationMapping.idleAnimation}");
+                            break;
+                        case "walk":
+                            adapter.PlayWalkAnimation();
+                            Debug.Log($"✅ 敌人 {enemy.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
+                            break;
+                        case "stop_walk":
+                            adapter.StopWalkWithTransition();
+                            Debug.Log($"✅ 敌人 {enemy.characterName} 停止走路并过渡到待机动画");
+                            break;
+                        default:
+                            Debug.LogWarning($"未识别的动画类型: {animationType}");
+                            break;
+                    }
                 }
                 else {
-                    Debug.LogWarning($"敌人 {enemy.characterName} 没有Role组件，无法播放动画");
+                    Debug.LogError($"❌ 敌人 {enemy.characterName} 缺少DND_CharacterAdapter组件！请为所有角色添加DND_CharacterAdapter组件");
                 }
             }
         }
@@ -648,18 +871,40 @@ public class IdleGameManager : MonoBehaviour {
     private IEnumerator EnemyEntranceAnimation(List<CharacterStats> enemies) {
         Debug.Log("🎬 敌人从右侧进入战场...");
 
-        // 先将所有敌人移动到屏幕右侧外面
+        // 🎯 先记录敌人的原始阵型位置
+        List<Vector3> originalPositions = new List<Vector3>();
         foreach (CharacterStats enemy in enemies) {
             if (enemy != null && enemy.gameObject != null) {
+                originalPositions.Add(enemy.transform.position);
+            }
+        }
+
+        // 将所有敌人移动到屏幕右侧外面并立即设置走路动画
+        for (int i = 0; i < enemies.Count; i++) {
+            CharacterStats enemy = enemies[i];
+            if (enemy != null && enemy.gameObject != null && i < originalPositions.Count) {
                 // 将敌人放在屏幕右侧外面
-                Vector3 offScreenPosition = enemy.transform.position;
+                Vector3 offScreenPosition = originalPositions[i];
                 offScreenPosition.x += 15f; // 移动到屏幕右侧
                 enemy.transform.position = offScreenPosition;
+            }
+        }
 
-                // 设置走路动画
-                Role roleComponent = enemy.GetComponent<Role>();
-                if (roleComponent != null) {
-                    roleComponent.playAct(Role.ActState.MOVE, "walk");
+        // 等待一帧确保所有敌人位置设置完成
+        yield return null;
+
+        // 🎯 为所有敌人设置走路动画（在Start方法执行后）
+        for (int i = 0; i < enemies.Count; i++) {
+            CharacterStats enemy = enemies[i];
+            if (enemy != null && enemy.gameObject != null) {
+                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    // 强制播放走路动画，覆盖Start方法中的待机动画
+                    adapter.PlayWalkAnimation();
+                    Debug.Log($"✅ 为敌人 {enemy.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
+                }
+                else {
+                    Debug.LogError($"❌ 敌人 {enemy.characterName} 缺少DND_CharacterAdapter组件，无法播放走路动画！请为所有角色添加DND_CharacterAdapter组件");
                 }
             }
         }
@@ -671,40 +916,63 @@ public class IdleGameManager : MonoBehaviour {
         float elapsedTime = 0f;
 
         List<Vector3> startPositions = new List<Vector3>();
-        List<Vector3> targetPositions = new List<Vector3>();
 
-        // 记录起始和目标位置
+        // 记录起始位置（屏幕外）
         foreach (CharacterStats enemy in enemies) {
             if (enemy != null) {
                 startPositions.Add(enemy.transform.position);
-                Vector3 targetPos = enemy.transform.position;
-                targetPos.x -= 15f; // 恢复到正常位置
-                targetPositions.Add(targetPos);
             }
         }
 
-        // 平滑移动动画
+        // 平滑移动动画，回到原始阵型位置
+        float walkAnimationCheckInterval = 0.5f; // 每0.5秒检查一次走路动画
+        float lastWalkCheck = 0f;
+
         while (elapsedTime < duration) {
             float t = elapsedTime / duration;
 
             for (int i = 0; i < enemies.Count; i++) {
-                if (enemies[i] != null && i < startPositions.Count && i < targetPositions.Count) {
-                    enemies[i].transform.position = Vector3.Lerp(startPositions[i], targetPositions[i], t);
+                if (enemies[i] != null && i < startPositions.Count && i < originalPositions.Count) {
+                    enemies[i].transform.position = Vector3.Lerp(startPositions[i], originalPositions[i], t);
                 }
+            }
+
+            // 定期检查并确保敌人正在播放走路动画
+            if (elapsedTime - lastWalkCheck >= walkAnimationCheckInterval) {
+                for (int i = 0; i < enemies.Count; i++) {
+                    if (enemies[i] != null) {
+                        DND_CharacterAdapter adapter = enemies[i].GetComponent<DND_CharacterAdapter>();
+                        if (adapter != null && adapter.CurrentAnimation != adapter.animationMapping.walkAnimation) {
+                            adapter.PlayWalkAnimation();
+                            Debug.Log($"🔄 重新为敌人 {enemies[i].characterName} 播放走路动画");
+                        }
+                    }
+                }
+                lastWalkCheck = elapsedTime;
             }
 
             elapsedTime += Time.deltaTime;
             yield return null;
         }
 
-        // 确保敌人到达最终位置
+        // 确保敌人到达最终位置（原始阵型位置）
         for (int i = 0; i < enemies.Count; i++) {
-            if (enemies[i] != null && i < targetPositions.Count) {
-                enemies[i].transform.position = targetPositions[i];
+            if (enemies[i] != null && i < originalPositions.Count) {
+                enemies[i].transform.position = originalPositions[i];
+
+                // 🎯 统一通过DND_CharacterAdapter切换到待机动画
+                DND_CharacterAdapter adapter = enemies[i].GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    adapter.StopWalkWithTransition();
+                    Debug.Log($"✅ 敌人 {enemies[i].characterName} 使用过渡动画切换到待机状态");
+                }
+                else {
+                    Debug.LogError($"❌ 敌人 {enemies[i].characterName} 缺少DND_CharacterAdapter组件，无法切换到待机动画！请为所有角色添加DND_CharacterAdapter组件");
+                }
             }
         }
 
-        Debug.Log("✅ 敌人进入动画完成");
+        Debug.Log("✅ 敌人进入动画完成，切换到待机状态");
     }
 }
 

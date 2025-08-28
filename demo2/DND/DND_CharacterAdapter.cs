@@ -28,6 +28,9 @@ public class DND_CharacterAdapter : MonoBehaviour {
     // 当前动画状态
     private string currentAnimation;
 
+    // 公开当前动画状态的只读属性
+    public string CurrentAnimation => currentAnimation;
+
     // 初始化
     private void Start() {
         // 获取角色统计数据
@@ -43,8 +46,16 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 播放空闲动画
-        PlayAnimation(animationMapping.idleAnimation, true);
+        // 🎯 只有当角色属于玩家阵营或不在战斗状态时才播放默认待机动画
+        // 这样可以避免敌人在进场时被待机动画覆盖走路动画
+        if (characterStats != null && characterStats.battleSide == BattleSide.Player) {
+            // 玩家角色立即播放待机动画
+            PlayAnimation(animationMapping.idleAnimation, true);
+        }
+        else {
+            // 敌人角色延迟播放待机动画，让进场动画有机会执行
+            StartCoroutine(DelayedIdleAnimation());
+        }
 
         // 注册事件
         // 战斗管理器已迁移至挂机系统
@@ -54,6 +65,19 @@ public class DND_CharacterAdapter : MonoBehaviour {
     private void OnTurnStart(CharacterStats character) {
         // 如果是自己的回合且没有死亡，播放空闲动画
         if (character == characterStats && characterStats.currentHitPoints > 0) {
+            PlayAnimation(animationMapping.idleAnimation, true);
+        }
+    }
+
+    /// <summary>
+    /// 延迟播放待机动画，给进场动画留出时间
+    /// </summary>
+    private IEnumerator DelayedIdleAnimation() {
+        // 等待1秒，让进场动画有机会执行
+        yield return new WaitForSeconds(1f);
+
+        // 如果当前没有播放其他动画，则播放待机动画
+        if (string.IsNullOrEmpty(currentAnimation) || currentAnimation == animationMapping.idleAnimation) {
             PlayAnimation(animationMapping.idleAnimation, true);
         }
     }
@@ -251,7 +275,12 @@ public class DND_CharacterAdapter : MonoBehaviour {
 
     // 播放移动动画
     public void PlayWalkAnimation() {
+        if (skeletonAnimation == null) {
+            Debug.LogWarning($"⚠️ {gameObject.name} 没有SkeletonAnimation组件，无法播放走路动画");
+            return;
+        }
         PlayAnimation(animationMapping.walkAnimation, true);
+        Debug.Log($"🚶 {gameObject.name} 开始播放走路动画: {animationMapping.walkAnimation}");
     }
 
     // 停止行走动画并播放过渡动画
