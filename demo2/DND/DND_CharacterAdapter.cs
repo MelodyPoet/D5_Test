@@ -46,16 +46,8 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 🎯 只有当角色属于玩家阵营或不在战斗状态时才播放默认待机动画
-        // 这样可以避免敌人在进场时被待机动画覆盖走路动画
-        if (characterStats != null && characterStats.battleSide == BattleSide.Player) {
-            // 玩家角色立即播放待机动画
-            PlayAnimation(animationMapping.idleAnimation, true);
-        }
-        else {
-            // 敌人角色延迟播放待机动画，让进场动画有机会执行
-            StartCoroutine(DelayedIdleAnimation());
-        }
+        // 🎯 不在Start中播放任何动画，由游戏管理器统一控制
+        // 这样避免了动画冲突和延迟问题
 
         // 注册事件
         // 战斗管理器已迁移至挂机系统
@@ -70,14 +62,15 @@ public class DND_CharacterAdapter : MonoBehaviour {
     }
 
     /// <summary>
-    /// 延迟播放待机动画，给进场动画留出时间
+    /// 初始化角色动画状态 - 由游戏管理器调用
     /// </summary>
-    private IEnumerator DelayedIdleAnimation() {
-        // 等待1秒，让进场动画有机会执行
-        yield return new WaitForSeconds(1f);
-
-        // 如果当前没有播放其他动画，则播放待机动画
-        if (string.IsNullOrEmpty(currentAnimation) || currentAnimation == animationMapping.idleAnimation) {
+    public void InitializeAnimation() {
+        if (characterStats != null && characterStats.battleSide == BattleSide.Player) {
+            // 玩家角色默认为待机状态
+            PlayAnimation(animationMapping.idleAnimation, true);
+        }
+        else {
+            // 敌人角色默认为待机状态
             PlayAnimation(animationMapping.idleAnimation, true);
         }
     }

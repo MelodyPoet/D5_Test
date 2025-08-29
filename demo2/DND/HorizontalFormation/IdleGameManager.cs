@@ -98,6 +98,9 @@ public class IdleGameManager : MonoBehaviour {
         // 启动挂机模式
         idleModeEnabled = true;
 
+        // 🎯 初始化所有角色的动画状态（避免延迟）
+        InitializeAllCharacterAnimations();
+
         // 立即设置玩家队伍为走路动画
         SetPlayerPartyAnimation("walk");
         Debug.Log("🎬 玩家队伍开始探索，播放走路动画");
@@ -788,6 +791,23 @@ public class IdleGameManager : MonoBehaviour {
         }
 
         return validPlayers;
+    }
+
+    /// <summary>
+    /// 初始化所有角色的动画状态
+    /// </summary>
+    private void InitializeAllCharacterAnimations() {
+        // 初始化玩家队伍动画
+        if (currentPlayerTeam != null) {
+            foreach (CharacterStats player in currentPlayerTeam) {
+                if (player != null && player.gameObject != null) {
+                    DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                    if (adapter != null) {
+                        adapter.InitializeAnimation();
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
