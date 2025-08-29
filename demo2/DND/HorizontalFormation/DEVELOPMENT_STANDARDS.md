@@ -400,7 +400,7 @@ Hierarchy结构:
 
 ### 🎭 **动画系统管理**
 
-#### **DND_CharacterAdapter 动画系统**
+#### **DND_CharacterAdapter 动画系统 (传统方案)**
 
 **统一动画管理器**：所有角色（玩家和敌人）必须使用 `DND_CharacterAdapter` 组件
 
@@ -431,6 +431,37 @@ adapter.PlayHitAnimation();           // 受击动画
 adapter.PlayDeathAnimation();         // 死亡动画
 adapter.PlayCastAnimation();          // 施法动画
 ```
+
+#### **CharacterAnimationStateMachine 状态机系统 (推荐方案)**
+
+**简化的动画状态管理**：消除复杂协程，统一状态转换
+
+```csharp
+// 动画状态枚举
+public enum AnimationState {
+    Idle, Walking, Attacking, Hit, Death, Casting
+}
+
+// 核心状态机方法
+stateMachine.StartWalking();          // 开始走路
+stateMachine.StopWalking();           // 停止走路(自动转idle)
+stateMachine.PlayAttack();            // 攻击(完成后自动转idle)
+stateMachine.PlayHit();               // 受击(完成后自动转idle)
+stateMachine.PlayDeath();             // 死亡(终止状态)
+stateMachine.PlayCast();              // 施法(完成后自动转idle)
+
+// 状态查询
+stateMachine.IsIdle();                // 是否待机
+stateMachine.IsWalking();             // 是否走路
+stateMachine.IsDead();                // 是否死亡
+stateMachine.IsInCombatAction();      // 是否在战斗动作中
+```
+
+**状态机配置要求**：
+
+- `mixDuration = 0.1f` (动画混合时间)
+- `autoReturnToIdle = true` (自动返回待机)
+- 事件回调：`OnStateChanged`, `OnAnimationCompleted`
 
 #### **战斗动画控制规则**
 
