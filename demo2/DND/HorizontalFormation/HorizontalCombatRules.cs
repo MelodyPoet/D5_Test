@@ -1,227 +1,234 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
 /// 横版战斗攻击规则系统
 /// 处理基于位置的攻击范围和目标选择
 /// </summary>
-public static class HorizontalCombatRules {    /// <summary>
-                                               /// 获取近战攻击的有效目标 - 线性布局版本
-                                               /// 近战攻击只能攻击距离 <= 1 的目标
-                                               /// </summary>
-    public static List<CharacterStats> GetMeleeTargets(CharacterStats attacker) {
-        BattlePositionComponent positionComponent = attacker.GetComponent<BattlePositionComponent>();
-        if (positionComponent == null) {
-            Debug.LogWarning($"{attacker.name} 没有 BattlePositionComponent");
-            return new List<CharacterStats>();
-        }
-
-        HorizontalPosition attackerPos = positionComponent.currentPosition;
-        BattleSide attackerSide = HorizontalFormationAI.GetPositionSide(attackerPos);
-
-        List<CharacterStats> validTargets = new List<CharacterStats>();
-
-        // 检查所有位置，找到距离 <= 1 的敌方目标
-        for (int i = 0; i < 12; i++) {
-            HorizontalPosition targetPos = (HorizontalPosition)i;
-
-            // 跳过同阵营位置
-            if (HorizontalFormationAI.GetPositionSide(targetPos) == attackerSide)
-                continue;
-
-            // 检查距离
-            if (HorizontalFormationAI.CanMeleeAttack(attackerPos, targetPos)) {
-                CharacterStats target = HorizontalBattleFormationManager.Instance.GetCharacterAtPosition(targetPos);
-                if (target != null && target.currentHitPoints > 0) {
-                    validTargets.Add(target);
-                }
-            }
-        }
-
-        return validTargets;
-    }
+public static class HorizontalCombatRules {
     /// <summary>
-    /// 获取远程攻击的有效目标 - 线性布局版本
-    /// 远程攻击可以攻击任何距离的敌方目标，但要考虑掩护
+    /// DND5E先攻检定 - 1d20 + 敏捷调整值
     /// </summary>
-    public static List<CharacterStats> GetRangedTargets(CharacterStats attacker) {
-        BattlePositionComponent positionComponent = attacker.GetComponent<BattlePositionComponent>();
-        if (positionComponent == null) {
-            Debug.LogWarning($"{attacker.name} 没有 BattlePositionComponent");
-            return new List<CharacterStats>();
-        }
+    public static int RollInitiative(CharacterStats character) {
+        int d20Roll = Random.Range(1, 21); // 1d20
+        int dexterityModifier = character.DexMod; // 直接使用DexMod属性
+        int initiative = d20Roll + dexterityModifier;
 
-        HorizontalPosition attackerPos = positionComponent.currentPosition;
-        BattleSide attackerSide = HorizontalFormationAI.GetPositionSide(attackerPos);
-
-        List<CharacterStats> validTargets = new List<CharacterStats>();
-
-        // 远程攻击可以攻击对面所有位置的敌人
-        for (int i = 0; i < 12; i++) {
-            HorizontalPosition targetPos = (HorizontalPosition)i;
-
-            // 跳过同阵营位置
-            if (HorizontalFormationAI.GetPositionSide(targetPos) == attackerSide)
-                continue;
-
-            CharacterStats target = HorizontalBattleFormationManager.Instance.GetCharacterAtPosition(targetPos);
-            if (target != null && target.currentHitPoints > 0) {
-                // 检查掩护效果
-                CoverType cover = HorizontalCoverSystem.CheckCover(attackerPos, targetPos);
-
-                // 即使有掩护也可以攻击，只是命中率降低
-                validTargets.Add(target);
-            }
-        }
-
-        return validTargets;
+        Debug.Log($"🎲 {character.GetDisplayName()} 先攻检定: {d20Roll} + {dexterityModifier} = {initiative}");
+        return initiative;
     }
 
     /// <summary>
-    /// 获取法术攻击的有效目标
+    /// 比较两个角色的先攻顺序
+    /// 规则: 先攻值高者优先 > 敏捷属性高者优先 > 随机决定
     /// </summary>
-    public static List<CharacterStats> GetSpellTargets(CharacterStats caster, DND5E.Spell spell) {
-        // 大部分法术遵循远程攻击规则
-        List<CharacterStats> targets = GetRangedTargets(caster);
-
-        // 根据法术类型进行特殊处理
-        if (spell.heals) {
-            // 治疗法术只能对友方使用
-            return GetHealingTargets(caster);
+    public static int CompareInitiative(CharacterStats a, CharacterStats b, int initiativeA, int initiativeB) {
+        // 先攻值不同，值高者优先
+        if (initiativeA != initiativeB) {
+            return initiativeB.CompareTo(initiativeA); // 降序排列
         }
 
-        if (spell.areaOfEffect > 0) {
-            // 范围法术需要特殊处理
-            return GetAreaSpellTargets(caster, spell);
+        // 先攻值相同，敏捷属性高者优先
+        int dexA = a.dexterity;
+        int dexB = b.dexterity;
+        if (dexA != dexB) {
+            return dexB.CompareTo(dexA); // 敏捷高者优先
         }
 
-        return targets;
-    }    /// <summary>
-         /// 获取治疗法术的有效目标 - 线性布局版本
-         /// </summary>
-    public static List<CharacterStats> GetHealingTargets(CharacterStats caster) {
-        BattlePositionComponent positionComponent = caster.GetComponent<BattlePositionComponent>();
-        if (positionComponent == null) return new List<CharacterStats>();
-
-        BattleSide casterSide = HorizontalFormationAI.GetPositionSide(positionComponent.currentPosition);
-        List<CharacterStats> friendlyTargets = new List<CharacterStats>();
-
-        // 检查所有位置，找到同阵营的受伤盟友
-        for (int i = 0; i < 12; i++) {
-            HorizontalPosition pos = (HorizontalPosition)i;
-
-            // 只检查同阵营位置
-            if (HorizontalFormationAI.GetPositionSide(pos) != casterSide)
-                continue;
-
-            CharacterStats ally = HorizontalBattleFormationManager.Instance.GetCharacterAtPosition(pos);
-            if (ally != null && ally.currentHitPoints > 0 && ally.currentHitPoints < ally.maxHitPoints) {
-                friendlyTargets.Add(ally);
-            }
-        }
-
-        return friendlyTargets;
+        // 敏捷也相同，随机决定
+        return Random.Range(0, 2) == 0 ? -1 : 1;
     }
 
     /// <summary>
-    /// 获取范围法术的有效目标
+    /// 为所有参战角色进行先攻检定并排序
     /// </summary>
-    public static List<CharacterStats> GetAreaSpellTargets(CharacterStats caster, DND5E.Spell spell) {
-        // 简化处理：范围法术可以同时攻击对面前排或后排的多个目标
-        BattlePositionComponent positionComponent = caster.GetComponent<BattlePositionComponent>();
-        if (positionComponent == null) return new List<CharacterStats>();
+    public static List<InitiativeEntry> RollAndSortInitiative(List<CharacterStats> combatants) {
+        List<InitiativeEntry> initiativeList = new List<InitiativeEntry>();
 
-        BattleSide casterSide = HorizontalFormationAI.GetPositionSide(positionComponent.currentPosition);
-        List<CharacterStats> areaTargets = new List<CharacterStats>();        // 获取对面前排目标
-        HorizontalPosition[] frontRowPositions = HorizontalFormationAI.GetNearestEnemyFrontRow(casterSide); foreach (HorizontalPosition pos in frontRowPositions) {
-            CharacterStats target = HorizontalBattleFormationManager.Instance.GetCharacterAtPosition(pos);
-            if (target != null && target.currentHitPoints > 0) {
-                areaTargets.Add(target);
+        // 为每个角色进行先攻检定
+        foreach (CharacterStats character in combatants) {
+            if (character != null && character.currentHitPoints > 0) {
+                int initiative = RollInitiative(character);
+                initiativeList.Add(new InitiativeEntry {
+                    character = character,
+                    initiative = initiative
+                });
             }
         }
 
-        // 如果前排目标少于2个，也包含后排
-        if (areaTargets.Count < 2) {
-            HorizontalPosition[] allEnemyPositions = HorizontalFormationAI.GetOppositeAllPositions(casterSide); foreach (HorizontalPosition pos in allEnemyPositions) {
-                CharacterStats target = HorizontalBattleFormationManager.Instance.GetCharacterAtPosition(pos);
-                if (target != null && target.currentHitPoints > 0 && !areaTargets.Contains(target)) {
-                    areaTargets.Add(target);
-                }
-            }
+        // 按先攻顺序排序
+        initiativeList.Sort((a, b) => CompareInitiative(a.character, b.character, a.initiative, b.initiative));
+
+        Debug.Log("📋 先攻顺序排序完成:");
+        for (int i = 0; i < initiativeList.Count; i++) {
+            var entry = initiativeList[i];
+            Debug.Log($"  {i + 1}. {entry.character.GetDisplayName()} - 先攻值: {entry.initiative} (敏捷: {entry.character.dexterity})");
         }
 
-        return areaTargets;
+        return initiativeList;
     }
 
     /// <summary>
-    /// 检查是否可以进行机会攻击
+    /// DND5E攻击检定 - 1d20 + 攻击加值 vs 目标AC
     /// </summary>
-    public static bool CanMakeOpportunityAttack(CharacterStats attacker, CharacterStats movingTarget) {
-        BattlePositionComponent attackerPos = attacker.GetComponent<BattlePositionComponent>();
-        BattlePositionComponent targetPos = movingTarget.GetComponent<BattlePositionComponent>();
+    public static bool RollAttackCheck(CharacterStats attacker, CharacterStats target) {
+        if (attacker == null || target == null) return false;
 
-        if (attackerPos == null || targetPos == null) return false;
+        // 1d20攻击骰
+        int d20Roll = Random.Range(1, 21);
 
-        // 检查攻击者是否在前排
-        if (!attackerPos.IsInFrontRow()) return false;
+        // 攻击加值 = 熟练加值 + 属性调整值
+        int proficiencyBonus = CalculateProficiencyBonus(attacker.characterLevel);
+        int attackModifier = GetAttackModifier(attacker);
+        int attackBonus = proficiencyBonus + attackModifier;
 
-        // 检查目标是否从相邻位置移动
-        bool wasAdjacent = HorizontalFormationAI.ArePositionsAdjacent(
-            attackerPos.currentPosition,
-            targetPos.previousPosition
-        );
+        // 总攻击检定值
+        int totalAttack = d20Roll + attackBonus;
 
-        bool isStillAdjacent = HorizontalFormationAI.ArePositionsAdjacent(
-            attackerPos.currentPosition,
-            targetPos.currentPosition
-        );
+        // 目标AC
+        int targetAC = target.armorClass; // 直接使用armorClass属性
 
-        // 如果目标从相邻位置移开，则可以进行机会攻击
-        return wasAdjacent && !isStillAdjacent;
+        // 判定结果
+        bool isHit = totalAttack >= targetAC;
+        bool isCriticalHit = d20Roll == 20;
+        bool isCriticalMiss = d20Roll == 1;
+
+        // 自然1自动失败，自然20自动命中
+        if (isCriticalMiss) isHit = false;
+        if (isCriticalHit) isHit = true;
+
+        Debug.Log($"🎲 攻击检定: {attacker.GetDisplayName()} → {target.GetDisplayName()}");
+        Debug.Log($"   骰子:{d20Roll} + 攻击加值:{attackBonus} = {totalAttack} vs AC:{targetAC}");
+        Debug.Log($"   结果: {(isHit ? "命中" : "失败")}{(isCriticalHit ? " (暴击!)" : "")}{(isCriticalMiss ? " (大失败)" : "")}");
+
+        return isHit;
     }
 
     /// <summary>
-    /// 计算攻击的命中修正
+    /// DND5E伤害计算 - 武器伤害骰 + 属性调整值
     /// </summary>
-    public static int CalculateAttackModifier(CharacterStats attacker, CharacterStats target) {
-        int baseModifier = 0;
-        BattlePositionComponent attackerPos = attacker.GetComponent<BattlePositionComponent>();
-        BattlePositionComponent targetPos = target.GetComponent<BattlePositionComponent>();
+    public static int RollDamage(CharacterStats attacker, CharacterStats target) {
+        if (attacker == null || target == null) return 0;
 
-        if (attackerPos == null || targetPos == null) return baseModifier;
+        // 基础伤害骰（简化版本，实际应该从武器数据获取）
+        int baseDamage = GetBaseDamage(attacker);
 
-        // 检查掩护效果
-        CoverType cover = HorizontalCoverSystem.CheckCover(attackerPos.currentPosition, targetPos.currentPosition);
-        switch (cover) {
-            case CoverType.Half:
-                baseModifier -= 2; // 半掩护 -2 命中
-                break;
-            case CoverType.ThreeQuarter:
-                baseModifier -= 5; // 四分之三掩护 -5 命中
-                break;
-            case CoverType.Full:
-                return -999; // 完全掩护无法攻击
+        // 属性调整值
+        int damageModifier = GetDamageModifier(attacker);
+
+        // 总伤害
+        int totalDamage = baseDamage + damageModifier;
+
+        // 最小伤害为1
+        totalDamage = Mathf.Max(1, totalDamage);
+
+        Debug.Log($"💥 伤害计算: {attacker.GetDisplayName()} → {target.GetDisplayName()}");
+        Debug.Log($"   基础伤害:{baseDamage} + 调整值:{damageModifier} = {totalDamage}");
+
+        return totalDamage;
+    }
+
+    /// <summary>
+    /// 计算熟练加值
+    /// </summary>
+    private static int CalculateProficiencyBonus(int characterLevel) {
+        return 2 + (characterLevel - 1) / 4; // DND5E标准公式
+    }
+
+    /// <summary>
+    /// 获取攻击属性调整值
+    /// </summary>
+    private static int GetAttackModifier(CharacterStats character) {
+        // 根据职业和攻击类型决定使用哪个属性
+        switch (character.characterClass) {
+            case CharacterClass.Fighter:
+            case CharacterClass.Paladin:
+            case CharacterClass.Barbarian:
+                return character.StrMod; // 力量攻击
+
+            case CharacterClass.Rogue:
+            case CharacterClass.Ranger:
+                return character.DexMod; // 敏捷攻击
+
+            case CharacterClass.Wizard:
+            case CharacterClass.Sorcerer:
+                return character.IntMod; // 智力施法
+
+            case CharacterClass.Cleric:
+            case CharacterClass.Druid:
+                return character.WisMod; // 感知施法
+
+            case CharacterClass.Warlock:
+            case CharacterClass.Bard:
+                return character.ChaMod; // 魅力施法
+
+            default:
+                return character.StrMod; // 默认力量
         }
+    }
 
-        // 检查背刺加成
-        if (IsFlankingAttack(attacker, target)) {
-            baseModifier += 2; // 背刺攻击 +2 命中
+    /// <summary>
+    /// 获取伤害属性调整值
+    /// </summary>
+    private static int GetDamageModifier(CharacterStats character) {
+        // 通常与攻击调整值相同
+        return GetAttackModifier(character);
+    }
+
+    /// <summary>
+    /// 获取基础伤害骰（简化版本）
+    /// </summary>
+    private static int GetBaseDamage(CharacterStats character) {
+        // 简化的武器伤害，实际应该从装备系统获取
+        switch (character.characterClass) {
+            case CharacterClass.Fighter:
+            case CharacterClass.Paladin:
+                return Random.Range(1, 9); // 1d8 长剑
+
+            case CharacterClass.Barbarian:
+                return Random.Range(1, 13); // 1d12 巨斧
+
+            case CharacterClass.Rogue:
+                return Random.Range(1, 7); // 1d6 短剑
+
+            case CharacterClass.Ranger:
+                return Random.Range(1, 9); // 1d8 长弓
+
+            case CharacterClass.Wizard:
+            case CharacterClass.Sorcerer:
+            case CharacterClass.Warlock:
+                return Random.Range(1, 5); // 1d4 法术焦点
+
+            case CharacterClass.Cleric:
+                return Random.Range(1, 7); // 1d6 战锤
+
+            case CharacterClass.Druid:
+                return Random.Range(1, 7); // 1d6 木棒
+
+            case CharacterClass.Bard:
+                return Random.Range(1, 7); // 1d6 细剑
+
+            default:
+                return Random.Range(1, 5); // 1d4 默认
         }
+    }
 
-        return baseModifier;
-    }    /// <summary>
-         /// 检查是否为背刺攻击
-         /// </summary>
-    private static bool IsFlankingAttack(CharacterStats attacker, CharacterStats target) {
-        // 检查攻击者是否是盗贼且处于背刺状态
-        if (attacker.characterClass == DND5E.CharacterClass.Rogue) {
-            HorizontalStealthComponent stealthComponent = attacker.GetComponent<HorizontalStealthComponent>();
-            if (stealthComponent != null && stealthComponent.stealthState == StealthState.Flanking) {
+    /// <summary>
+    /// 判断攻击者是否为远程攻击角色
+    /// </summary>
+    public static bool IsRangedAttacker(CharacterStats character) {
+        switch (character.characterClass) {
+            case CharacterClass.Wizard:
+            case CharacterClass.Sorcerer:
+            case CharacterClass.Warlock:
+            case CharacterClass.Ranger:
                 return true;
-            }
+            case CharacterClass.Cleric:
+            case CharacterClass.Druid:
+            case CharacterClass.Bard:
+                return true; // 施法者默认远程
+            default:
+                return false; // 近战职业
         }
-
-        return false;
     }
 }

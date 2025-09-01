@@ -15,8 +15,6 @@ GameObject:
   - component: {fileID: 5575585352547758138}
   - component: {fileID: 1642782178530901607}
   - component: {fileID: 5487972192688071486}
-  - component: {fileID: 1076721051247055272}
-  - component: {fileID: 6946099325076628137}
   - component: {fileID: 938172523630810073}
   m_Layer: 7
   m_Name: EnemyTemplate
@@ -203,72 +201,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8e97f2c7d93060e4db925598648e52c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  stats:
-    Strength: 10
-    Dexterity: 10
-    Constitution: 10
-    Intelligence: 10
-    Wisdom: 10
-    Charisma: 10
-    StrSaveProficient: 0
-    DexSaveProficient: 0
-    ConSaveProficient: 0
-    IntSaveProficient: 0
-    WisSaveProficient: 0
-    ChaSaveProficient: 0
-    ProficientSkills: 
+  template: {fileID: 11400000, guid: a5e44c5e12dffa841a5fa47b8a0f423e, type: 2}
   characterName: "\u89D2\u8272"
-  displayName: 
   characterClass: 0
-  level: 1
-  experiencePoints: 0
-  baseArmorClass: 10
-  armorClass: 10
+  characterLevel: 1
+  battleSide: 1
   maxHitPoints: 10
   currentHitPoints: 10
   temporaryHitPoints: 0
-  hitDice: 8
-  proficiencyBonus: 2
-  battleSide: 0
-  speed: 30
-  resistances: 
-  vulnerabilities: 
-  immunities: 
+  armorClass: 10
   statusEffects: 
---- !u!114 &1076721051247055272
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1110104639557568765}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 99ce52960c54e994f8ea8c7fc3bd36f7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  hasAction: 1
-  hasBonusAction: 1
-  hasMovement: 1
-  hasReaction: 1
-  hasMoved: 0
-  movementSpeed: 30
-  movementRemaining: 0
---- !u!114 &6946099325076628137
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1110104639557568765}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1d2419df6b42bdb4ea8232e191ee8688, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  spellList:
-    knownSpells: []
-    spellSlots: 000000000000000000000000000000000000000000000000000000000000000000000000
+  strength: 10
+  dexterity: 10
+  constitution: 10
+  intelligence: 10
+  wisdom: 10
+  charisma: 10
 --- !u!114 &938172523630810073
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
-using DND5E;
 
 public class DND_CharacterAdapter : MonoBehaviour {
     // 角色统计数据
@@ -157,7 +156,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
                 // 设置混合时间
                 trackEntry.MixDuration = 0.1f;
 
-                // 使用正常的时间缩放
+                // 使用正���的时间缩放
                 trackEntry.TimeScale = 1.0f;
 
                 // 记录当前动画
@@ -299,81 +298,42 @@ public class DND_CharacterAdapter : MonoBehaviour {
                 else {
                     // 如果过渡动画不存在，直接播放待机动画
                     Debug.LogWarning($"{gameObject.name} 过渡动画 {animationMapping.moveToIdleAnimation} 不存在，直接切换到待机动画");
-                    PlayAnimation(animationMapping.idleAnimation, true);
+                    PlayIdleAnimation();
                 }
             }
             else {
-                // 如果skeletonAnimation组件有问题，直接播放待机动画
-                Debug.LogWarning($"{gameObject.name} skeletonAnimation组件异常，直接切换到待机动画");
-                PlayAnimation(animationMapping.idleAnimation, true);
+                // 如果SkeletonAnimation组件有问题，直接播放待机动画
+                PlayIdleAnimation();
             }
         }
     }
 
-    // 动画播放完毕后返回空闲状态
+    /// <summary>
+    /// 播放待机动画
+    /// </summary>
+    public void PlayIdleAnimation() {
+        if (skeletonAnimation == null) {
+            Debug.LogWarning($"⚠️ {gameObject.name} 没有SkeletonAnimation组件，无法播放待机动画");
+            return;
+        }
+        PlayAnimation(animationMapping.idleAnimation, true);
+        Debug.Log($"🧘 {gameObject.name} 开始播放待机动画: {animationMapping.idleAnimation}");
+    }
+
+    /// <summary>
+    /// 播放法术动画（施法动画的别名）
+    /// </summary>
+    public void PlaySpellAnimation() {
+        PlayCastAnimation();
+    }
+
+    // 返回空闲状态的协程
     private IEnumerator ReturnToIdle(float delay) {
         yield return new WaitForSeconds(delay);
 
-        // 只有在角色没有死亡的情况下才返回空闲状态
+        // 检查角色是否还活着
         if (characterStats != null && characterStats.currentHitPoints > 0) {
-            PlayAnimation(animationMapping.idleAnimation, true);
+            PlayIdleAnimation();
         }
-        else {
-            Debug.Log($"{gameObject.name} 已死亡，不返回空闲状态");
-        }
-    }
-
-    // 移动到目标位置
-    public IEnumerator MoveToPosition(Vector3 targetPosition, float speed) {
-        // 播放移动动画
-        PlayWalkAnimation();
-
-        // 计算方向
-        Vector3 direction = targetPosition - transform.position;
-        direction.y = 0;
-
-        // 设置朝向
-        if (direction.x != 0) {
-            transform.localScale = new Vector3(direction.x > 0 ? 1 : -1, 1, 1);
-        }
-
-        // 移动到目标位置
-        float distance = direction.magnitude;
-        float remainingDistance = distance;
-
-        while (remainingDistance > 0.1f) {
-            float step = speed * Time.deltaTime;
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, step);
-            remainingDistance = Vector3.Distance(transform.position, targetPosition);
-            yield return null;
-        }
-
-        // 到达目标位置，如果角色没有死亡，播放过渡动画
-        if (characterStats != null && characterStats.currentHitPoints > 0) {
-            StopWalkWithTransition();
-        }
-        else {
-            Debug.Log($"{gameObject.name} 已死亡，不返回空闲状态");
-        }
-    }
-
-    // 受到伤害
-    public void TakeDamage() {
-        // 播放受击动画
-        PlayHitAnimation();
-
-        // 确保UI更新
-        // UI更新已转移至挂机系统自动处理
-
-        // 如果生命值为0，播放死亡动画
-        if (characterStats != null && characterStats.currentHitPoints <= 0) {
-            PlayDeathAnimation();
-        }
-    }
-
-    // 清理
-    private void OnDestroy() {
-        // 取消注册事件
-        // 事件注销已转移至挂机系统自动处理
     }
 }

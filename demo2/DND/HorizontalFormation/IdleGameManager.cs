@@ -1,9 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-// using UnityEngine.UI; // 如果项目没有UI模块，则注释掉
-using DND5E;
-using Spine.Unity; // 添加Spine命名空间
 
 /// <summary>
 /// 挂机模式管理器
@@ -11,19 +8,14 @@ using Spine.Unity; // 添加Spine命名空间
 /// </summary>
 public class IdleGameManager : MonoBehaviour {
     [Header("挂机模式设置")]
-    public bool idleModeEnabled = false;
+    public bool idleModeEnabled;
     public float encounterInterval = 10f; // 遭遇间隔时间
     public float battleSpeed = 1f; // 战斗速度倍率
 
     [Header("探索设置")]
     public int currentStage = 1;
     public int currentWave = 1;
-    public float stageProgressPercent = 0f; [Header("UI组件 - 如果项目没有UI模块则注释掉")]
-    // public Button idleModeToggle;
-    // public Text stageInfoText;
-    // public Text progressText;
-    // public Slider progressSlider;
-    // public Text rewardsText;
+    public float stageProgressPercent;
 
     [Header("队伍生成设置")]
     [Tooltip("是否使用阵型管理器生成队伍（推荐开启）")]
@@ -36,20 +28,18 @@ public class IdleGameManager : MonoBehaviour {
     public AutoBattleAI autoBattleAI;
 
     // 私有变量
-    private bool isInBattle = false;
+    private bool isInBattle;
     private float nextEncounterTime;
     private Coroutine idleCoroutine;
     private IdleRewards accumulatedRewards;
 
     // 当前活跃的队伍（运行时生成）
     private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
-    private List<CharacterStats> currentEnemyTeam = new List<CharacterStats>();
 
     // 阶段配置
     private Dictionary<int, StageData> stageConfigs;
 
     void Start() {
-        // 🎯 修复：先初始化配置，再初始化系统
         LoadStageConfigs();
         SetupUI();
         InitializeIdleSystem();
@@ -59,13 +49,13 @@ public class IdleGameManager : MonoBehaviour {
         if (idleModeEnabled && !isInBattle) {
             UpdateExploreProgress();
         }
-
         UpdateUI();
-    }    /// <summary>
-         /// 初始化挂机系统
-         /// </summary>
+    }
+
+    /// <summary>
+    /// 初始化挂机系统
+    /// </summary>
     private void InitializeIdleSystem() {
-        // 强制手动引用验证 - 移除自动查找逻辑
         if (formationManager == null) {
             Debug.LogError("IdleGameManager: formationManager 引用未设置！请在Inspector中手动拖入HorizontalBattleFormationManager组件");
             return;
@@ -79,11 +69,8 @@ public class IdleGameManager : MonoBehaviour {
         accumulatedRewards = new IdleRewards();
         nextEncounterTime = Time.time + encounterInterval;
 
-        // 使用阵型管理器生成初始队伍
         if (useFormationManager) {
             GenerateInitialTeams();
-
-            // 队伍生成后，启动探索模式
             if (currentPlayerTeam.Count > 0) {
                 Debug.Log("🎯 队伍生成完成，启动探索模式...");
                 StartExploreMode();
@@ -92,23 +79,14 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 启动探索模式（确保角色播放走路动画）
+    /// 启动探索模式
     /// </summary>
     private void StartExploreMode() {
-        // 启动挂机模式
         idleModeEnabled = true;
-
-        // 🎯 初始化所有角色的动画状态（避免延迟）
         InitializeAllCharacterAnimations();
-
-        // 立即设置玩家队伍为走路动画
         SetPlayerPartyAnimation("walk");
-        Debug.Log("🎬 玩家队伍开始探索，播放走路动画");
-
-        // 🎯 关键修复：立即启动背景滚动
         StartBackgroundScrolling();
 
-        // 开始挂机循环
         if (idleCoroutine != null) {
             StopCoroutine(idleCoroutine);
         }
@@ -116,85 +94,48 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 启动背景滚动（立即执行）
+    /// 启动背景滚动
     /// </summary>
     private void StartBackgroundScrolling() {
-        // 通过ScrollLayer实现背景滚动（UV移动）
         ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
         if (scrollLayers.Length > 0) {
-            Debug.Log($"🎬 找到 {scrollLayers.Length} 个ScrollLayer组件，开始启动背景滚动");
-            foreach (ScrollLayer layer in scrollLayers) {
-                if (layer != null) {
-                    layer.SetScrollSpeed(2f); // 设置滚动速度
-                    Debug.Log($"✅ 启动ScrollLayer: {layer.gameObject.name} - 滚动状态: {layer.IsScrolling()}");
-                }
-            }
-
-            // 等待一帧后再次检查
-            StartCoroutine(VerifyScrollingAfterDelay());
-        }
-        else {
-            Debug.LogError("❌ 未找到任何ScrollLayer组件！请检查以下设置:");
-            Debug.LogError("  1. Environment容器下是否有背景GameObject");
-            Debug.LogError("  2. 背景GameObject是否添加了ScrollLayer脚本");
-            Debug.LogError("  3. 背景GameObject是否有SpriteRenderer组件");
-        }
-    }
-
-    /// <summary>
-    /// 延迟验证滚动状态
-    /// </summary>
-    private System.Collections.IEnumerator VerifyScrollingAfterDelay() {
-        yield return new WaitForSeconds(0.1f);
-
-        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        Debug.Log("🔍 验证背景滚动状态:");
-
-        foreach (ScrollLayer layer in scrollLayers) {
-            if (layer != null) {
-                Debug.Log($"  - {layer.gameObject.name}: 滚动中={layer.IsScrolling()}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 停止背景滚动（战斗时）
-    /// </summary>
-    private void StopBackgroundScrolling() {
-        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        if (scrollLayers.Length > 0) {
-            Debug.Log("🛑 战斗开始，停止背景滚动");
-            foreach (ScrollLayer layer in scrollLayers) {
-                if (layer != null) {
-                    layer.StopScrolling();
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 恢复背景滚动（探索时）
-    /// </summary>
-    private void ResumeBackgroundScrolling() {
-        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        if (scrollLayers.Length > 0) {
-            Debug.Log("🎬 战斗结束，恢复背景滚动");
             foreach (ScrollLayer layer in scrollLayers) {
                 if (layer != null) {
                     layer.SetScrollSpeed(2f);
                 }
             }
         }
-    }    /// <summary>
-         /// 设置UI
-         /// </summary>
+    }
+
+    /// <summary>
+    /// 停止背景滚动
+    /// </summary>
+    private void StopBackgroundScrolling() {
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        foreach (ScrollLayer layer in scrollLayers) {
+            if (layer != null) {
+                layer.StopScrolling();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 恢复背景滚动
+    /// </summary>
+    private void ResumeBackgroundScrolling() {
+        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
+        foreach (ScrollLayer layer in scrollLayers) {
+            if (layer != null) {
+                layer.SetScrollSpeed(2f);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 设置UI
+    /// </summary>
     private void SetupUI() {
         // UI初始化代码，如果项目没有UI模块则注释掉
-        /*
-        if (idleModeToggle != null) {
-            idleModeToggle.onClick.AddListener(ToggleIdleMode);
-        }
-        */
     }
 
     /// <summary>
@@ -217,63 +158,12 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 切换挂机模式
-    /// </summary>
-    public void ToggleIdleMode() {
-        idleModeEnabled = !idleModeEnabled;
-
-        if (idleModeEnabled) {
-            StartIdleMode();
-        }
-        else {
-            StopIdleMode();
-        }
-
-        Debug.Log($"挂机模式: {(idleModeEnabled ? "开启" : "关闭")}");
-    }
-
-    /// <summary>
-    /// 开始挂机模式
-    /// </summary>
-    private void StartIdleMode() {
-        if (autoBattleAI != null) {
-            autoBattleAI.enableAutoBattle = true;
-        }
-
-        if (idleCoroutine != null) {
-            StopCoroutine(idleCoroutine);
-        }
-
-        idleCoroutine = StartCoroutine(IdleGameLoop());
-
-        Debug.Log("开始自动探索...");
-    }
-
-    /// <summary>
-    /// 停止挂机模式
-    /// </summary>
-    private void StopIdleMode() {
-        if (autoBattleAI != null) {
-            autoBattleAI.enableAutoBattle = false;
-        }
-
-        if (idleCoroutine != null) {
-            StopCoroutine(idleCoroutine);
-            idleCoroutine = null;
-        }
-
-        Debug.Log("停止自动探索");
-    }
-
-    /// <summary>
     /// 挂机游戏主循环
     /// </summary>
     private IEnumerator IdleGameLoop() {
         while (idleModeEnabled) {
-            // 探索阶段
             yield return StartCoroutine(ExploreStage());
 
-            // 检查是否需要进入战斗
             if (Time.time >= nextEncounterTime) {
                 yield return StartCoroutine(StartRandomEncounter());
                 nextEncounterTime = Time.time + encounterInterval;
@@ -284,40 +174,18 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 探索阶段（确保持续播放走路动画和背景滚动）
+    /// 探索阶段
     /// </summary>
     private IEnumerator ExploreStage() {
-        // 🛡️ 增强null检查
-        if (stageConfigs == null) {
-            Debug.LogError("ExploreStage: stageConfigs未初始化！");
+        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage)) {
             yield break;
         }
 
-        // 检查基础配置
-        if (!stageConfigs.ContainsKey(currentStage)) {
-            Debug.LogWarning($"未找到阶段 {currentStage} 的配置");
-            yield break;
-        }
-
-        // 检查玩家队伍是否存在
-        if (currentPlayerTeam == null || currentPlayerTeam.Count == 0) {
-            Debug.LogWarning("ExploreStage: 玩家队伍为空，跳过动画设置");
-            yield break;
-        }
-
-        // 🎯 只有在非战斗状态时才设置走路动画
         if (!isInBattle) {
-            // 确保玩家队伍持续播放走路动画
             SetPlayerPartyAnimation("walk");
         }
 
-        // 🎬 确保背景持续滚动（每次都检查）
-        EnsureBackgroundScrolling();
-
-        StageData stageData = stageConfigs[currentStage];
-
-        // 更新探索进度
-        stageProgressPercent += Time.deltaTime * 10f; // 每秒增加10%进度
+        stageProgressPercent += Time.deltaTime * 10f;
 
         if (stageProgressPercent >= 100f) {
             CompleteCurrentWave();
@@ -327,672 +195,539 @@ public class IdleGameManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 确保背景滚动正常运行
-    /// </summary>
-    private void EnsureBackgroundScrolling() {
-        ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        if (scrollLayers.Length > 0) {
-            foreach (ScrollLayer layer in scrollLayers) {
-                if (layer != null && !layer.IsScrolling()) {
-                    layer.SetScrollSpeed(2f);
-                    Debug.Log($"🔄 重新启动背景滚动: {layer.gameObject.name}");
-                }
-            }
-        }
-        else if (Time.frameCount % 300 == 0) { // 每5秒提醒一次
-            Debug.LogWarning("⚠️ 未找到ScrollLayer组件！请检查背景配置");
-        }
-    }
-
-    /// <summary>
     /// 完成当前波次
     /// </summary>
     private void CompleteCurrentWave() {
         stageProgressPercent = 0f;
         currentWave++;
 
-        if (!stageConfigs.ContainsKey(currentStage))
-            return;
+        if (stageConfigs.ContainsKey(currentStage)) {
+            StageData stageData = stageConfigs[currentStage];
+            GiveWaveRewards(stageData);
 
-        StageData stageData = stageConfigs[currentStage];
-
-        // 给予波次奖励
-        GiveWaveRewards(stageData);
-
-        if (currentWave > stageData.wavesPerStage) {
-            CompleteCurrentStage();
+            if (currentWave > stageData.wavesPerStage) {
+                CompleteCurrentStage();
+            }
         }
-
-        Debug.Log($"完成波次 {currentWave - 1}，当前阶段: {currentStage}-{currentWave}");
     }
 
     /// <summary>
     /// 完成当前阶段
     /// </summary>
     private void CompleteCurrentStage() {
-        if (!stageConfigs.ContainsKey(currentStage))
-            return;
-
-        StageData stageData = stageConfigs[currentStage];
-
-        // 给予阶段完成奖励
-        GiveStageCompletionRewards(stageData);
+        if (stageConfigs.ContainsKey(currentStage)) {
+            StageData stageData = stageConfigs[currentStage];
+            GiveStageCompletionRewards(stageData);
+        }
 
         currentStage++;
         currentWave = 1;
+    }
 
-        Debug.Log($"完成阶段 {currentStage - 1}！进入新阶段: {currentStage}");
-    }    /// <summary>
-         /// 开始随机遭遇
-         /// </summary>
+    /// <summary>
+    /// 开始随机遭遇
+    /// </summary>
     private IEnumerator StartRandomEncounter() {
         if (isInBattle) yield break;
 
-        Debug.Log("遭遇敌人！开始自动战斗...");
-
         isInBattle = true;
 
-        // 获取玩家队伍（单一配置方式）
         List<CharacterStats> validPlayerParty = GetValidPlayerParty();
         if (validPlayerParty.Count == 0) {
-            Debug.LogError("无法开始战斗：未找到有效的玩家角色！请在Inspector中配置playerParty字段。");
             isInBattle = false;
             yield break;
         }
 
-        // 生成敌人队伍
-        List<CharacterStats> enemyParty = GenerateEnemyParty();
-
-        // 播放敌人进场动画
-        Debug.Log("🎬 开始敌人进场动画...");
-        yield return StartCoroutine(EnemyEntranceAnimation(enemyParty));
-
-        // 🎯 敌人进场完成后，立即让玩家队伍切换到待机动画
+        // 先切换玩家到待机状态和停止背景
         SetPlayerPartyAnimation("idle");
-        Debug.Log("🎬 玩家队伍切换到待机动画，准备战斗");
+        StopBackgroundScrolling();
 
-        // ⚠️ 不再重新排列位置，敌人已经在进场动画中定位好了
+        // 生成敌人队伍并执行进场动画
+        List<CharacterStats> enemyParty = GenerateEnemyParty();
+        yield return StartCoroutine(PlayEnemyEntranceAnimation(enemyParty));
 
-        // 开始自动战斗
-        yield return StartCoroutine(AutoBattleSequence(validPlayerParty, enemyParty));
+        // 使用先攻系统开始战斗
+        if (autoBattleAI != null) {
+            Debug.Log("🎯 敌人进场完成，启动先攻系统...");
+            autoBattleAI.StartBattleSequence();
+
+            // 等待先攻系统战斗完成
+            yield return new WaitUntil(() => !autoBattleAI.isBattleActive);
+        }
+
+        // 战斗结束后的清理
+        yield return StartCoroutine(HandleBattleEnd(validPlayerParty, enemyParty));
 
         isInBattle = false;
     }
 
     /// <summary>
-    /// 自动战斗序列
+    /// 敌人进场动画序列
     /// </summary>
-    private IEnumerator AutoBattleSequence(List<CharacterStats> playerParty, List<CharacterStats> enemyParty) {
-        int round = 1;
+    private IEnumerator PlayEnemyEntranceAnimation(List<CharacterStats> enemyParty) {
+        Debug.Log("🚶‍♂️ 播放敌人进场动画...");
 
-        // 战斗开始时设置所有角色为空闲动画
-        SetPlayerPartyAnimation("idle");
-        SetEnemyPartyAnimation(enemyParty, "idle");
-        Debug.Log("🎬 战斗开始，所有角色切换到空闲动画");
+        foreach (CharacterStats enemy in enemyParty) {
+            if (enemy != null) {
+                // 将敌人初始位置设置在屏幕右侧外
+                Vector3 currentPos = enemy.transform.position;
+                Vector3 startPos = new Vector3(currentPos.x + 8f, currentPos.y, currentPos.z);
+                enemy.transform.position = startPos;
 
-        // 🎯 战斗开始时停止背景滚动
-        StopBackgroundScrolling();
-
-        while (HasLivingMembers(playerParty) && HasLivingMembers(enemyParty)) {
-            Debug.Log($"=== 自动战斗回合 {round} ===");            // 玩家回合
-            foreach (CharacterStats player in playerParty) {
-                if (player.currentHitPoints > 0 && autoBattleAI != null) {
-                    autoBattleAI.ExecuteAutoBattleTurn(player);
-                    yield return new WaitForSeconds(0.5f / battleSpeed);
+                // 播放走路动画
+                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    adapter.PlayWalkAnimation();
                 }
             }
 
-            // 敌人回合
+            yield return new WaitForSeconds(0.2f); // 错开敌人进场时间
+        }
+
+        // 移动到目标位置
+        float moveSpeed = 3f;
+        bool allReachedTarget = false;
+
+        while (!allReachedTarget) {
+            allReachedTarget = true;
+
             foreach (CharacterStats enemy in enemyParty) {
-                if (enemy.currentHitPoints > 0 && autoBattleAI != null) {
-                    autoBattleAI.ExecuteAutoBattleTurn(enemy);
-                    yield return new WaitForSeconds(0.5f / battleSpeed);
+                if (enemy != null) {
+                    BattlePositionComponent posComp = enemy.GetComponent<BattlePositionComponent>();
+                    if (posComp != null) {
+                        Vector3 targetPos = GetSpawnPosition(posComp.currentPosition);
+                        Vector3 currentPos = enemy.transform.position;
+
+                        if (Vector3.Distance(currentPos, targetPos) > 0.1f) {
+                            allReachedTarget = false;
+                            Vector3 newPos = Vector3.MoveTowards(currentPos, targetPos, moveSpeed * Time.deltaTime);
+                            enemy.transform.position = newPos;
+                        }
+                    }
                 }
             }
 
-            round++;
-            yield return new WaitForSeconds(1f / battleSpeed);
+            yield return null;
         }
 
-        // 战斗结果
-        if (HasLivingMembers(playerParty)) {
-            Debug.Log("玩家胜利！");
-            GiveBattleVictoryRewards();
+        // 切换到待机动画
+        foreach (CharacterStats enemy in enemyParty) {
+            if (enemy != null) {
+                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    adapter.PlayIdleAnimation();
+                }
+            }
         }
-        else {
-            Debug.Log("玩家失败...");
+
+        Debug.Log("✅ 敌人进场动画完成");
+    }
+
+    /// <summary>
+    /// 处理战斗结束
+    /// </summary>
+    private IEnumerator HandleBattleEnd(List<CharacterStats> playerParty, List<CharacterStats> enemyParty) {
+        // 判断战斗结果
+        if (HasLivingMembers(playerParty)) {
+            Debug.Log("🎉 玩家胜利！");
+            GiveBattleVictoryRewards();
+
+            // 销毁敌人
+            foreach (CharacterStats enemy in enemyParty) {
+                if (enemy != null && enemy.gameObject != null) {
+                    Destroy(enemy.gameObject);
+                }
+            }
+        } else {
+            Debug.Log("💀 玩家败北！");
             HandleBattleDefeat();
         }
 
-        // 🎬 战斗结束后恢复玩家走路动画和背景滚动
-        SetPlayerPartyAnimation("walk");
-        Debug.Log("🎬 战斗结束，玩家队伍恢复走路动画");
+        yield return new WaitForSeconds(1f);
 
+        // 恢复探索状态
+        SetPlayerPartyAnimation("walk");
         ResumeBackgroundScrolling();
     }
 
     /// <summary>
-    /// 生成敌人队伍（使用阵型管理器）
+    /// 获取指定位置的spawn点坐标
+    /// </summary>
+    private Vector3 GetSpawnPosition(HorizontalPosition position) {
+        if (formationManager == null) return Vector3.zero;
+
+        Transform spawnPoint = null;
+
+        switch (position) {
+            case HorizontalPosition.EnemyFrontLeft:
+                spawnPoint = formationManager.enemyFrontLeftSpawn;
+                break;
+            case HorizontalPosition.EnemyFrontCenter:
+                spawnPoint = formationManager.enemyFrontCenterSpawn;
+                break;
+            case HorizontalPosition.EnemyFrontRight:
+                spawnPoint = formationManager.enemyFrontRightSpawn;
+                break;
+            case HorizontalPosition.EnemyBackLeft:
+                spawnPoint = formationManager.enemyBackLeftSpawn;
+                break;
+            case HorizontalPosition.EnemyBackCenter:
+                spawnPoint = formationManager.enemyBackCenterSpawn;
+                break;
+            case HorizontalPosition.EnemyBackRight:
+                spawnPoint = formationManager.enemyBackRightSpawn;
+                break;
+            case HorizontalPosition.PlayerFrontLeft:
+                spawnPoint = formationManager.playerFrontLeftSpawn;
+                break;
+            case HorizontalPosition.PlayerFrontCenter:
+                spawnPoint = formationManager.playerFrontCenterSpawn;
+                break;
+            case HorizontalPosition.PlayerFrontRight:
+                spawnPoint = formationManager.playerFrontRightSpawn;
+                break;
+            case HorizontalPosition.PlayerBackLeft:
+                spawnPoint = formationManager.playerBackLeftSpawn;
+                break;
+            case HorizontalPosition.PlayerBackCenter:
+                spawnPoint = formationManager.playerBackCenterSpawn;
+                break;
+            case HorizontalPosition.PlayerBackRight:
+                spawnPoint = formationManager.playerBackRightSpawn;
+                break;
+        }
+
+        return spawnPoint != null ? spawnPoint.position : Vector3.zero;
+    }
+
+    /// <summary>
+    /// 生成敌人队伍
     /// </summary>
     private List<CharacterStats> GenerateEnemyParty() {
-        if (formationManager != null) {
-            // 使用阵型管理器生成敌人队伍
-            currentEnemyTeam = formationManager.GenerateEnemyFormation();
+        List<CharacterStats> enemyParty = new List<CharacterStats>();
 
-            // 根据当前关卡调整敌人属性
-            if (stageConfigs.ContainsKey(currentStage)) {
-                StageData stageData = stageConfigs[currentStage];
-                AdjustEnemyLevels(currentEnemyTeam, stageData.enemyLevel);
-            }
-
-            return currentEnemyTeam;
+        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage)) {
+            Debug.LogWarning($"⚠️ 没有找到第{currentStage}阶段的配置数据");
+            return enemyParty;
         }
-        else {
-            Debug.LogError("FormationManager未设置，使用旧方法生成敌人");
-            return GenerateEnemyParty_Legacy();
-        }
-    }
-
-    /// <summary>
-    /// 调整敌人队伍等级和属性
-    /// </summary>
-    private void AdjustEnemyLevels(List<CharacterStats> enemies, int targetLevel) {
-        foreach (CharacterStats enemy in enemies) {
-            if (enemy != null) {
-                enemy.level = targetLevel;
-                enemy.maxHitPoints = 30 + (targetLevel * 10);
-                enemy.currentHitPoints = enemy.maxHitPoints;
-                enemy.armorClass = 10 + targetLevel;
-
-                // 设置基础属性
-                enemy.stats.Strength = 12 + targetLevel;
-                enemy.stats.Dexterity = 10 + targetLevel;
-                enemy.stats.Constitution = 14 + targetLevel;
-                enemy.proficiencyBonus = 2 + (targetLevel / 4);
-            }
-        }
-        Debug.Log($"🔴 敌人队伍等级已调整为 {targetLevel}");
-    }
-
-    /// <summary>
-    /// 旧版敌人生成方法（备用）
-    /// </summary>
-    private List<CharacterStats> GenerateEnemyParty_Legacy() {
-        List<CharacterStats> enemies = new List<CharacterStats>();
-
-        if (!stageConfigs.ContainsKey(currentStage))
-            return enemies;
 
         StageData stageData = stageConfigs[currentStage];
+        int enemyCount = Random.Range(1, 4);
 
-        // 根据阶段等级生成2-4个敌人
-        int enemyCount = Random.Range(2, 5);
+        HorizontalPosition[] enemyPositions = {
+            HorizontalPosition.EnemyFrontLeft,
+            HorizontalPosition.EnemyFrontCenter,
+            HorizontalPosition.EnemyFrontRight,
+            HorizontalPosition.EnemyBackLeft,
+            HorizontalPosition.EnemyBackCenter,
+            HorizontalPosition.EnemyBackRight
+        };
 
         for (int i = 0; i < enemyCount; i++) {
-            CharacterStats enemy = CreateRandomEnemy(stageData.enemyLevel);
-            if (enemy != null) {
-                enemies.Add(enemy);
+            if (i >= enemyPositions.Length) break;
+
+            GameObject enemyPrefab = GetRandomEnemyPrefab();
+            if (enemyPrefab == null) continue;
+
+            Vector3 spawnPos = GetSpawnPosition(enemyPositions[i]);
+            GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+
+            CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
+            if (enemyStats == null) {
+                enemyStats = enemyObj.AddComponent<CharacterStats>();
             }
+
+            ConfigureEnemyStats(enemyStats, stageData);
+
+            BattlePositionComponent posComp = enemyObj.GetComponent<BattlePositionComponent>();
+            if (posComp == null) {
+                posComp = enemyObj.AddComponent<BattlePositionComponent>();
+            }
+            posComp.currentPosition = enemyPositions[i];
+
+            enemyParty.Add(enemyStats);
+
+            Debug.Log($"🧌 生成敌人: {enemyStats.GetDisplayName()} 在位置 {enemyPositions[i]}");
         }
 
-        // 设置敌人队伍阵型位置（关键修复）
-        if (formationManager != null && enemies.Count > 0) {
-            // 首先将敌人放置在屏幕右侧外面的位置
-            StartCoroutine(EnemyEntranceAnimation(enemies));
-
-            formationManager.ArrangeExistingTeam(enemies, BattleSide.Enemy);
-            Debug.Log("✅ 敌人队伍已排列到右侧阵型位置");
-        }
-        else {
-            Debug.LogWarning("⚠️ 找不到HorizontalBattleFormationManager或敌人列表为空，敌人位置未设置");
-        }
-
-        return enemies;
+        return enemyParty;
     }
 
     /// <summary>
-    /// 创建随机敌人（旧版方法，现在使用阵型管理器）
+    /// 获取随机敌人预制体
     /// </summary>
-    private CharacterStats CreateRandomEnemy(int level) {
-        GameObject enemyObj;
+    private GameObject GetRandomEnemyPrefab() {
+        if (formationManager == null) return null;
 
-        // 创建空GameObject（不再依赖enemyPrefabs）
-        enemyObj = new GameObject($"敌人_等级{level}");
+        GameObject[] enemyPrefabs = {
+            formationManager.敌人前排左翼,
+            formationManager.敌人前排中锋,
+            formationManager.敌人前排右翼,
+            formationManager.敌人后排左翼,
+            formationManager.敌人后排中路,
+            formationManager.敌人后排右翼
+        };
 
-        // 获取或添加CharacterStats组件
-        CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
-        if (enemyStats == null) {
-            enemyStats = enemyObj.AddComponent<CharacterStats>();
+        List<GameObject> validPrefabs = new List<GameObject>();
+        foreach (GameObject prefab in enemyPrefabs) {
+            if (prefab != null) {
+                validPrefabs.Add(prefab);
+            }
         }
 
-        // 确保有Role组件用于动画控制
-        Role roleComponent = enemyObj.GetComponent<Role>();
-        if (roleComponent == null) {
-            roleComponent = enemyObj.AddComponent<Role>();
-            Debug.Log($"为敌人 {enemyStats.characterName} 添加Role组件");
-        }
-
-        // 🎯 验证prefab是否配置了必需的组件（不硬编码添加）
-        DND_CharacterAdapter adapter = enemyObj.GetComponent<DND_CharacterAdapter>();
-        if (adapter == null) {
-            Debug.LogError($"❌ 敌人预制体缺少DND_CharacterAdapter组件！请在prefab中预先配置此组件");
-            // 不创建有问题的敌人
-            DestroyImmediate(enemyObj);
+        if (validPrefabs.Count == 0) {
+            Debug.LogError("❌ 没有找到有效的敌人预制体！");
             return null;
         }
 
-        SkeletonAnimation skeletonAnim = enemyObj.GetComponent<SkeletonAnimation>();
-        if (skeletonAnim == null) {
-            Debug.LogError($"❌ 敌人预制体缺少SkeletonAnimation组件！请在prefab中预先配置此组件和Spine数据");
-            // 不创建有问题的敌人
-            DestroyImmediate(enemyObj);
-            return null;
-        }
+        return validPrefabs[Random.Range(0, validPrefabs.Count)];
+    }
 
-        // 仅设置必要的运行时引用，其他属性通过prefab配置
-        adapter.characterStats = enemyStats;
-
-        Debug.Log($"✅ 敌人 {enemyStats.characterName} 的组件配置验证完成");
-
-        // 设置敌人属性
-        enemyStats.characterName = $"野生怪物 等级{level}";
-        enemyStats.level = level;
+    /// <summary>
+    /// 配置敌人属性
+    /// </summary>
+    private void ConfigureEnemyStats(CharacterStats enemyStats, StageData stageData) {
+        enemyStats.characterLevel = stageData.enemyLevel;
         enemyStats.battleSide = BattleSide.Enemy;
 
-        // 根据等级设置血量和属性
-        enemyStats.maxHitPoints = 30 + (level * 10);
-        enemyStats.currentHitPoints = enemyStats.maxHitPoints;
-        enemyStats.armorClass = 10 + level;
+        CharacterClass[] enemyClasses = {
+            CharacterClass.Fighter,
+            CharacterClass.Rogue,
+            CharacterClass.Wizard,
+            CharacterClass.Ranger
+        };
+        enemyStats.characterClass = enemyClasses[Random.Range(0, enemyClasses.Length)];
 
-        // 设置基础属性（随等级增长）
-        enemyStats.stats.Strength = 12 + level;
-        enemyStats.stats.Dexterity = 10 + level;
-        enemyStats.stats.Constitution = 14 + level;
-        enemyStats.proficiencyBonus = 2 + (level / 4);
+        int baseHp = 20 + (stageData.enemyLevel * 5);
+        enemyStats.maxHitPoints = baseHp;
+        enemyStats.currentHitPoints = baseHp;
 
-        // 设置标签
-        enemyObj.tag = "Enemy";
+        enemyStats.strength = Random.Range(10, 16);
+        enemyStats.dexterity = Random.Range(10, 16);
+        enemyStats.constitution = Random.Range(10, 16);
+        enemyStats.intelligence = Random.Range(8, 14);
+        enemyStats.wisdom = Random.Range(8, 14);
+        enemyStats.charisma = Random.Range(8, 14);
 
-        Debug.Log($"创建等级 {level} 的敌人: {enemyStats.characterName}");
-        return enemyStats;
+        enemyStats.armorClass = 12 + stageData.enemyLevel;
+
+        Debug.Log($"🎯 配置敌人: {enemyStats.GetDisplayName()} - 等级{enemyStats.characterLevel} - 血量{enemyStats.currentHitPoints} - AC{enemyStats.armorClass}");
     }
 
     /// <summary>
-    /// 检查队伍是否有存活成员
+    /// 获取有效的玩家队伍
     /// </summary>
-    private bool HasLivingMembers(List<CharacterStats> party) {
-        return party.Exists(member => member != null && member.currentHitPoints > 0);
-    }
+    private List<CharacterStats> GetValidPlayerParty() {
+        List<CharacterStats> validParty = new List<CharacterStats>();
 
-    /// <summary>
-    /// 给予波次奖励
-    /// </summary>
-    private void GiveWaveRewards(StageData stageData) {
-        int expReward = Mathf.RoundToInt(stageData.baseExpReward * 0.3f);
-        int goldReward = Mathf.RoundToInt(stageData.baseGoldReward * 0.3f);
-
-        accumulatedRewards.totalExp += expReward;
-        accumulatedRewards.totalGold += goldReward;
-
-        Debug.Log($"波次奖励: {expReward} EXP, {goldReward} Gold");
-    }
-
-    /// <summary>
-    /// 给予阶段完成奖励
-    /// </summary>
-    private void GiveStageCompletionRewards(StageData stageData) {
-        int expReward = stageData.baseExpReward;
-        int goldReward = stageData.baseGoldReward;
-
-        accumulatedRewards.totalExp += expReward;
-        accumulatedRewards.totalGold += goldReward;
-
-        Debug.Log($"阶段完成奖励: {expReward} EXP, {goldReward} Gold");
-    }
-
-    /// <summary>
-    /// 给予战斗胜利奖励
-    /// </summary>
-    private void GiveBattleVictoryRewards() {
-        if (!stageConfigs.ContainsKey(currentStage))
-            return;
-
-        StageData stageData = stageConfigs[currentStage];
-
-        int expReward = Mathf.RoundToInt(stageData.baseExpReward * 0.5f);
-        int goldReward = Mathf.RoundToInt(stageData.baseGoldReward * 0.5f);
-
-        accumulatedRewards.totalExp += expReward;
-        accumulatedRewards.totalGold += goldReward;
-        accumulatedRewards.battlesWon++;
-
-        Debug.Log($"战斗胜利奖励: {expReward} EXP, {goldReward} Gold");
-    }
-
-    /// <summary>
-    /// 处理战斗失败
-    /// </summary>
-    private void HandleBattleDefeat() {
-        Debug.Log("战斗失败，队伍需要休息...");
-
-        // 失败惩罚：暂停挂机一段时间
-        StartCoroutine(DefeatPenalty());
-    }
-
-    /// <summary>
-    /// 失败惩罚协程
-    /// </summary>
-    private IEnumerator DefeatPenalty() {
-        float penaltyTime = 30f; // 30秒惩罚时间
-
-        Debug.Log($"队伍休息中... ({penaltyTime}秒)");
-
-        yield return new WaitForSeconds(penaltyTime);        // 恢复部分血量
-        List<CharacterStats> validPlayerParty = GetValidPlayerParty();
-        foreach (CharacterStats player in validPlayerParty) {
-            if (player != null) {
-                player.currentHitPoints = Mathf.Min(player.maxHitPoints, player.currentHitPoints + player.maxHitPoints / 4);
+        foreach (CharacterStats player in currentPlayerTeam) {
+            if (player != null && player.currentHitPoints > 0) {
+                validParty.Add(player);
             }
         }
 
-        Debug.Log("队伍休息完毕，继续探索！");
+        if (validParty.Count == 0) {
+            Debug.LogWarning("⚠️ 没有有效的玩家角色！");
+        }
+
+        return validParty;
+    }
+
+    /// <summary>
+    /// 检查队伍是否还有存活成员
+    /// </summary>
+    private bool HasLivingMembers(List<CharacterStats> party) {
+        if (party == null || party.Count == 0) return false;
+
+        foreach (CharacterStats character in party) {
+            if (character != null && character.currentHitPoints > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 生成初始队伍
+    /// </summary>
+    public void GenerateInitialTeams() {
+        if (formationManager == null) {
+            Debug.LogError("❌ FormationManager为null，无法生成队伍");
+            return;
+        }
+
+        GeneratePlayerTeam();
+        Debug.Log($"✅ 队伍生成完成 - 玩家队伍: {currentPlayerTeam.Count}人");
+    }
+
+    /// <summary>
+    /// 生成玩家队伍
+    /// </summary>
+    private void GeneratePlayerTeam() {
+        currentPlayerTeam.Clear();
+
+        HorizontalPosition[] playerPositions = {
+            HorizontalPosition.PlayerFrontCenter,
+            HorizontalPosition.PlayerBackLeft,
+            HorizontalPosition.PlayerBackRight
+        };
+
+        GameObject[] playerPrefabs = {
+            formationManager.玩家前排中锋,
+            formationManager.玩家后排左翼,
+            formationManager.玩家后排右翼
+        };
+
+        for (int i = 0; i < Mathf.Min(playerPartySize, playerPositions.Length, playerPrefabs.Length); i++) {
+            if (playerPrefabs[i] == null) continue;
+
+            Vector3 spawnPos = GetSpawnPosition(playerPositions[i]);
+            GameObject playerObj = Instantiate(playerPrefabs[i], spawnPos, Quaternion.identity);
+
+            CharacterStats playerStats = playerObj.GetComponent<CharacterStats>();
+            if (playerStats == null) {
+                playerStats = playerObj.AddComponent<CharacterStats>();
+            }
+
+            ConfigurePlayerStats(playerStats, i);
+
+            BattlePositionComponent posComp = playerObj.GetComponent<BattlePositionComponent>();
+            if (posComp == null) {
+                posComp = playerObj.AddComponent<BattlePositionComponent>();
+            }
+            posComp.currentPosition = playerPositions[i];
+
+            currentPlayerTeam.Add(playerStats);
+
+            Debug.Log($"🦸 生成玩家: {playerStats.GetDisplayName()} ���位置 {playerPositions[i]}");
+        }
+    }
+
+    /// <summary>
+    /// 配置玩家属性
+    /// </summary>
+    private void ConfigurePlayerStats(CharacterStats playerStats, int index) {
+        playerStats.characterLevel = 3;
+        playerStats.battleSide = BattleSide.Player;
+
+        CharacterClass[] playerClasses = {
+            CharacterClass.Fighter,
+            CharacterClass.Wizard,
+            CharacterClass.Cleric
+        };
+
+        if (index < playerClasses.Length) {
+            playerStats.characterClass = playerClasses[index];
+        } else {
+            playerStats.characterClass = CharacterClass.Fighter;
+        }
+
+        playerStats.maxHitPoints = 30;
+        playerStats.currentHitPoints = 30;
+
+        playerStats.strength = 14;
+        playerStats.dexterity = 12;
+        playerStats.constitution = 14;
+        playerStats.intelligence = 10;
+        playerStats.wisdom = 12;
+        playerStats.charisma = 10;
+        playerStats.armorClass = 15;
+    }
+
+    /// <summary>
+    /// 设置玩家队伍动画
+    /// </summary>
+    private void SetPlayerPartyAnimation(string animationName) {
+        foreach (CharacterStats player in currentPlayerTeam) {
+            if (player != null) {
+                DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    switch (animationName) {
+                        case "walk":
+                            adapter.PlayWalkAnimation();
+                            break;
+                        case "idle":
+                            adapter.PlayIdleAnimation();
+                            break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 初始化所有角色动画
+    /// </summary>
+    private void InitializeAllCharacterAnimations() {
+        foreach (CharacterStats player in currentPlayerTeam) {
+            if (player != null) {
+                DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                if (adapter != null) {
+                    adapter.PlayIdleAnimation();
+                }
+            }
+        }
     }
 
     /// <summary>
     /// 更新探索进度
     /// </summary>
     private void UpdateExploreProgress() {
-        // 这个方法在Update中调用，用于更新探索进度
+        // 探索进度更新逻辑
     }
 
     /// <summary>
-    /// 更新UI显示
+    /// 更新UI
     /// </summary>
     private void UpdateUI() {
-        // UI更新代码，如果项目没有UI模块则注释掉
-        /*
-        if (stageInfoText != null && stageConfigs.ContainsKey(currentStage)) {
-            StageData stageData = stageConfigs[currentStage];
-            stageInfoText.text = $"阶段 {currentStage}: {stageData.stageName} ({currentWave}/{stageData.wavesPerStage})";
-        }
-
-        if (progressText != null) {
-            progressText.text = $"进度: {stageProgressPercent:F1}%";
-        }
-
-        if (progressSlider != null) {
-            progressSlider.value = stageProgressPercent / 100f;
-        }
-
-        if (rewardsText != null) {
-            rewardsText.text = $"累计: {accumulatedRewards.totalExp} EXP, {accumulatedRewards.totalGold} Gold\n" +
-                              $"胜利: {accumulatedRewards.battlesWon}";
-        }
-
-        if (idleModeToggle != null) {
-            idleModeToggle.GetComponentInChildren<Text>().text = idleModeEnabled ? "停止挂机" : "开始挂机";
-        }
-        */
+        // UI更新逻辑
     }
 
     /// <summary>
-    /// 🎯 生成初始队伍（使用阵型管理器）
+    /// 给予波次奖励
     /// </summary>
-    private void GenerateInitialTeams() {
-        if (formationManager == null) {
-            Debug.LogError("FormationManager未设置，无法生成队伍！");
-            return;
-        }
+    private void GiveWaveRewards(StageData stageData) {
+        int expReward = stageData.baseExpReward / 5;
+        int goldReward = stageData.baseGoldReward / 5;
 
-        // 生成玩家队伍
-        currentPlayerTeam = formationManager.GeneratePlayerFormation();
-        Debug.Log($"🔵 玩家队伍生成完成，共 {currentPlayerTeam.Count} 人");
+        accumulatedRewards.totalExp += expReward;
+        accumulatedRewards.totalGold += goldReward;
 
-        // 显示当前阵型配置
-        Debug.Log(formationManager.GetFormationSummary());
+        Debug.Log($"💰 完成第{currentWave}波，获得 {expReward}经验 + {goldReward}金币");
     }
 
     /// <summary>
-    /// 初始化玩家角色属性
+    /// 给予阶段完成奖励
     /// </summary>
-    private void InitializePlayerStats(CharacterStats stats, int characterIndex) {
-        stats.level = 1;
-        stats.maxHitPoints = 80 + (characterIndex * 10);
-        stats.currentHitPoints = stats.maxHitPoints;
-        stats.armorClass = 14 + characterIndex;
-        stats.proficiencyBonus = 2;
+    private void GiveStageCompletionRewards(StageData stageData) {
+        accumulatedRewards.totalExp += stageData.baseExpReward;
+        accumulatedRewards.totalGold += stageData.baseGoldReward;
+        accumulatedRewards.stagesCompleted++;
 
-        // 设置基础属性
-        stats.stats.Strength = 14 + characterIndex;
-        stats.stats.Dexterity = 12 + characterIndex;
-        stats.stats.Constitution = 16 + characterIndex;
-        stats.stats.Intelligence = 10 + characterIndex;
-        stats.stats.Wisdom = 12 + characterIndex;
-        stats.stats.Charisma = 10 + characterIndex;
+        Debug.Log($"🎉 完成阶段 {stageData.stageName}！获得 {stageData.baseExpReward}经验 + {stageData.baseGoldReward}金币");
     }
 
     /// <summary>
-    /// 获取有效的玩家队伍（使用当前活跃队伍）
+    /// 给予战斗胜利奖励
     /// </summary>
-    private List<CharacterStats> GetValidPlayerParty() {
-        List<CharacterStats> validPlayers = new List<CharacterStats>();
+    private void GiveBattleVictoryRewards() {
+        int battleExp = 50 + (currentStage * 10);
+        int battleGold = 25 + (currentStage * 5);
 
-        // 防止空引用异常
-        if (currentPlayerTeam == null) {
-            Debug.LogWarning("GetValidPlayerParty: currentPlayerTeam为null");
-            return validPlayers;
-        }
+        accumulatedRewards.totalExp += battleExp;
+        accumulatedRewards.totalGold += battleGold;
+        accumulatedRewards.battlesWon++;
 
-        // 过滤掉null和死亡的角色
-        foreach (CharacterStats player in currentPlayerTeam) {
-            if (player != null && player.currentHitPoints > 0) {
-                validPlayers.Add(player);
-            }
-        }
-
-        return validPlayers;
+        Debug.Log($"⚔️ 战斗胜利！获得 {battleExp}经验 + {battleGold}金币");
     }
 
     /// <summary>
-    /// 初始化所有角色的动画状态
+    /// 处理战斗失败
     /// </summary>
-    private void InitializeAllCharacterAnimations() {
-        // 初始化玩家队伍动画
-        if (currentPlayerTeam != null) {
-            foreach (CharacterStats player in currentPlayerTeam) {
-                if (player != null && player.gameObject != null) {
-                    DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
-                    if (adapter != null) {
-                        adapter.InitializeAnimation();
-                    }
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 设置玩家队伍动画状态 - 统一使用DND_CharacterAdapter映射器
-    /// </summary>
-    private void SetPlayerPartyAnimation(string animationType) {
-        // 防止空引用异常
-        if (currentPlayerTeam == null) {
-            Debug.LogWarning("SetPlayerPartyAnimation: currentPlayerTeam为null");
-            return;
-        }
-
-        foreach (CharacterStats player in currentPlayerTeam) {
-            if (player != null && player.gameObject != null) {
-                DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
-                    switch (animationType.ToLower()) {
-                        case "idle":
-                            adapter.PlayAnimation(adapter.animationMapping.idleAnimation, true);
-                            Debug.Log($"✅ 玩家 {player.characterName} 播放待机动画: {adapter.animationMapping.idleAnimation}");
-                            break;
-                        case "walk":
-                            adapter.PlayWalkAnimation();
-                            Debug.Log($"✅ 玩家 {player.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
-                            break;
-                        case "stop_walk":
-                            adapter.StopWalkWithTransition();
-                            Debug.Log($"✅ 玩家 {player.characterName} 停止走路并过渡到待机动画");
-                            break;
-                        default:
-                            Debug.LogWarning($"未识别的动画类型: {animationType}");
-                            break;
-                    }
-                }
-                else {
-                    Debug.LogError($"❌ 玩家 {player.characterName} 缺少DND_CharacterAdapter组件！请为所有角色添加DND_CharacterAdapter组件");
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 设置敌人队伍动画状态
-    /// </summary>
-    /// <summary>
-    /// 设置敌人队伍动画 - 统一使用DND_CharacterAdapter映射器
-    /// </summary>
-    private void SetEnemyPartyAnimation(List<CharacterStats> enemies, string animationType) {
-        foreach (CharacterStats enemy in enemies) {
-            if (enemy != null && enemy.gameObject != null) {
-                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
-                    switch (animationType.ToLower()) {
-                        case "idle":
-                            adapter.PlayAnimation(adapter.animationMapping.idleAnimation, true);
-                            Debug.Log($"✅ 敌人 {enemy.characterName} 播放待机动画: {adapter.animationMapping.idleAnimation}");
-                            break;
-                        case "walk":
-                            adapter.PlayWalkAnimation();
-                            Debug.Log($"✅ 敌人 {enemy.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
-                            break;
-                        case "stop_walk":
-                            adapter.StopWalkWithTransition();
-                            Debug.Log($"✅ 敌人 {enemy.characterName} 停止走路并过渡到待机动画");
-                            break;
-                        default:
-                            Debug.LogWarning($"未识别的动画类型: {animationType}");
-                            break;
-                    }
-                }
-                else {
-                    Debug.LogError($"❌ 敌人 {enemy.characterName} 缺少DND_CharacterAdapter组件！请为所有角色添加DND_CharacterAdapter组件");
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 敌人进入场景动画（从右侧屏幕外进入）
-    /// </summary>
-    private IEnumerator EnemyEntranceAnimation(List<CharacterStats> enemies) {
-        Debug.Log("🎬 敌人从右侧进入战场...");
-
-        // 🎯 先记录敌人的原始阵型位置
-        List<Vector3> originalPositions = new List<Vector3>();
-        foreach (CharacterStats enemy in enemies) {
-            if (enemy != null && enemy.gameObject != null) {
-                originalPositions.Add(enemy.transform.position);
-            }
-        }
-
-        // 将所有敌人移动到屏幕右侧外面并立即设置走路动画
-        for (int i = 0; i < enemies.Count; i++) {
-            CharacterStats enemy = enemies[i];
-            if (enemy != null && enemy.gameObject != null && i < originalPositions.Count) {
-                // 将敌人放在屏幕右侧外面
-                Vector3 offScreenPosition = originalPositions[i];
-                offScreenPosition.x += 15f; // 移动到屏幕右侧
-                enemy.transform.position = offScreenPosition;
-            }
-        }
-
-        // 等待一帧确保所有敌人位置设置完成
-        yield return null;
-
-        // 🎯 为所有敌人设置走路动画（在Start方法执行后）
-        for (int i = 0; i < enemies.Count; i++) {
-            CharacterStats enemy = enemies[i];
-            if (enemy != null && enemy.gameObject != null) {
-                DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
-                    // 强制播放走路动画，覆盖Start方法中的待机动画
-                    adapter.PlayWalkAnimation();
-                    Debug.Log($"✅ 为敌人 {enemy.characterName} 播放走路动画: {adapter.animationMapping.walkAnimation}");
-                }
-                else {
-                    Debug.LogError($"❌ 敌人 {enemy.characterName} 缺少DND_CharacterAdapter组件，无法播放走路动画！请为所有角色添加DND_CharacterAdapter组件");
-                }
-            }
-        }
-
-        yield return new WaitForSeconds(0.5f);
-
-        // 敌人走向战斗位置的动画
-        float duration = 2f; // 进入动画持续时间
-        float elapsedTime = 0f;
-
-        List<Vector3> startPositions = new List<Vector3>();
-
-        // 记录起始位置（屏幕外）
-        foreach (CharacterStats enemy in enemies) {
-            if (enemy != null) {
-                startPositions.Add(enemy.transform.position);
-            }
-        }
-
-        // 平滑移动动画，回到原始阵型位置
-        float walkAnimationCheckInterval = 0.5f; // 每0.5秒检查一次走路动画
-        float lastWalkCheck = 0f;
-
-        while (elapsedTime < duration) {
-            float t = elapsedTime / duration;
-
-            for (int i = 0; i < enemies.Count; i++) {
-                if (enemies[i] != null && i < startPositions.Count && i < originalPositions.Count) {
-                    enemies[i].transform.position = Vector3.Lerp(startPositions[i], originalPositions[i], t);
-                }
-            }
-
-            // 定期检查并确保敌人正在播放走路动画
-            if (elapsedTime - lastWalkCheck >= walkAnimationCheckInterval) {
-                for (int i = 0; i < enemies.Count; i++) {
-                    if (enemies[i] != null) {
-                        DND_CharacterAdapter adapter = enemies[i].GetComponent<DND_CharacterAdapter>();
-                        if (adapter != null && adapter.CurrentAnimation != adapter.animationMapping.walkAnimation) {
-                            adapter.PlayWalkAnimation();
-                            Debug.Log($"🔄 重新为敌人 {enemies[i].characterName} 播放走路动画");
-                        }
-                    }
-                }
-                lastWalkCheck = elapsedTime;
-            }
-
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
-
-        // 确保敌人到达最终位置（原始阵型位置）
-        for (int i = 0; i < enemies.Count; i++) {
-            if (enemies[i] != null && i < originalPositions.Count) {
-                enemies[i].transform.position = originalPositions[i];
-
-                // 🎯 统一通过DND_CharacterAdapter切换到待机动画
-                DND_CharacterAdapter adapter = enemies[i].GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
-                    adapter.StopWalkWithTransition();
-                    Debug.Log($"✅ 敌人 {enemies[i].characterName} 使用过渡动画切换到待机状态");
-                }
-                else {
-                    Debug.LogError($"❌ 敌人 {enemies[i].characterName} 缺少DND_CharacterAdapter组件，无法切换到待机动画！请为所有角色添加DND_CharacterAdapter组件");
-                }
-            }
-        }
-
-        Debug.Log("✅ 敌人进入动画完成，切换到待机状态");
+    private void HandleBattleDefeat() {
+        Debug.Log("💀 玩家队伍全灭，游戏结束！");
+        idleModeEnabled = false;
     }
 }
 
@@ -1009,12 +744,12 @@ public class StageData {
 }
 
 /// <summary>
-/// 挂机奖励累计
+/// 挂机奖励数据结构
 /// </summary>
 [System.Serializable]
 public class IdleRewards {
-    public int totalExp = 0;
-    public int totalGold = 0;
-    public int battlesWon = 0;
-    public int stagesCompleted = 0;
+    public int totalExp;
+    public int totalGold;
+    public int battlesWon;
+    public int stagesCompleted;
 }
