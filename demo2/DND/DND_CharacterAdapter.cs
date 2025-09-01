@@ -30,6 +30,9 @@ public class DND_CharacterAdapter : MonoBehaviour {
     // 公开当前动画状态的只读属性
     public string CurrentAnimation => currentAnimation;
 
+    // 控制动画初始化的标志
+    private bool isEnemyInEntrance = false;
+
     // 初始化
     private void Start() {
         // 获取角色统计数据
@@ -45,26 +48,20 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 延迟初始化动画，避免错误的动画帧在错误位置播放
-        // 等待一帧确保角色已移动到正确位置
-        StartCoroutine(DelayedAnimationInitialization());
-
-        // 注册事件
-        // 战斗管理器已迁移至挂机系统
+        // 简化初始化：直接播放待机动画，不使用复杂的协程
+        if (characterStats != null && characterStats.battleSide == BattleSide.Player) {
+            // 玩家角色立即播放待机动画
+            PlayIdleAnimation();
+        }
+        // 敌人角色不播放任何动画，等待IdleGameManager控制
     }
 
     /// <summary>
-    /// 延迟动画初始化，避免进场前错误动画帧
+    /// 手动初始化敌人动画（由IdleGameManager调用）
     /// </summary>
-    private System.Collections.IEnumerator DelayedAnimationInitialization() {
-        // 等待一帧，确保角色已经移动到正确位置
-        yield return null;
-
-        // 现在安全地初始化动画
-        if (skeletonAnimation != null && !string.IsNullOrEmpty(animationMapping.idleAnimation)) {
-            PlayAnimation(animationMapping.idleAnimation, true);
-            Debug.Log($"{gameObject.name} 延迟初始化动画完成，播放待机动画");
-        }
+    public void InitializeEnemyAnimation() {
+        // 敌人初始化时不做任何动画，等待进场动画控制
+        Debug.Log($"{gameObject.name} 敌人动画初始化完成，等待进场动画");
     }
 
     // 回合开始事件处理
@@ -171,7 +168,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
                 // 设置混合时间
                 trackEntry.MixDuration = 0.1f;
 
-                // 使用正���的时间缩放
+                // 使用正���的��间缩放
                 trackEntry.TimeScale = 1.0f;
 
                 // 记录当前动画

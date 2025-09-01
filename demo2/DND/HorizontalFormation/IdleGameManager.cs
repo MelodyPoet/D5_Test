@@ -13,11 +13,6 @@ public class IdleGameManager : MonoBehaviour
     public float encounterInterval = 10f; // 遭遇间隔时间
     public float battleSpeed = 1f; // 战斗速度倍率
 
-    [Header("探索设置")]
-    public int currentStage = 1;
-    public int currentWave = 1;
-    public float stageProgressPercent;
-
     [Header("队伍生成设置")]
     [Tooltip("是否使用阵型管理器生成队伍（推荐开启）")]
     public bool useFormationManager = true;
@@ -32,17 +27,12 @@ public class IdleGameManager : MonoBehaviour
     private bool isInBattle;
     private float nextEncounterTime;
     private Coroutine idleCoroutine;
-    private IdleRewards accumulatedRewards;
 
     // 当前活跃的队伍（运行时生成）
     private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
 
-    // 阶段配置
-    private Dictionary<int, StageData> stageConfigs;
-
     void Start()
     {
-        LoadStageConfigs();
         SetupUI();
         InitializeIdleSystem();
     }
@@ -73,7 +63,6 @@ public class IdleGameManager : MonoBehaviour
             return;
         }
 
-        accumulatedRewards = new IdleRewards();
         nextEncounterTime = Time.time + encounterInterval;
 
         if (useFormationManager)
@@ -81,19 +70,20 @@ public class IdleGameManager : MonoBehaviour
             GenerateInitialTeams();
             if (currentPlayerTeam.Count > 0)
             {
-                Debug.Log("🎯 队伍生成完成，启动探索模式...");
+                Debug.Log("队伍生成完成，启动探索模式...");
                 StartExploreMode();
             }
         }
     }
 
     /// <summary>
-    /// 启动探索模式
+    /// 启动探索模式 - 简化版本
     /// </summary>
     private void StartExploreMode()
     {
         idleModeEnabled = true;
-        InitializeAllCharacterAnimations();
+
+        // 直接设置玩家走路动画，不使用复杂的初始化协程
         SetPlayerPartyAnimation("walk");
         StartBackgroundScrolling();
 
@@ -161,34 +151,12 @@ public class IdleGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 加载阶段配置
-    /// </summary>
-    private void LoadStageConfigs()
-    {
-        stageConfigs = new Dictionary<int, StageData>
-        {
-            { 1, new StageData { stageName = "森林入口", enemyLevel = 1, wavesPerStage = 5,
-                               baseExpReward = 100, baseGoldReward = 50 } },
-            { 2, new StageData { stageName = "深森小径", enemyLevel = 2, wavesPerStage = 6,
-                               baseExpReward = 150, baseGoldReward = 75 } },
-            { 3, new StageData { stageName = "古树林地", enemyLevel = 3, wavesPerStage = 7,
-                               baseExpReward = 200, baseGoldReward = 100 } },
-            { 4, new StageData { stageName = "魔法森林", enemyLevel = 4, wavesPerStage = 8,
-                               baseExpReward = 300, baseGoldReward = 150 } },
-            { 5, new StageData { stageName = "森林之心", enemyLevel = 5, wavesPerStage = 10,
-                               baseExpReward = 500, baseGoldReward = 250 } }
-        };
-    }
-
-    /// <summary>
     /// 挂机游戏主循环
     /// </summary>
     private IEnumerator IdleGameLoop()
     {
         while (idleModeEnabled)
         {
-            yield return StartCoroutine(ExploreStage());
-
             if (Time.time >= nextEncounterTime)
             {
                 yield return StartCoroutine(StartRandomEncounter());
@@ -197,66 +165,6 @@ public class IdleGameManager : MonoBehaviour
 
             yield return new WaitForSeconds(1f / battleSpeed);
         }
-    }
-
-    /// <summary>
-    /// 探索阶段
-    /// </summary>
-    private IEnumerator ExploreStage()
-    {
-        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage))
-        {
-            yield break;
-        }
-
-        if (!isInBattle)
-        {
-            SetPlayerPartyAnimation("walk");
-        }
-
-        stageProgressPercent += Time.deltaTime * 10f;
-
-        if (stageProgressPercent >= 100f)
-        {
-            CompleteCurrentWave();
-        }
-
-        yield return null;
-    }
-
-    /// <summary>
-    /// 完成当前波次
-    /// </summary>
-    private void CompleteCurrentWave()
-    {
-        stageProgressPercent = 0f;
-        currentWave++;
-
-        if (stageConfigs.ContainsKey(currentStage))
-        {
-            StageData stageData = stageConfigs[currentStage];
-            GiveWaveRewards(stageData);
-
-            if (currentWave > stageData.wavesPerStage)
-            {
-                CompleteCurrentStage();
-            }
-        }
-    }
-
-    /// <summary>
-    /// 完成当前阶段
-    /// </summary>
-    private void CompleteCurrentStage()
-    {
-        if (stageConfigs.ContainsKey(currentStage))
-        {
-            StageData stageData = stageConfigs[currentStage];
-            GiveStageCompletionRewards(stageData);
-        }
-
-        currentStage++;
-        currentWave = 1;
     }
 
     /// <summary>
@@ -493,7 +401,7 @@ public class IdleGameManager : MonoBehaviour
             HorizontalPosition.EnemyBackRight
         };
 
-        // 按照阵型管理器配置生成敌人，有预制体才生成
+        // 按照阵型管理器配置生成敌人，只有预制体才生成
         for (int i = 0; i < enemyPrefabs.Length; i++)
         {
             GameObject enemyPrefab = enemyPrefabs[i];
@@ -502,18 +410,29 @@ public class IdleGameManager : MonoBehaviour
             Vector3 spawnPos = GetSpawnPosition(enemyPositions[i]);
             GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
-            // 设置敌人朝向（面向玩家）
-            enemyObj.transform.localScale = new Vector3(-1, 1, 1);
+            // 保存预制体的原始缩放值
+            Vector3 originalScale = enemyPrefab.transform.localScale;
+
+            // 设置敌人朝向（面向玩家），只翻转X轴，保持原始缩放
+            enemyObj.transform.localScale = new Vector3(-Mathf.Abs(originalScale.x), originalScale.y, originalScale.z);
 
             CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
             if (enemyStats == null)
             {
                 Debug.LogError($"❌ 敌人预制体 {enemyPrefab.name} 缺少CharacterStats组件！");
+                Destroy(enemyObj);
                 continue;
             }
 
             // 确保敌人属于敌方阵营
             enemyStats.battleSide = BattleSide.Enemy;
+
+            // 初始化敌人动画状态，避免自动播放待机动画
+            DND_CharacterAdapter adapter = enemyObj.GetComponent<DND_CharacterAdapter>();
+            if (adapter != null)
+            {
+                adapter.InitializeEnemyAnimation();
+            }
 
             BattlePositionComponent posComp = enemyObj.GetComponent<BattlePositionComponent>();
             if (posComp == null)
@@ -524,7 +443,7 @@ public class IdleGameManager : MonoBehaviour
 
             enemyParty.Add(enemyStats);
 
-            Debug.Log($"���� 生成敌人: {enemyStats.GetDisplayName()} 在位置 {enemyPositions[i]} 使用预制体 {enemyPrefab.name}");
+            Debug.Log($"生成敌人: {enemyStats.GetDisplayName()} 在位置 {enemyPositions[i]} 缩放值: {enemyObj.transform.localScale}");
         }
 
         return enemyParty;
@@ -729,44 +648,11 @@ public class IdleGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 给予波次奖励
-    /// </summary>
-    private void GiveWaveRewards(StageData stageData)
-    {
-        int expReward = stageData.baseExpReward / 5;
-        int goldReward = stageData.baseGoldReward / 5;
-
-        accumulatedRewards.totalExp += expReward;
-        accumulatedRewards.totalGold += goldReward;
-
-        Debug.Log($"💰 完成第{currentWave}波，获得 {expReward}经验 + {goldReward}金币");
-    }
-
-    /// <summary>
-    /// 给���阶段完成奖励
-    /// </summary>
-    private void GiveStageCompletionRewards(StageData stageData)
-    {
-        accumulatedRewards.totalExp += stageData.baseExpReward;
-        accumulatedRewards.totalGold += stageData.baseGoldReward;
-        accumulatedRewards.stagesCompleted++;
-
-        Debug.Log($"🎉 完成阶段 {stageData.stageName}！获得 {stageData.baseExpReward}经验 + {stageData.baseGoldReward}金币");
-    }
-
-    /// <summary>
     /// 给予战斗胜利奖励
     /// </summary>
     private void GiveBattleVictoryRewards()
     {
-        int battleExp = 50 + (currentStage * 10);
-        int battleGold = 25 + (currentStage * 5);
-
-        accumulatedRewards.totalExp += battleExp;
-        accumulatedRewards.totalGold += battleGold;
-        accumulatedRewards.battlesWon++;
-
-        Debug.Log($"⚔️ 战斗胜利！获得 {battleExp}经验 + {battleGold}金币");
+        Debug.Log("战斗胜利！获得经验和金币");
     }
 
     /// <summary>
@@ -774,22 +660,9 @@ public class IdleGameManager : MonoBehaviour
     /// </summary>
     private void HandleBattleDefeat()
     {
-        Debug.Log("💀 玩家队伍全灭，游戏结束！");
+        Debug.Log("玩家队伍全灭，游戏结束！");
         idleModeEnabled = false;
     }
-}
-
-/// <summary>
-/// 阶段数据结构
-/// </summary>
-[System.Serializable]
-public class StageData
-{
-    public string stageName;
-    public int enemyLevel;
-    public int wavesPerStage;
-    public int baseExpReward;
-    public int baseGoldReward;
 }
 
 /// <summary>
@@ -801,5 +674,4 @@ public class IdleRewards
     public int totalExp;
     public int totalGold;
     public int battlesWon;
-    public int stagesCompleted;
 }
