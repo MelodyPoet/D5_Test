@@ -157,6 +157,7 @@ HorizontalCombatRules 战斗规则:
 3.遇敌时候会有几帧错误的提前加载敌人后排prefab的情况
 4.敌人后排进场时加载的prefab会缩放值不对，初始的prefab缩放值是人为调整的，但是运行时加载的prefab缩放值是1，
 导致敌人后排prefab在进场时候会变大
+5.当前使用协程动画脚本逻辑，经常产生问题，是否可以改成使用DOTween或者unity自己的状态机配合timeline来实现动画
 
 集成点:
 - 扩展AutoBattleAI.ExecuteAutoBattleTurn()支持敌方角色
