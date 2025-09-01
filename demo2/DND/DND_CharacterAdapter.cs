@@ -45,7 +45,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 🎯 延迟初始化动画，避免错误的动画帧在错误位置播放
+        // 延迟初始化动画，避免错误的动画帧在错误位置播放
         // 等待一帧确保角色已移动到正确位置
         StartCoroutine(DelayedAnimationInitialization());
 
@@ -63,7 +63,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
         // 现在安全地初始化动画
         if (skeletonAnimation != null && !string.IsNullOrEmpty(animationMapping.idleAnimation)) {
             PlayAnimation(animationMapping.idleAnimation, true);
-            Debug.Log($"🎬 {gameObject.name} 延迟初始化动画完成，播放待机动画");
+            Debug.Log($"{gameObject.name} 延迟初始化动画完成，播放待机动画");
         }
     }
 
@@ -255,7 +255,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
 
             // 播放动画，使用较高的混合时间确保平滑过渡
             if (skeletonAnimation != null && !string.IsNullOrEmpty(deathAnimName)) {
-                // 直接使用AnimationState API，确保动画能够播放
+                // 直��使用AnimationState API，确保动画能够播放
                 Spine.TrackEntry trackEntry = skeletonAnimation.AnimationState.SetAnimation(0, deathAnimName, false);
 
                 // 设置混合时间

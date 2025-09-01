@@ -2,93 +2,93 @@
 using UnityEngine;
 
 /// <summary>
-/// 角色职业枚举
+/// 游戏核心枚举定义
 /// </summary>
+
 public enum CharacterClass {
     Fighter,    // 战士
-    Rogue,      // 盗贼
     Wizard,     // 法师
+    Rogue,      // 盗贼
     Cleric,     // 牧师
     Ranger,     // 游侠
-    Paladin,    // 圣武士
     Barbarian,  // 野蛮人
-    Bard,       // 吟游诗人
+    Paladin,    // 圣骑士
+    Warlock,    // 术士
+    Sorcerer,   // 法师
+    Bard,       // 诗人
     Druid,      // 德鲁伊
-    Monk,       // 武僧
-    Sorcerer,   // 术士
-    Warlock     // 契术师
-}
-
-/// <summary>
-/// 伤害类型枚举
-/// </summary>
-public enum DamageType {
-    Slashing,   // 挥砍
-    Piercing,   // 穿刺
-    Bludgeoning,// 钝击
-    Fire,       // 火焰
-    Cold,       // 寒冷
-    Lightning,  // 闪电
-    Poison,     // 毒素
-    Acid,       // 酸性
-    Necrotic,   // 暗蚀
-    Radiant,    // 光耀
-    Psychic,    // 心灵
-    Force,      // 力场
-    Thunder     // 雷鸣
+    Monk        // 武僧
 }
 
 /// <summary>
 /// 状态效果类型枚举
 /// </summary>
 public enum StatusEffectType {
-    Blinded,        // 目盲
-    Charmed,        // 魅惑
-    Deafened,       // 耳聋
-    Frightened,     // 恐慌
-    Grappled,       // 擒抱
-    Incapacitated,  // 失能
-    Invisible,      // 隐形
-    Paralyzed,      // 麻痹
-    Petrified,      // 石化
+    None,           // 无状态
     Poisoned,       // 中毒
-    Prone,          // 倒地
-    Restrained,     // 束缚
-    Stunned,        // 震慑
-    Unconscious,    // 昏迷
-    Dodging         // 闪避中
+    Paralyzed,      // 麻痹
+    Stunned,        // 昏迷
+    Charmed,        // 魅惑
+    Frightened,     // 恐惧
+    Unconscious,    // 失去意识
+    Dodging,        // 闪避状态
+    Blessed,        // 祝福
+    Cursed,         // 诅咒
+    Burning,        // 燃烧
+    Frozen,         // 冰冻
+    Bleeding        // 流血
 }
 
 /// <summary>
-/// 战斗阵营枚举
+/// 伤害类型枚举
 /// </summary>
-public enum BattleSide {
-    Player,    // 玩家方
-    Enemy      // 敌人方
+public enum DamageType {
+    Bludgeoning,    // 钝击伤害
+    Piercing,       // 穿刺伤害
+    Slashing,       // 挥砍伤害
+    Fire,           // 火焰伤害
+    Cold,           // 寒冷伤害
+    Lightning,      // 闪电伤害
+    Thunder,        // 雷鸣伤害
+    Acid,           // 强酸伤害
+    Poison,         // 毒素伤害
+    Psychic,        // 心灵伤害
+    Necrotic,       // 坏死伤害
+    Radiant,        // 光辉伤害
+    Force           // 力场伤害
 }
 
 /// <summary>
 /// 技能枚举
 /// </summary>
 public enum Skill {
-    Athletics,      // 运动 (力量)
-    Acrobatics,     // 杂技 (敏捷)
-    SleightOfHand,  // 手上功夫 (敏捷)
-    Stealth,        // 隐匿 (敏捷)
-    Arcana,         // 奥秘 (智力)
-    History,        // 历史 (智力)
-    Investigation,  // 调查 (智力)
-    Nature,         // 自然 (智力)
-    Religion,       // 宗教 (智力)
-    AnimalHandling, // 驯兽 (感知)
-    Insight,        // 洞悉 (感知)
-    Medicine,       // 医疗 (感知)
-    Perception,     // 察觉 (感知)
-    Survival,       // 生存 (感知)
-    Deception,      // 欺瞒 (魅力)
-    Intimidation,   // 威吓 (魅力)
-    Performance,    // 表演 (魅力)
-    Persuasion      // 说服 (魅力)
+    Acrobatics,     // 杂技
+    AnimalHandling, // 驯兽
+    Arcana,         // 奥术学识
+    Athletics,      // 运动
+    Deception,      // 欺骗
+    History,        // 历史
+    Insight,        // 洞察
+    Intimidation,   // 威吓
+    Investigation,  // 调查
+    Medicine,       // 医疗
+    Nature,         // 自然
+    Perception,     // 察觉
+    Performance,    // 表演
+    Persuasion,     // 说服
+    Religion,       // 宗教
+    SleightOfHand,  // 巧手
+    Stealth,        // 潜行
+    Survival        // 生存
+}
+
+/// <summary>
+/// 战斗阵营枚举
+/// </summary>
+public enum BattleSide {
+    Player,  // 玩家阵营
+    Enemy,   // 敌人阵营
+    Neutral  // 中立阵营
 }
 
 /// <summary>

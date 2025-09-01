@@ -12,7 +12,7 @@ public class CharacterTemplateCreator : EditorWindow
         CreatePlayerTemplates();
         CreateEnemyTemplates();
         AssetDatabase.Refresh();
-        Debug.Log("✅ 所有角色模板创建完成！");
+        Debug.Log("所有角色模板创建完成！");
     }
 
     private static void CreatePlayerTemplates()
@@ -107,7 +107,7 @@ public class CharacterTemplateCreator : EditorWindow
 
         // 创建哥布林模板
         var goblinTemplate = ScriptableObject.CreateInstance<CharacterTemplate>();
-        goblinTemplate.characterName = "哥���林";
+        goblinTemplate.characterName = "哥布林";
         goblinTemplate.characterClass = CharacterClass.Rogue;
         goblinTemplate.level = 1;
         goblinTemplate.defaultSide = BattleSide.Enemy;

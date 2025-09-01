@@ -48,7 +48,7 @@ public enum FormationType {
 /// </summary>
 public static class HorizontalFormationAI {
     /// <summary>
-    /// 根据角色特性获取最佳位置
+    /// 根据角色特性获取最��位置
     /// </summary>
     public static HorizontalPosition GetOptimalPosition(CharacterStats character, BattleSide side) {
         // 根据职业特性决定前后排位置

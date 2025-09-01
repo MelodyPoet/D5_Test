@@ -39,6 +39,9 @@ public class CharacterStats : MonoBehaviour {
     public int WisMod => (wisdom - 10) / 2;
     public int ChaMod => (charisma - 10) / 2;
 
+    // 便捷属性访问
+    public int level => characterLevel;
+
     void Start() {
         // 如果有模板，从模板初始化
         if (template != null) {
@@ -71,7 +74,7 @@ public class CharacterStats : MonoBehaviour {
         currentHitPoints = maxHitPoints;
         armorClass = template.baseArmorClass;
 
-        Debug.Log($"✅ {characterName} 从模板初始化完成 - 等级{characterLevel} - 血量{maxHitPoints} - AC{armorClass}");
+        Debug.Log($"{characterName} 从模板初始化完成 - 等级{characterLevel} - 血量{maxHitPoints} - AC{armorClass}");
     }
 
     /// <summary>

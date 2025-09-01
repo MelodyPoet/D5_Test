@@ -190,6 +190,9 @@ MonoBehaviour:
   positioningPriority: 0.6
   offensivePriority: 0.7
   defensivePriority: 0.5
+  initiativeOrder: []
+  currentTurnIndex: 0
+  isBattleActive: 0
 --- !u!4 &164080473
 Transform:
   m_ObjectHideFlags: 0
@@ -1070,20 +1073,22 @@ MonoBehaviour:
   "\u654C\u4EBA\u540E\u6392\u4E2D\u8DEF": {fileID: 5992248824920210409, guid: bba1c48f3214dfd4e8860826e6fdac0d, type: 3}
   "\u654C\u4EBA\u540E\u6392\u53F3\u7FFC": {fileID: 0}
   battlefieldWidth: 20
-  battlefieldDepth: 4
-  positionSpacing: 2
-  playerFrontLeftSpawn: {fileID: 256781678}
-  playerFrontCenterSpawn: {fileID: 1154563296}
-  playerFrontRightSpawn: {fileID: 1116836431}
-  playerBackLeftSpawn: {fileID: 247970017}
-  playerBackCenterSpawn: {fileID: 352052710}
-  playerBackRightSpawn: {fileID: 428075188}
-  enemyFrontLeftSpawn: {fileID: 1437200884}
-  enemyFrontCenterSpawn: {fileID: 1701643022}
-  enemyFrontRightSpawn: {fileID: 1733741205}
-  enemyBackLeftSpawn: {fileID: 470826648}
-  enemyBackCenterSpawn: {fileID: 115786330}
-  enemyBackRightSpawn: {fileID: 1310299168}
+  characterSpacing: 2
+  rankDistance: 3
+  playerSpawnPoints:
+  - {fileID: 256781678}
+  - {fileID: 1154563296}
+  - {fileID: 1116836431}
+  - {fileID: 247970017}
+  - {fileID: 352052710}
+  - {fileID: 428075188}
+  enemySpawnPoints:
+  - {fileID: 1437200884}
+  - {fileID: 1701643022}
+  - {fileID: 1733741205}
+  - {fileID: 470826648}
+  - {fileID: 115786330}
+  - {fileID: 1310299168}
 --- !u!1 &1437200883
 GameObject:
   m_ObjectHideFlags: 0

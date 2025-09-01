@@ -203,7 +203,7 @@ MonoBehaviour:
   characterName: "\u89D2\u8272"
   characterClass: 4
   characterLevel: 1
-  battleSide: 0
+  battleSide: 1
   maxHitPoints: 10
   currentHitPoints: 10
   temporaryHitPoints: 0

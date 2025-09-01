@@ -8,7 +8,7 @@
 public class InitiativeEntry {
     [Header("先攻数据")]
     public CharacterStats character;     // 角色数据
-    public int initiative;              // 先攻值 (1d20 + 敏捷调整值)
+    public int initiativeValue;          // 先攻值 (1d20 + 敏捷调整值)
 
     [Header("回合状态")]
     public bool hasActedThisRound;      // 本轮是否已行动
@@ -16,12 +16,30 @@ public class InitiativeEntry {
     public int delayedInitiative;       // 延迟后的先攻值
 
     /// <summary>
+    /// 默认构造函数（Unity序列化需要）
+    /// </summary>
+    public InitiativeEntry() {
+        character = null;
+        initiativeValue = 0;
+        ResetTurnState();
+    }
+
+    /// <summary>
+    /// 带参数的构造函数
+    /// </summary>
+    public InitiativeEntry(CharacterStats character, int initiative) {
+        this.character = character;
+        this.initiativeValue = initiative;
+        ResetTurnState();
+    }
+
+    /// <summary>
     /// 重置回合状态
     /// </summary>
     public void ResetTurnState() {
         hasActedThisRound = false;
         isDelayingAction = false;
-        delayedInitiative = initiative;
+        delayedInitiative = initiativeValue;
     }
 
     /// <summary>
@@ -32,21 +50,24 @@ public class InitiativeEntry {
     }
 
     /// <summary>
-    /// 检查是否可以行动
+    /// 延迟行动到指定先攻值
     /// </summary>
-    public bool CanAct() {
-        return character != null &&
-               character.currentHitPoints > 0 &&
-               !hasActedThisRound;
+    public void DelayActionTo(int newInitiative) {
+        isDelayingAction = true;
+        delayedInitiative = newInitiative;
     }
 
     /// <summary>
-    /// 获取显示信息
+    /// 获取当前有效先攻值
     /// </summary>
-    public string GetDisplayInfo() {
-        if (character == null) return "无效角色";
+    public int GetEffectiveInitiative() {
+        return isDelayingAction ? delayedInitiative : initiativeValue;
+    }
 
-        string status = hasActedThisRound ? "已行动" : "待行动";
-        return $"{character.GetDisplayName()} (先攻:{initiative}, {status})";
+    /// <summary>
+    /// 检查是否可以行动
+    /// </summary>
+    public bool CanAct() {
+        return !hasActedThisRound && character != null && character.currentHitPoints > 0;
     }
 }

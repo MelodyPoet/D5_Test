@@ -41,13 +41,13 @@ public class ScrollLayer : MonoBehaviour {
         InitializeScrolling();
 
         // 添加立即测试滚动的选项
-        Debug.Log($"🔍 ScrollLayer在 {gameObject.name} 上初始化完成");
-        Debug.Log($"🔍 当前滚动模式: {actualScrollMode}");
-        Debug.Log($"🔍 滚动状态: isScrolling = {isScrolling}");
+        Debug.Log($"ScrollLayer在 {gameObject.name} 上初始化完成");
+        Debug.Log($"当前滚动模式: {actualScrollMode}");
+        Debug.Log($"滚动状态: isScrolling = {isScrolling}");
 
         // 如果设置了自动开始滚动，立即开始（用于测试）
         if (scrollSpeed > 0) {
-            Debug.Log("🚀 ScrollLayer: 启动时立即开始滚动测试");
+            Debug.Log("ScrollLayer: 启动时立即开始滚动测试");
             SetScrollSpeed(scrollSpeed);
         }
     }
@@ -55,7 +55,7 @@ public class ScrollLayer : MonoBehaviour {
     void Update() {
         // 添加调试信息（每60帧输出一次）
         if (Time.frameCount % 60 == 0 && isScrolling) {
-            Debug.Log($"🔄 ScrollLayer更新: 模式={actualScrollMode}, 速度={scrollSpeed}, UV偏移={uvOffset}");
+            Debug.Log($"ScrollLayer更新: 模式={actualScrollMode}, 速度={scrollSpeed}, UV偏��={uvOffset}");
         }
 
         switch (actualScrollMode) {
@@ -82,20 +82,20 @@ public class ScrollLayer : MonoBehaviour {
         // 确定实际滚动模式
         if (forceTransformMove) {
             actualScrollMode = ScrollMode.TransformMove;
-            Debug.Log("🎬 ScrollLayer: 强制使用Transform移动模式");
+            Debug.Log("ScrollLayer: 强制使用Transform移动模式");
         }
         else if (scrollMode == ScrollMode.AutoDetect) {
             if (spriteRenderer != null) {
                 actualScrollMode = ScrollMode.SpriteUVScroll;
-                Debug.Log("🎬 ScrollLayer: 检测到SpriteRenderer，使用Sprite UV滚动模式");
+                Debug.Log("ScrollLayer: 检测到SpriteRenderer，使用Sprite UV滚动模式");
             }
             else if (meshRenderer != null) {
                 actualScrollMode = ScrollMode.UVScroll;
-                Debug.Log("🎬 ScrollLayer: 检测到MeshRenderer，使用标准UV滚动模式");
+                Debug.Log("ScrollLayer: 检测到MeshRenderer，使用标准UV滚动模式");
             }
             else {
                 actualScrollMode = ScrollMode.TransformMove;
-                Debug.Log("🎬 ScrollLayer: 未检测到Renderer，使用Transform移动模式");
+                Debug.Log("ScrollLayer: 未检测到Renderer，使用Transform移动模式");
             }
         }
         else {
@@ -112,7 +112,7 @@ public class ScrollLayer : MonoBehaviour {
                 break;
             case ScrollMode.TransformMove:
                 // Transform模式无需特殊初始化
-                Debug.Log("✅ Transform移动模式已准备就绪");
+                Debug.Log("Transform移动模式已准备就绪");
                 break;
         }
     }
@@ -123,10 +123,10 @@ public class ScrollLayer : MonoBehaviour {
     private void InitializeUVScroll() {
         if (meshRenderer != null) {
             material = meshRenderer.material;
-            Debug.Log("✅ UV滚动材质初始化完成");
+            Debug.Log("UV滚动材质初始化完成");
         }
         else {
-            Debug.LogWarning("⚠️ 未找到MeshRenderer，切换到Transform移动模式");
+            Debug.LogWarning("未找到MeshRenderer，切换到Transform移动模式");
             actualScrollMode = ScrollMode.TransformMove;
         }
     }
@@ -140,17 +140,17 @@ public class ScrollLayer : MonoBehaviour {
             material = new Material(spriteRenderer.material);
             spriteRenderer.material = material;
 
-            // 🎯 重要：检查材质是否支持UV偏移
+            // 重要：检查材质是否支持UV偏移
             if (!material.HasProperty("_MainTex") && !material.HasProperty("_BaseMap")) {
-                Debug.LogWarning($"⚠️ 材质 {material.name} 不支持UV偏移，自动切换到Transform移动模式");
+                Debug.LogWarning($"材质 {material.name} 不支持UV偏移，自动切换到Transform移动模式");
                 actualScrollMode = ScrollMode.TransformMove;
                 return;
             }
 
-            Debug.Log($"✅ SpriteRenderer UV滚动材质初始化完成: {material.name}");
+            Debug.Log($"SpriteRenderer UV滚动材质初始化完成: {material.name}");
         }
         else {
-            Debug.LogWarning("⚠️ 未找到SpriteRenderer，切换到Transform移动模式");
+            Debug.LogWarning("未找到SpriteRenderer，切换到Transform移动模式");
             actualScrollMode = ScrollMode.TransformMove;
         }
     }
@@ -171,7 +171,7 @@ public class ScrollLayer : MonoBehaviour {
     private void UpdateSpriteUVScroll() {
         if (material == null || !isScrolling) {
             if (Time.frameCount % 120 == 0) {
-                Debug.Log($"🔍 SpriteUVScroll检查: material={material != null}, isScrolling={isScrolling}");
+                Debug.Log($"SpriteUVScroll检查: material={material != null}, isScrolling={isScrolling}");
             }
             return;
         }
@@ -191,24 +191,26 @@ public class ScrollLayer : MonoBehaviour {
 
         if (!success) {
             // 如果都不支持，立即切换到Transform移动
-            Debug.LogWarning("⚠️ UV偏移不支持，立即切换到Transform移动模式");
+            Debug.LogWarning("UV偏移不支持，立即切换到Transform移动模式");
             actualScrollMode = ScrollMode.TransformMove;
             // 重置UV偏移
             uvOffset = Vector2.zero;
         }
         else if (Time.frameCount % 180 == 0) {
-            Debug.Log($"✅ SpriteUV滚动: uvOffset={uvOffset}, 材质={material.name}");
+            Debug.Log($"SpriteUV滚动: uvOffset={uvOffset}, 材质={material.name}");
 
-            // 🎯 检查UV偏移是否真的在工作（检查材质当前偏移）
+            // 检查UV偏移是否真的在���作（检查材质当前偏移）
             Vector2 currentOffset = material.GetTextureOffset("_MainTex");
             if (Mathf.Approximately(currentOffset.x, 0f) && uvOffset.x > 1f) {
-                Debug.LogWarning("⚠️ 检测到UV偏移无效，切换到Transform移动模式");
+                Debug.LogWarning("检测到UV偏移无效，切换到Transform移动模式");
                 actualScrollMode = ScrollMode.TransformMove;
             }
         }
-    }    /// <summary>
-         /// 更新Transform移动
-         /// </summary>
+    }
+
+    /// <summary>
+    /// 更新Transform移动
+    /// </summary>
     private void UpdateTransformMove() {
         if (!isScrolling) return;
 
@@ -217,7 +219,7 @@ public class ScrollLayer : MonoBehaviour {
         transform.position = pos;
 
         if (Time.frameCount % 120 == 0) {
-            Debug.Log($"🚀 Transform移动: 新位置={transform.position}");
+            Debug.Log($"Transform移动: 新位置={transform.position}");
         }
     }
 
@@ -227,7 +229,7 @@ public class ScrollLayer : MonoBehaviour {
     public void SetScrollSpeed(float speed) {
         scrollSpeed = speed;
         isScrolling = true;
-        Debug.Log($"🎬 背景开始滚动，模式: {actualScrollMode}，速度: {speed}");
+        Debug.Log($"背景开始滚动，模式: {actualScrollMode}，速度: {speed}");
     }
 
     /// <summary>
@@ -235,7 +237,7 @@ public class ScrollLayer : MonoBehaviour {
     /// </summary>
     public void StopScrolling() {
         isScrolling = false;
-        Debug.Log("🛑 背景停止滚动");
+        Debug.Log("背景停止滚动");
     }
 
     /// <summary>

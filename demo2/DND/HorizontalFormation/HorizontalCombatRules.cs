@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 /// <summary>
 /// 横版战斗攻击规则系统
@@ -14,7 +15,7 @@ public static class HorizontalCombatRules {
         int dexterityModifier = character.DexMod; // 直接使用DexMod属性
         int initiative = d20Roll + dexterityModifier;
 
-        Debug.Log($"🎲 {character.GetDisplayName()} 先攻检定: {d20Roll} + {dexterityModifier} = {initiative}");
+        Debug.Log($"{character.GetDisplayName()} 先攻检定: {d20Roll} + {dexterityModifier} = {initiative}");
         return initiative;
     }
 
@@ -49,186 +50,166 @@ public static class HorizontalCombatRules {
         foreach (CharacterStats character in combatants) {
             if (character != null && character.currentHitPoints > 0) {
                 int initiative = RollInitiative(character);
-                initiativeList.Add(new InitiativeEntry {
-                    character = character,
-                    initiative = initiative
-                });
+                initiativeList.Add(new InitiativeEntry(character, initiative));
             }
         }
 
-        // 按先攻顺序排序
-        initiativeList.Sort((a, b) => CompareInitiative(a.character, b.character, a.initiative, b.initiative));
+        // 按先攻值排序
+        initiativeList.Sort((a, b) => CompareInitiative(a.character, b.character, a.initiativeValue, b.initiativeValue));
 
-        Debug.Log("📋 先攻顺序排序完成:");
+        Debug.Log("=== 先攻顺序确定 ===");
         for (int i = 0; i < initiativeList.Count; i++) {
-            var entry = initiativeList[i];
-            Debug.Log($"  {i + 1}. {entry.character.GetDisplayName()} - 先攻值: {entry.initiative} (敏捷: {entry.character.dexterity})");
+            Debug.Log($"{i + 1}. {initiativeList[i].character.GetDisplayName()} - 先攻值: {initiativeList[i].initiativeValue}");
         }
 
         return initiativeList;
     }
 
     /// <summary>
-    /// DND5E攻击检定 - 1d20 + 攻击加值 vs 目标AC
+    /// DND5E攻击检定
+    /// 计算 1d20 + 属性调整值 + 熟练加值 vs 目标AC
     /// </summary>
-    public static bool RollAttackCheck(CharacterStats attacker, CharacterStats target) {
-        if (attacker == null || target == null) return false;
+    public static bool MakeAttackRoll(CharacterStats attacker, CharacterStats target, out bool isCriticalHit, out int attackRoll) {
+        // 攻击骰投掷
+        int d20 = Random.Range(1, 21);
 
-        // 1d20攻击骰
-        int d20Roll = Random.Range(1, 21);
+        // 力量或敏捷调整值（近战用力量，远程用敏捷）
+        int attributeModifier = attacker.StrMod; // 默认使用力量
 
-        // 攻击加值 = 熟练加值 + 属性调整值
-        int proficiencyBonus = CalculateProficiencyBonus(attacker.characterLevel);
-        int attackModifier = GetAttackModifier(attacker);
-        int attackBonus = proficiencyBonus + attackModifier;
+        // 熟练加值
+        int proficiencyBonus = GetProficiencyBonus(attacker.level);
 
-        // 总攻击检定值
-        int totalAttack = d20Roll + attackBonus;
+        // 最终攻击检定
+        attackRoll = d20 + attributeModifier + proficiencyBonus;
 
-        // 目标AC
-        int targetAC = target.armorClass; // 直接使用armorClass属性
+        // 暴击检测（天然20）
+        isCriticalHit = (d20 == 20);
 
-        // 判定结果
-        bool isHit = totalAttack >= targetAC;
-        bool isCriticalHit = d20Roll == 20;
-        bool isCriticalMiss = d20Roll == 1;
+        // 攻击命中检测
+        bool hits = attackRoll >= target.armorClass || isCriticalHit;
 
-        // 自然1自动失败，自然20自动命中
-        if (isCriticalMiss) isHit = false;
-        if (isCriticalHit) isHit = true;
+        Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: " +
+                 $"投骰{d20} + 属性{attributeModifier} + 熟练{proficiencyBonus} = {attackRoll} " +
+                 $"vs AC{target.armorClass} - {(hits ? "命中" : "未命中")}" +
+                 $"{(isCriticalHit ? " [暴击!]" : "")}");
 
-        Debug.Log($"🎲 攻击检定: {attacker.GetDisplayName()} → {target.GetDisplayName()}");
-        Debug.Log($"   骰子:{d20Roll} + 攻击加值:{attackBonus} = {totalAttack} vs AC:{targetAC}");
-        Debug.Log($"   结果: {(isHit ? "命中" : "失败")}{(isCriticalHit ? " (暴击!)" : "")}{(isCriticalMiss ? " (大失败)" : "")}");
-
-        return isHit;
+        return hits;
     }
 
     /// <summary>
-    /// DND5E伤害计算 - 武器伤害骰 + 属性调整值
+    /// 计算伤害
     /// </summary>
-    public static int RollDamage(CharacterStats attacker, CharacterStats target) {
-        if (attacker == null || target == null) return 0;
+    public static int CalculateDamage(CharacterStats attacker, bool isCriticalHit) {
+        // 基础武器伤害 (1d6 默认)
+        int baseDamage = Random.Range(1, 7);
 
-        // 基础伤害骰（简化版本，实际应该从武器数据获取）
-        int baseDamage = GetBaseDamage(attacker);
+        // 暴击时骰子翻倍
+        if (isCriticalHit) {
+            baseDamage += Random.Range(1, 7);
+        }
 
-        // 属性调整值
-        int damageModifier = GetDamageModifier(attacker);
+        // 属性调整值加成
+        int attributeModifier = attacker.StrMod;
 
-        // 总伤害
-        int totalDamage = baseDamage + damageModifier;
+        int totalDamage = Mathf.Max(1, baseDamage + attributeModifier); // 最少1点伤害
 
-        // 最小伤害为1
-        totalDamage = Mathf.Max(1, totalDamage);
-
-        Debug.Log($"💥 伤害计算: {attacker.GetDisplayName()} → {target.GetDisplayName()}");
-        Debug.Log($"   基础伤害:{baseDamage} + 调整值:{damageModifier} = {totalDamage}");
+        Debug.Log($"{attacker.GetDisplayName()} 造成伤害: 武器{baseDamage} + 属性{attributeModifier} = {totalDamage}");
 
         return totalDamage;
     }
 
     /// <summary>
-    /// 计算熟练加值
+    /// 应用伤害到目标
     /// </summary>
-    private static int CalculateProficiencyBonus(int characterLevel) {
-        return 2 + (characterLevel - 1) / 4; // DND5E标准公式
-    }
+    public static void ApplyDamage(CharacterStats target, int damage) {
+        target.currentHitPoints = Mathf.Max(0, target.currentHitPoints - damage);
 
-    /// <summary>
-    /// 获取攻击属性调整值
-    /// </summary>
-    private static int GetAttackModifier(CharacterStats character) {
-        // 根据职业和攻击类型决定使用哪个属性
-        switch (character.characterClass) {
-            case CharacterClass.Fighter:
-            case CharacterClass.Paladin:
-            case CharacterClass.Barbarian:
-                return character.StrMod; // 力量攻击
+        Debug.Log($"{target.GetDisplayName()} 受到 {damage} 点伤害，剩余生命值: {target.currentHitPoints}/{target.maxHitPoints}");
 
-            case CharacterClass.Rogue:
-            case CharacterClass.Ranger:
-                return character.DexMod; // 敏捷攻击
-
-            case CharacterClass.Wizard:
-            case CharacterClass.Sorcerer:
-                return character.IntMod; // 智力施法
-
-            case CharacterClass.Cleric:
-            case CharacterClass.Druid:
-                return character.WisMod; // 感知施法
-
-            case CharacterClass.Warlock:
-            case CharacterClass.Bard:
-                return character.ChaMod; // 魅力施法
-
-            default:
-                return character.StrMod; // 默认力量
+        if (target.currentHitPoints <= 0) {
+            Debug.Log($"{target.GetDisplayName()} 死亡！");
         }
     }
 
     /// <summary>
-    /// 获取伤害属性调整值
+    /// 获取基于等级的熟练加值
     /// </summary>
-    private static int GetDamageModifier(CharacterStats character) {
-        // 通常与攻击调整值相同
-        return GetAttackModifier(character);
+    public static int GetProficiencyBonus(int level) {
+        return 2 + (level - 1) / 4; // DND5E标准熟练加值计算
     }
 
     /// <summary>
-    /// 获取基础伤害骰（简化版本）
+    /// 检查是否可以攻击目标（基于位置规则）
     /// </summary>
-    private static int GetBaseDamage(CharacterStats character) {
-        // 简化的武器伤害，实际应该从装备系统获取
-        switch (character.characterClass) {
-            case CharacterClass.Fighter:
-            case CharacterClass.Paladin:
-                return Random.Range(1, 9); // 1d8 长剑
+    public static bool CanAttackTarget(CharacterStats attacker, CharacterStats target, HorizontalBattleFormationManager formationManager) {
+        if (attacker == null || target == null || formationManager == null) return false;
 
-            case CharacterClass.Barbarian:
-                return Random.Range(1, 13); // 1d12 巨斧
+        // 同阵营无法攻击
+        if (attacker.battleSide == target.battleSide) return false;
 
-            case CharacterClass.Rogue:
-                return Random.Range(1, 7); // 1d6 短剑
+        // 目标已死亡无法攻击
+        if (target.currentHitPoints <= 0) return false;
 
-            case CharacterClass.Ranger:
-                return Random.Range(1, 9); // 1d8 长弓
+        // 近战角色只能攻击前排，前排全灭后可攻击后排
+        if (formationManager.IsMeleeClass(attacker)) {
+            var enemyFrontline = formationManager.GetFrontlineCharacters(target.battleSide);
 
-            case CharacterClass.Wizard:
-            case CharacterClass.Sorcerer:
-            case CharacterClass.Warlock:
-                return Random.Range(1, 5); // 1d4 法术焦点
-
-            case CharacterClass.Cleric:
-                return Random.Range(1, 7); // 1d6 战锤
-
-            case CharacterClass.Druid:
-                return Random.Range(1, 7); // 1d6 木棒
-
-            case CharacterClass.Bard:
-                return Random.Range(1, 7); // 1d6 细剑
-
-            default:
-                return Random.Range(1, 5); // 1d4 默认
+            // 如果前排还有存活角色，近战只能攻击前排
+            if (enemyFrontline.Count > 0) {
+                return enemyFrontline.Contains(target);
+            }
+            // 前排全灭，可以攻击后排
         }
+
+        // 远程角色可以攻击任意目标
+        return true;
     }
 
     /// <summary>
-    /// 判断攻击者是否为远程攻击角色
+    /// 获取角色的可攻击目标列表
     /// </summary>
-    public static bool IsRangedAttacker(CharacterStats character) {
-        switch (character.characterClass) {
-            case CharacterClass.Wizard:
-            case CharacterClass.Sorcerer:
-            case CharacterClass.Warlock:
-            case CharacterClass.Ranger:
-                return true;
-            case CharacterClass.Cleric:
-            case CharacterClass.Druid:
-            case CharacterClass.Bard:
-                return true; // 施法者默认远程
-            default:
-                return false; // 近战职业
+    public static List<CharacterStats> GetValidTargets(CharacterStats attacker, HorizontalBattleFormationManager formationManager) {
+        List<CharacterStats> validTargets = new List<CharacterStats>();
+
+        if (attacker == null || formationManager == null) return validTargets;
+
+        // 确定敌方阵营
+        BattleSide enemySide = (attacker.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
+
+        // 获取所有敌方存活角色
+        List<CharacterStats> enemies = formationManager.GetAllAliveCharacters(enemySide);
+
+        // 筛选可攻击的目标
+        foreach (CharacterStats enemy in enemies) {
+            if (CanAttackTarget(attacker, enemy, formationManager)) {
+                validTargets.Add(enemy);
+            }
         }
+
+        return validTargets;
+    }
+
+    /// <summary>
+    /// AI目标选择 - 优先攻击前排，前排全灭后攻击后排
+    /// </summary>
+    public static CharacterStats SelectBestTarget(CharacterStats attacker, HorizontalBattleFormationManager formationManager) {
+        List<CharacterStats> validTargets = GetValidTargets(attacker, formationManager);
+
+        if (validTargets.Count == 0) return null;
+
+        // 确定敌方阵营
+        BattleSide enemySide = (attacker.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
+
+        // 优先攻击前排
+        var frontlineTargets = formationManager.GetFrontlineCharacters(enemySide);
+        var availableFrontline = validTargets.Where(t => frontlineTargets.Contains(t)).ToList();
+
+        if (availableFrontline.Count > 0) {
+            // 从前排中选择血量最少的目标
+            return availableFrontline.OrderBy(t => t.currentHitPoints).First();
+        }
+
+        // 前排无目标，攻击后排血量最少的
+        return validTargets.OrderBy(t => t.currentHitPoints).First();
     }
 }

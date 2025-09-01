@@ -417,41 +417,44 @@ public class IdleGameManager : MonoBehaviour
 
         switch (position)
         {
+            // 敌人位置 - 使用 enemySpawnPoints 数组
             case HorizontalPosition.EnemyFrontLeft:
-                spawnPoint = formationManager.enemyFrontLeftSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 0 ? formationManager.enemySpawnPoints[0] : null;
                 break;
             case HorizontalPosition.EnemyFrontCenter:
-                spawnPoint = formationManager.enemyFrontCenterSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 1 ? formationManager.enemySpawnPoints[1] : null;
                 break;
             case HorizontalPosition.EnemyFrontRight:
-                spawnPoint = formationManager.enemyFrontRightSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 2 ? formationManager.enemySpawnPoints[2] : null;
                 break;
             case HorizontalPosition.EnemyBackLeft:
-                spawnPoint = formationManager.enemyBackLeftSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 3 ? formationManager.enemySpawnPoints[3] : null;
                 break;
             case HorizontalPosition.EnemyBackCenter:
-                spawnPoint = formationManager.enemyBackCenterSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 4 ? formationManager.enemySpawnPoints[4] : null;
                 break;
             case HorizontalPosition.EnemyBackRight:
-                spawnPoint = formationManager.enemyBackRightSpawn;
+                spawnPoint = formationManager.enemySpawnPoints.Length > 5 ? formationManager.enemySpawnPoints[5] : null;
                 break;
+
+            // 玩家位置 - 使用 playerSpawnPoints 数组
             case HorizontalPosition.PlayerFrontLeft:
-                spawnPoint = formationManager.playerFrontLeftSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 0 ? formationManager.playerSpawnPoints[0] : null;
                 break;
             case HorizontalPosition.PlayerFrontCenter:
-                spawnPoint = formationManager.playerFrontCenterSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 1 ? formationManager.playerSpawnPoints[1] : null;
                 break;
             case HorizontalPosition.PlayerFrontRight:
-                spawnPoint = formationManager.playerFrontRightSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 2 ? formationManager.playerSpawnPoints[2] : null;
                 break;
             case HorizontalPosition.PlayerBackLeft:
-                spawnPoint = formationManager.playerBackLeftSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 3 ? formationManager.playerSpawnPoints[3] : null;
                 break;
             case HorizontalPosition.PlayerBackCenter:
-                spawnPoint = formationManager.playerBackCenterSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 4 ? formationManager.playerSpawnPoints[4] : null;
                 break;
             case HorizontalPosition.PlayerBackRight:
-                spawnPoint = formationManager.playerBackRightSpawn;
+                spawnPoint = formationManager.playerSpawnPoints.Length > 5 ? formationManager.playerSpawnPoints[5] : null;
                 break;
         }
 
@@ -740,7 +743,7 @@ public class IdleGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 给予阶段完成奖励
+    /// 给���阶段完成奖励
     /// </summary>
     private void GiveStageCompletionRewards(StageData stageData)
     {
