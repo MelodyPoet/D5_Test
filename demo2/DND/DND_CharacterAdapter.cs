@@ -45,11 +45,26 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 🎯 不在Start中播放任何动画，由游戏管理器统一控制
-        // 这样避免了动画冲突和延迟问题
+        // 🎯 延迟初始化动画，避免错误的动画帧在错误位置播放
+        // 等待一帧确保角色已移动到正确位置
+        StartCoroutine(DelayedAnimationInitialization());
 
         // 注册事件
         // 战斗管理器已迁移至挂机系统
+    }
+
+    /// <summary>
+    /// 延迟动画初始化，避免进场前错误动画帧
+    /// </summary>
+    private System.Collections.IEnumerator DelayedAnimationInitialization() {
+        // 等待一帧，确保角色已经移动到正确位置
+        yield return null;
+
+        // 现在安全地初始化动画
+        if (skeletonAnimation != null && !string.IsNullOrEmpty(animationMapping.idleAnimation)) {
+            PlayAnimation(animationMapping.idleAnimation, true);
+            Debug.Log($"🎬 {gameObject.name} 延迟初始化动画完成，播放待机动画");
+        }
     }
 
     // 回合开始事件处理
@@ -268,18 +283,18 @@ public class DND_CharacterAdapter : MonoBehaviour {
     // 播放移动动画
     public void PlayWalkAnimation() {
         if (skeletonAnimation == null) {
-            Debug.LogWarning($"⚠️ {gameObject.name} 没有SkeletonAnimation组件，无法播放走路动画");
+            Debug.LogWarning($"{gameObject.name} 没有SkeletonAnimation组件，无法播放走路动画");
             return;
         }
         PlayAnimation(animationMapping.walkAnimation, true);
-        Debug.Log($"🚶 {gameObject.name} 开始播放走路动画: {animationMapping.walkAnimation}");
+        Debug.Log($"{gameObject.name} 开始播放走路动画: {animationMapping.walkAnimation}");
     }
 
     // 停止行走动画并播放过渡动画
     public void StopWalkWithTransition() {
         // 检查角色是否已死亡
         if (characterStats != null && characterStats.currentHitPoints <= 0) {
-            // 如果角色已死亡，播放死亡动画
+            // 如果角色已死亡，播放死���动画
             Debug.Log($"{gameObject.name} 已死亡，不播放过渡动画");
             PlayAnimation(animationMapping.deathAnimation, false);
         }
@@ -296,7 +311,7 @@ public class DND_CharacterAdapter : MonoBehaviour {
                     StartCoroutine(ReturnToIdle(transitionAnim.Duration));
                 }
                 else {
-                    // 如果过渡动画不存在，直接播放待机动画
+                    // 如果过渡动画不存在，直���播放待机动画
                     Debug.LogWarning($"{gameObject.name} 过渡动画 {animationMapping.moveToIdleAnimation} 不存在，直接切换到待机动画");
                     PlayIdleAnimation();
                 }
@@ -313,11 +328,11 @@ public class DND_CharacterAdapter : MonoBehaviour {
     /// </summary>
     public void PlayIdleAnimation() {
         if (skeletonAnimation == null) {
-            Debug.LogWarning($"⚠️ {gameObject.name} 没有SkeletonAnimation组件，无法播放待机动画");
+            Debug.LogWarning($"{gameObject.name} 没有SkeletonAnimation组件，无法播放待机动画");
             return;
         }
         PlayAnimation(animationMapping.idleAnimation, true);
-        Debug.Log($"🧘 {gameObject.name} 开始播放待机动画: {animationMapping.idleAnimation}");
+        Debug.Log($"{gameObject.name} 开始播放待机动画: {animationMapping.idleAnimation}");
     }
 
     /// <summary>

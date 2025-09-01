@@ -7,7 +7,8 @@ using UnityEngine;
 /// 自动战斗AI系统 - 线性阵型版本
 /// 实现挂机模式的智能战斗决策和攻击动画
 /// </summary>
-public class AutoBattleAI : MonoBehaviour {
+public class AutoBattleAI : MonoBehaviour
+{
     [Header("AI设置")]
     public bool enableAutoBattle = true;
     public float decisionDelay = 1.0f; // AI决策延迟
@@ -30,8 +31,10 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 开始战斗序列 - 执行先攻检定并开始回合制战斗
     /// </summary>
-    public void StartBattleSequence() {
-        if (isBattleActive) {
+    public void StartBattleSequence()
+    {
+        if (isBattleActive)
+        {
             Debug.LogWarning("战斗已经在进行中！");
             return;
         }
@@ -40,13 +43,16 @@ public class AutoBattleAI : MonoBehaviour {
         List<CharacterStats> allCombatants = new List<CharacterStats>();
         CharacterStats[] allCharacters = FindObjectsOfType<CharacterStats>();
 
-        foreach (CharacterStats character in allCharacters) {
-            if (character.currentHitPoints > 0) {
+        foreach (CharacterStats character in allCharacters)
+        {
+            if (character.currentHitPoints > 0)
+            {
                 allCombatants.Add(character);
             }
         }
 
-        if (allCombatants.Count < 2) {
+        if (allCombatants.Count < 2)
+        {
             Debug.LogWarning("参战角色不足，无法开始战斗");
             return;
         }
@@ -58,7 +64,8 @@ public class AutoBattleAI : MonoBehaviour {
         isBattleActive = true;
 
         // 开始回合制战斗循环
-        if (battleSequenceCoroutine != null) {
+        if (battleSequenceCoroutine != null)
+        {
             StopCoroutine(battleSequenceCoroutine);
         }
         battleSequenceCoroutine = StartCoroutine(BattleSequenceLoop());
@@ -67,10 +74,13 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 战斗序列循环 - 按先攻顺序执行每个角色的回合
     /// </summary>
-    private IEnumerator BattleSequenceLoop() {
-        while (isBattleActive && enableAutoBattle) {
+    private IEnumerator BattleSequenceLoop()
+    {
+        while (isBattleActive && enableAutoBattle)
+        {
             // 检查战斗是否结束
-            if (IsBattleOver()) {
+            if (IsBattleOver())
+            {
                 EndBattle();
                 yield break;
             }
@@ -78,7 +88,8 @@ public class AutoBattleAI : MonoBehaviour {
             // 获取当前行动角色
             InitiativeEntry currentEntry = GetCurrentInitiativeEntry();
 
-            if (currentEntry != null && currentEntry.CanAct()) {
+            if (currentEntry != null && currentEntry.CanAct())
+            {
                 Debug.Log($"⚡ 轮到 {currentEntry.character.GetDisplayName()} 行动 (先攻顺序 {currentTurnIndex + 1})");
 
                 // 执行角色回合
@@ -92,7 +103,8 @@ public class AutoBattleAI : MonoBehaviour {
             AdvanceToNextTurn();
 
             // 检查是否完成一轮，重置行动状态
-            if (currentTurnIndex == 0) {
+            if (currentTurnIndex == 0)
+            {
                 ResetRoundState();
                 Debug.Log("📝 新的战斗轮次开始");
             }
@@ -104,16 +116,19 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 处理角色回合
     /// </summary>
-    private IEnumerator ProcessCharacterTurn(InitiativeEntry initiativeEntry) {
+    private IEnumerator ProcessCharacterTurn(InitiativeEntry initiativeEntry)
+    {
         CharacterStats character = initiativeEntry.character;
 
-        if (character == null || character.currentHitPoints <= 0) {
+        if (character == null || character.currentHitPoints <= 0)
+        {
             yield break;
         }
 
         isProcessingTurn = true;
 
-        if (showAIThoughts) {
+        if (showAIThoughts)
+        {
             Debug.Log($"=== {character.GetDisplayName()} 的回合开始 ===");
         }
 
@@ -122,7 +137,8 @@ public class AutoBattleAI : MonoBehaviour {
         // AI决策流程
         BattleAction chosenAction = DecideBestAction(character);
 
-        if (chosenAction != null) {
+        if (chosenAction != null)
+        {
             ExecuteBattleAction(character, chosenAction);
         }
 
@@ -134,8 +150,10 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 获取当前行动的先攻条目
     /// </summary>
-    private InitiativeEntry GetCurrentInitiativeEntry() {
-        if (currentTurnIndex >= 0 && currentTurnIndex < initiativeOrder.Count) {
+    private InitiativeEntry GetCurrentInitiativeEntry()
+    {
+        if (currentTurnIndex >= 0 && currentTurnIndex < initiativeOrder.Count)
+        {
             return initiativeOrder[currentTurnIndex];
         }
         return null;
@@ -144,9 +162,11 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 前进到下一个回合
     /// </summary>
-    private void AdvanceToNextTurn() {
+    private void AdvanceToNextTurn()
+    {
         currentTurnIndex++;
-        if (currentTurnIndex >= initiativeOrder.Count) {
+        if (currentTurnIndex >= initiativeOrder.Count)
+        {
             currentTurnIndex = 0; // 回到第一个角色，开始新轮次
         }
     }
@@ -154,8 +174,10 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 重置轮次状态
     /// </summary>
-    private void ResetRoundState() {
-        foreach (InitiativeEntry entry in initiativeOrder) {
+    private void ResetRoundState()
+    {
+        foreach (InitiativeEntry entry in initiativeOrder)
+        {
             entry.ResetTurnState();
         }
     }
@@ -163,15 +185,21 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 检查战斗是否结束
     /// </summary>
-    private bool IsBattleOver() {
+    private bool IsBattleOver()
+    {
         bool hasPlayerAlive = false;
         bool hasEnemyAlive = false;
 
-        foreach (InitiativeEntry entry in initiativeOrder) {
-            if (entry.character != null && entry.character.currentHitPoints > 0) {
-                if (entry.character.battleSide == BattleSide.Player) {
+        foreach (InitiativeEntry entry in initiativeOrder)
+        {
+            if (entry.character != null && entry.character.currentHitPoints > 0)
+            {
+                if (entry.character.battleSide == BattleSide.Player)
+                {
                     hasPlayerAlive = true;
-                } else {
+                }
+                else
+                {
                     hasEnemyAlive = true;
                 }
             }
@@ -183,11 +211,13 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 结束战斗
     /// </summary>
-    private void EndBattle() {
+    private void EndBattle()
+    {
         isBattleActive = false;
         isProcessingTurn = false;
 
-        if (battleSequenceCoroutine != null) {
+        if (battleSequenceCoroutine != null)
+        {
             StopCoroutine(battleSequenceCoroutine);
             battleSequenceCoroutine = null;
         }
@@ -207,7 +237,8 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 为角色执行自动战斗回合
     /// </summary>
-    public void ExecuteAutoBattleTurn(CharacterStats character) {
+    public void ExecuteAutoBattleTurn(CharacterStats character)
+    {
         if (isProcessingTurn || !enableAutoBattle) return;
 
         StartCoroutine(ProcessAutoBattleTurn(character));
@@ -216,7 +247,8 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 处理自动战斗回合
     /// </summary>
-    private IEnumerator ProcessAutoBattleTurn(CharacterStats character) {
+    private IEnumerator ProcessAutoBattleTurn(CharacterStats character)
+    {
         isProcessingTurn = true;
 
         if (showAIThoughts)
@@ -227,7 +259,8 @@ public class AutoBattleAI : MonoBehaviour {
         // AI决策流程
         BattleAction chosenAction = DecideBestAction(character);
 
-        if (chosenAction != null) {
+        if (chosenAction != null)
+        {
             ExecuteBattleAction(character, chosenAction);
         }
 
@@ -239,12 +272,14 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 决定最佳行动
     /// </summary>
-    private BattleAction DecideBestAction(CharacterStats character) {
+    private BattleAction DecideBestAction(CharacterStats character)
+    {
         List<BattleAction> possibleActions = new List<BattleAction>();
 
         // 1. 考虑攻击行动（优先级最高）
         BattleAction attackAction = ConsiderAttack(character);
-        if (attackAction != null) {
+        if (attackAction != null)
+        {
             possibleActions.Add(attackAction);
         }
 
@@ -255,17 +290,20 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 考虑攻击行动
     /// </summary>
-    private BattleAction ConsiderAttack(CharacterStats character) {
+    private BattleAction ConsiderAttack(CharacterStats character)
+    {
         // 查找可攻击的目标
         List<CharacterStats> availableTargets = FindAvailableTargets(character);
 
-        if (availableTargets.Count > 0) {
+        if (availableTargets.Count > 0)
+        {
             CharacterStats bestTarget = ChooseBestAttackTarget(availableTargets);
 
             // 根据角色职业决定攻击类型
             bool isMeleeCharacter = IsMeleeCharacter(character);
 
-            return new BattleAction {
+            return new BattleAction
+            {
                 type = isMeleeCharacter ? BattleActionType.MeleeAttack : BattleActionType.RangedAttack,
                 priority = offensivePriority + (isMeleeCharacter ? 0.1f : 0f),
                 target = bestTarget,
@@ -279,7 +317,8 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 查找可攻击的目标
     /// </summary>
-    private List<CharacterStats> FindAvailableTargets(CharacterStats attacker) {
+    private List<CharacterStats> FindAvailableTargets(CharacterStats attacker)
+    {
         List<CharacterStats> targets = new List<CharacterStats>();
 
         // 获取攻击者的阵营
@@ -288,8 +327,10 @@ public class AutoBattleAI : MonoBehaviour {
 
         // 查找所有敌方角色
         CharacterStats[] allCharacters = FindObjectsOfType<CharacterStats>();
-        foreach (CharacterStats character in allCharacters) {
-            if (character.battleSide == enemySide && character.currentHitPoints > 0) {
+        foreach (CharacterStats character in allCharacters)
+        {
+            if (character.battleSide == enemySide && character.currentHitPoints > 0)
+            {
                 targets.Add(character);
             }
         }
@@ -299,33 +340,31 @@ public class AutoBattleAI : MonoBehaviour {
 
     /// <summary>
     /// 判断角色是否为近战职业
+    /// 根据角色在阵型中的实际位置判断：��排=近战，后排=远程
     /// </summary>
-    private bool IsMeleeCharacter(CharacterStats character) {
-        switch (character.characterClass) {
-            case CharacterClass.Fighter:
-            case CharacterClass.Paladin:
-            case CharacterClass.Barbarian:
-            case CharacterClass.Rogue:
-                return true;
-            case CharacterClass.Wizard:
-            case CharacterClass.Sorcerer:
-            case CharacterClass.Warlock:
-            case CharacterClass.Ranger:
-                return false;
-            case CharacterClass.Cleric:
-            case CharacterClass.Druid:
-            case CharacterClass.Bard:
-                return false; // 默认为远程，可根据需要调整
-            default:
-                return true; // 默认近战
+    private bool IsMeleeCharacter(CharacterStats character)
+    {
+        // 获取角色的战斗位置组件
+        BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
+        if (positionComponent != null)
+        {
+            // 根据实际阵型位置判断职业类型
+            bool isInFrontLine = IsPositionInFrontLine(positionComponent.currentPosition);
+            Debug.Log($"🔍 职业判断: {character.GetDisplayName()} - 位置:{positionComponent.currentPosition} - 判定:{(isInFrontLine ? "近战" : "远程")}职业");
+            return isInFrontLine;
         }
+
+        // 如果没有位置组件，默认为近战（安全回退）
+        Debug.LogWarning($"⚠️ {character.GetDisplayName()} 缺少BattlePositionComponent，默认判定为近战职业");
+        return true;
     }
 
     /// <summary>
     /// 根据战术优先级选择攻击目标
     /// 规则：前排优先 > 血量最少
     /// </summary>
-    private CharacterStats ChooseBestAttackTarget(List<CharacterStats> targets) {
+    private CharacterStats ChooseBestAttackTarget(List<CharacterStats> targets)
+    {
         if (targets.Count == 0) return null;
         if (targets.Count == 1) return targets[0];
 
@@ -333,12 +372,16 @@ public class AutoBattleAI : MonoBehaviour {
         var frontLineTargets = new List<CharacterStats>();
         var backLineTargets = new List<CharacterStats>();
 
-        foreach (CharacterStats target in targets) {
+        foreach (CharacterStats target in targets)
+        {
             bool isFrontLine = IsInFrontLine(target);
 
-            if (isFrontLine) {
+            if (isFrontLine)
+            {
                 frontLineTargets.Add(target);
-            } else {
+            }
+            else
+            {
                 backLineTargets.Add(target);
             }
         }
@@ -346,11 +389,14 @@ public class AutoBattleAI : MonoBehaviour {
         Debug.Log($"🎯 战术分析: 前排目标{frontLineTargets.Count}个, 后排目标{backLineTargets.Count}个");
 
         // 优先攻击前排，如果前排没有存活角色则攻击后排
-        if (frontLineTargets.Count > 0) {
+        if (frontLineTargets.Count > 0)
+        {
             CharacterStats selectedTarget = frontLineTargets.OrderBy(t => t.currentHitPoints).First();
             Debug.Log($"✅ 选择前排目标: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
             return selectedTarget;
-        } else {
+        }
+        else
+        {
             CharacterStats selectedTarget = backLineTargets.OrderBy(t => t.currentHitPoints).First();
             Debug.Log($"⚠️ 前排无目标，选择后排: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
             return selectedTarget;
@@ -361,10 +407,12 @@ public class AutoBattleAI : MonoBehaviour {
     /// 判断角色是否在前排位置
     /// 根据BattlePositionComponent或实际spawn点坐标判断
     /// </summary>
-    private bool IsInFrontLine(CharacterStats character) {
+    private bool IsInFrontLine(CharacterStats character)
+    {
         // 方法1：通过BattlePositionComponent判断（优先使用）
         BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
-        if (positionComponent != null) {
+        if (positionComponent != null)
+        {
             bool result = IsPositionInFrontLine(positionComponent.currentPosition);
             Debug.Log($"🔍 位置组件判断: {character.GetDisplayName()} - 枚举位置:{positionComponent.currentPosition} - 判定:{(result ? "前排" : "后排")}");
             return result;
@@ -378,8 +426,10 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 通过位置枚举判断是否为前排
     /// </summary>
-    private bool IsPositionInFrontLine(HorizontalPosition position) {
-        switch (position) {
+    private bool IsPositionInFrontLine(HorizontalPosition position)
+    {
+        switch (position)
+        {
             case HorizontalPosition.PlayerFrontLeft:
             case HorizontalPosition.PlayerFrontCenter:
             case HorizontalPosition.PlayerFrontRight:
@@ -402,7 +452,8 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 选择最佳行动
     /// </summary>
-    private BattleAction ChooseBestAction(List<BattleAction> actions) {
+    private BattleAction ChooseBestAction(List<BattleAction> actions)
+    {
         if (actions.Count == 0) return null;
         if (actions.Count == 1) return actions[0];
 
@@ -413,12 +464,14 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 执行战斗行动
     /// </summary>
-    private void ExecuteBattleAction(CharacterStats actor, BattleAction action) {
+    private void ExecuteBattleAction(CharacterStats actor, BattleAction action)
+    {
         if (action == null || actor == null) return;
 
         Debug.Log($"🎬 执行行动: {actor.GetDisplayName()} -> {action.description}");
 
-        switch (action.type) {
+        switch (action.type)
+        {
             case BattleActionType.MeleeAttack:
                 ExecuteMeleeAttack(actor, action.target);
                 break;
@@ -440,71 +493,212 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 执行近战攻击
     /// </summary>
-    private void ExecuteMeleeAttack(CharacterStats attacker, CharacterStats target) {
+    private void ExecuteMeleeAttack(CharacterStats attacker, CharacterStats target)
+    {
         if (attacker == null || target == null) return;
 
         Debug.Log($"⚔️ {attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起近战攻击");
 
-        // 播放攻击动画
+        // 启动近战攻击协程，包含移动-攻击-返回的完整流程
+        StartCoroutine(PerformMeleeAttackSequence(attacker, target));
+    }
+
+    /// <summary>
+    /// 执行近战攻击序列：移动-攻击-返回
+    /// </summary>
+    private IEnumerator PerformMeleeAttackSequence(CharacterStats attacker, CharacterStats target)
+    {
+        // 记录攻击者的原始位置
+        Vector3 originalPosition = attacker.transform.position;
+
+        // 计算目标攻击位置（目标前方1.5单位）
+        Vector3 targetPosition = target.transform.position;
+        Vector3 attackPosition;
+
+        // 根据阵营决定攻击位置
+        if (attacker.battleSide == BattleSide.Player)
+        {
+            // 玩家攻击敌人，移动到敌人左侧
+            attackPosition = new Vector3(targetPosition.x - 1.5f, targetPosition.y, targetPosition.z);
+        }
+        else
+        {
+            // 敌人攻击玩家，移动到玩家右侧
+            attackPosition = new Vector3(targetPosition.x + 1.5f, targetPosition.y, targetPosition.z);
+        }
+
+        // 阶段1：移动到攻击位置
+        Debug.Log($"🏃 {attacker.GetDisplayName()} 移动到攻击位置");
+
         DND_CharacterAdapter adapter = attacker.GetComponent<DND_CharacterAdapter>();
-        if (adapter != null) {
+        if (adapter != null)
+        {
+            adapter.PlayWalkAnimation();
+        }
+
+        float moveSpeed = 5f;
+        while (Vector3.Distance(attacker.transform.position, attackPosition) > 0.1f)
+        {
+            attacker.transform.position = Vector3.MoveTowards(
+                attacker.transform.position,
+                attackPosition,
+                moveSpeed * Time.deltaTime
+            );
+            yield return null;
+        }
+
+        // 阶段2：执行攻击
+        Debug.Log($"💥 {attacker.GetDisplayName()} 到达攻击位置，开始攻击");
+
+        if (adapter != null)
+        {
             adapter.PlayAttackAnimation();
         }
 
+        // 等待攻击动画播放一段时间
+        yield return new WaitForSeconds(0.5f);
+
         // 执行攻击检定和伤害计算
         bool hitSuccess = HorizontalCombatRules.RollAttackCheck(attacker, target);
-        if (hitSuccess) {
+        if (hitSuccess)
+        {
             int damage = HorizontalCombatRules.RollDamage(attacker, target);
             target.TakeDamage(damage);
             Debug.Log($"💥 攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
-        } else {
+        }
+        else
+        {
             Debug.Log($"🛡️ 攻击未命中！");
         }
+
+        // 等待攻击动画完成
+        yield return new WaitForSeconds(0.5f);
+
+        // 阶段3：返回原位
+        Debug.Log($"🔙 {attacker.GetDisplayName()} 返回原位置");
+
+        if (adapter != null)
+        {
+            adapter.PlayWalkAnimation();
+        }
+
+        while (Vector3.Distance(attacker.transform.position, originalPosition) > 0.1f)
+        {
+            attacker.transform.position = Vector3.MoveTowards(
+                attacker.transform.position,
+                originalPosition,
+                moveSpeed * Time.deltaTime
+            );
+            yield return null;
+        }
+
+        // 阶段4：恢复待机状态
+        if (adapter != null)
+        {
+            adapter.PlayIdleAnimation();
+        }
+
+        Debug.Log($"✅ {attacker.GetDisplayName()} 近战攻击序列完成");
+
+        // 标记回合结束
+        MarkTurnComplete(attacker);
     }
 
     /// <summary>
     /// 执行远程攻击
     /// </summary>
-    private void ExecuteRangedAttack(CharacterStats attacker, CharacterStats target) {
+    private void ExecuteRangedAttack(CharacterStats attacker, CharacterStats target)
+    {
         if (attacker == null || target == null) return;
 
         Debug.Log($"🏹 {attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起远程攻击");
 
         // 播放攻击动画
         DND_CharacterAdapter adapter = attacker.GetComponent<DND_CharacterAdapter>();
-        if (adapter != null) {
+        if (adapter != null)
+        {
             adapter.PlayAttackAnimation();
         }
 
         // 执行攻击检定和伤害计算
         bool hitSuccess = HorizontalCombatRules.RollAttackCheck(attacker, target);
-        if (hitSuccess) {
+        if (hitSuccess)
+        {
             int damage = HorizontalCombatRules.RollDamage(attacker, target);
             target.TakeDamage(damage);
             Debug.Log($"💥 攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
-        } else {
+        }
+        else
+        {
             Debug.Log($"🛡️ 远程攻击未命中！");
         }
+
+        // 标记回合结束
+        MarkTurnComplete(attacker);
     }
 
     /// <summary>
     /// 执行防御动作
     /// </summary>
-    private void ExecuteDefend(CharacterStats character) {
+    private void ExecuteDefend(CharacterStats character)
+    {
         Debug.Log($"🛡️ {character.GetDisplayName()} 采取防御姿态");
 
         // 播放防御动画或保持待机
         DND_CharacterAdapter adapter = character.GetComponent<DND_CharacterAdapter>();
-        if (adapter != null) {
+        if (adapter != null)
+        {
             adapter.PlayIdleAnimation();
         }
+
+        // 标记回合结束
+        MarkTurnComplete(character);
+    }
+
+    /// <summary>
+    /// 标记回合完成
+    /// </summary>
+    private void MarkTurnComplete(CharacterStats character)
+    {
+        if (character == null) return;
+
+        Debug.Log($"⏭️ {character.GetDisplayName()} 回合结束");
+
+        // 回合结束后，继续下一个角色的回合
+        StartCoroutine(NextTurnCoroutine());
+    }
+
+    /// <summary>
+    /// 下一回合协程
+    /// </summary>
+    private IEnumerator NextTurnCoroutine()
+    {
+        yield return new WaitForSeconds(0.5f); // 短暂延迟让动画播放完
+
+        if (isBattleActive)
+        {
+            ProcessNextTurn();
+        }
+    }
+
+    /// <summary>
+    /// 处理下一个回合
+    /// </summary>
+    private void ProcessNextTurn()
+    {
+        if (!isBattleActive) return;
+
+        // 在战斗序列循环中已经处理了回合推进逻辑
+        // 这里只需要确保战斗状态正确
+        Debug.Log("⏭️ 处理下一回合...");
     }
 
     /// <summary>
     /// 战斗行动数据结构
     /// </summary>
     [System.Serializable]
-    public class BattleAction {
+    public class BattleAction
+    {
         public BattleActionType type;
         public float priority;
         public CharacterStats target;
@@ -515,7 +709,8 @@ public class AutoBattleAI : MonoBehaviour {
     /// <summary>
     /// 战斗行动类型枚举
     /// </summary>
-    public enum BattleActionType {
+    public enum BattleActionType
+    {
         MeleeAttack,    // 近战攻击
         RangedAttack,   // 远程攻击
         Spell,          // 法术

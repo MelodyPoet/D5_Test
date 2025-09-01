@@ -6,7 +6,8 @@ using UnityEngine;
 /// 挂机模式管理器
 /// 实现自动探索和战斗的挂机游戏系统
 /// </summary>
-public class IdleGameManager : MonoBehaviour {
+public class IdleGameManager : MonoBehaviour
+{
     [Header("挂机模式设置")]
     public bool idleModeEnabled;
     public float encounterInterval = 10f; // 遭遇间隔时间
@@ -39,14 +40,17 @@ public class IdleGameManager : MonoBehaviour {
     // 阶段配置
     private Dictionary<int, StageData> stageConfigs;
 
-    void Start() {
+    void Start()
+    {
         LoadStageConfigs();
         SetupUI();
         InitializeIdleSystem();
     }
 
-    void Update() {
-        if (idleModeEnabled && !isInBattle) {
+    void Update()
+    {
+        if (idleModeEnabled && !isInBattle)
+        {
             UpdateExploreProgress();
         }
         UpdateUI();
@@ -55,13 +59,16 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 初始化挂机系统
     /// </summary>
-    private void InitializeIdleSystem() {
-        if (formationManager == null) {
+    private void InitializeIdleSystem()
+    {
+        if (formationManager == null)
+        {
             Debug.LogError("IdleGameManager: formationManager 引用未设置！请在Inspector中手动拖入HorizontalBattleFormationManager组件");
             return;
         }
 
-        if (autoBattleAI == null) {
+        if (autoBattleAI == null)
+        {
             Debug.LogError("IdleGameManager: autoBattleAI 引用未设置！请在Inspector中手动拖入AutoBattleAI组件");
             return;
         }
@@ -69,9 +76,11 @@ public class IdleGameManager : MonoBehaviour {
         accumulatedRewards = new IdleRewards();
         nextEncounterTime = Time.time + encounterInterval;
 
-        if (useFormationManager) {
+        if (useFormationManager)
+        {
             GenerateInitialTeams();
-            if (currentPlayerTeam.Count > 0) {
+            if (currentPlayerTeam.Count > 0)
+            {
                 Debug.Log("🎯 队伍生成完成，启动探索模式...");
                 StartExploreMode();
             }
@@ -81,13 +90,15 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 启动探索模式
     /// </summary>
-    private void StartExploreMode() {
+    private void StartExploreMode()
+    {
         idleModeEnabled = true;
         InitializeAllCharacterAnimations();
         SetPlayerPartyAnimation("walk");
         StartBackgroundScrolling();
 
-        if (idleCoroutine != null) {
+        if (idleCoroutine != null)
+        {
             StopCoroutine(idleCoroutine);
         }
         idleCoroutine = StartCoroutine(IdleGameLoop());
@@ -96,11 +107,15 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 启动背景滚动
     /// </summary>
-    private void StartBackgroundScrolling() {
+    private void StartBackgroundScrolling()
+    {
         ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        if (scrollLayers.Length > 0) {
-            foreach (ScrollLayer layer in scrollLayers) {
-                if (layer != null) {
+        if (scrollLayers.Length > 0)
+        {
+            foreach (ScrollLayer layer in scrollLayers)
+            {
+                if (layer != null)
+                {
                     layer.SetScrollSpeed(2f);
                 }
             }
@@ -110,10 +125,13 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 停止背景滚动
     /// </summary>
-    private void StopBackgroundScrolling() {
+    private void StopBackgroundScrolling()
+    {
         ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        foreach (ScrollLayer layer in scrollLayers) {
-            if (layer != null) {
+        foreach (ScrollLayer layer in scrollLayers)
+        {
+            if (layer != null)
+            {
                 layer.StopScrolling();
             }
         }
@@ -122,10 +140,13 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 恢复背景滚动
     /// </summary>
-    private void ResumeBackgroundScrolling() {
+    private void ResumeBackgroundScrolling()
+    {
         ScrollLayer[] scrollLayers = FindObjectsOfType<ScrollLayer>();
-        foreach (ScrollLayer layer in scrollLayers) {
-            if (layer != null) {
+        foreach (ScrollLayer layer in scrollLayers)
+        {
+            if (layer != null)
+            {
                 layer.SetScrollSpeed(2f);
             }
         }
@@ -134,14 +155,16 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 设置UI
     /// </summary>
-    private void SetupUI() {
+    private void SetupUI()
+    {
         // UI初始化代码，如果项目没有UI模块则注释掉
     }
 
     /// <summary>
     /// 加载阶段配置
     /// </summary>
-    private void LoadStageConfigs() {
+    private void LoadStageConfigs()
+    {
         stageConfigs = new Dictionary<int, StageData>
         {
             { 1, new StageData { stageName = "森林入口", enemyLevel = 1, wavesPerStage = 5,
@@ -160,11 +183,14 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 挂机游戏主循环
     /// </summary>
-    private IEnumerator IdleGameLoop() {
-        while (idleModeEnabled) {
+    private IEnumerator IdleGameLoop()
+    {
+        while (idleModeEnabled)
+        {
             yield return StartCoroutine(ExploreStage());
 
-            if (Time.time >= nextEncounterTime) {
+            if (Time.time >= nextEncounterTime)
+            {
                 yield return StartCoroutine(StartRandomEncounter());
                 nextEncounterTime = Time.time + encounterInterval;
             }
@@ -176,18 +202,22 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 探索阶段
     /// </summary>
-    private IEnumerator ExploreStage() {
-        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage)) {
+    private IEnumerator ExploreStage()
+    {
+        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage))
+        {
             yield break;
         }
 
-        if (!isInBattle) {
+        if (!isInBattle)
+        {
             SetPlayerPartyAnimation("walk");
         }
 
         stageProgressPercent += Time.deltaTime * 10f;
 
-        if (stageProgressPercent >= 100f) {
+        if (stageProgressPercent >= 100f)
+        {
             CompleteCurrentWave();
         }
 
@@ -197,15 +227,18 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 完成当前波次
     /// </summary>
-    private void CompleteCurrentWave() {
+    private void CompleteCurrentWave()
+    {
         stageProgressPercent = 0f;
         currentWave++;
 
-        if (stageConfigs.ContainsKey(currentStage)) {
+        if (stageConfigs.ContainsKey(currentStage))
+        {
             StageData stageData = stageConfigs[currentStage];
             GiveWaveRewards(stageData);
 
-            if (currentWave > stageData.wavesPerStage) {
+            if (currentWave > stageData.wavesPerStage)
+            {
                 CompleteCurrentStage();
             }
         }
@@ -214,8 +247,10 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 完成当前阶段
     /// </summary>
-    private void CompleteCurrentStage() {
-        if (stageConfigs.ContainsKey(currentStage)) {
+    private void CompleteCurrentStage()
+    {
+        if (stageConfigs.ContainsKey(currentStage))
+        {
             StageData stageData = stageConfigs[currentStage];
             GiveStageCompletionRewards(stageData);
         }
@@ -227,13 +262,15 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 开始随机遭遇
     /// </summary>
-    private IEnumerator StartRandomEncounter() {
+    private IEnumerator StartRandomEncounter()
+    {
         if (isInBattle) yield break;
 
         isInBattle = true;
 
         List<CharacterStats> validPlayerParty = GetValidPlayerParty();
-        if (validPlayerParty.Count == 0) {
+        if (validPlayerParty.Count == 0)
+        {
             isInBattle = false;
             yield break;
         }
@@ -247,7 +284,8 @@ public class IdleGameManager : MonoBehaviour {
         yield return StartCoroutine(PlayEnemyEntranceAnimation(enemyParty));
 
         // 使用先攻系统开始战斗
-        if (autoBattleAI != null) {
+        if (autoBattleAI != null)
+        {
             Debug.Log("🎯 敌人进场完成，启动先攻系统...");
             autoBattleAI.StartBattleSequence();
 
@@ -264,11 +302,14 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 敌人进场动画序列
     /// </summary>
-    private IEnumerator PlayEnemyEntranceAnimation(List<CharacterStats> enemyParty) {
+    private IEnumerator PlayEnemyEntranceAnimation(List<CharacterStats> enemyParty)
+    {
         Debug.Log("🚶‍♂️ 播放敌人进场动画...");
 
-        foreach (CharacterStats enemy in enemyParty) {
-            if (enemy != null) {
+        foreach (CharacterStats enemy in enemyParty)
+        {
+            if (enemy != null)
+            {
                 // 将敌人初始位置设置在屏幕右侧外
                 Vector3 currentPos = enemy.transform.position;
                 Vector3 startPos = new Vector3(currentPos.x + 8f, currentPos.y, currentPos.z);
@@ -276,7 +317,8 @@ public class IdleGameManager : MonoBehaviour {
 
                 // 播放走路动画
                 DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
+                if (adapter != null)
+                {
                     adapter.PlayWalkAnimation();
                 }
             }
@@ -288,17 +330,22 @@ public class IdleGameManager : MonoBehaviour {
         float moveSpeed = 3f;
         bool allReachedTarget = false;
 
-        while (!allReachedTarget) {
+        while (!allReachedTarget)
+        {
             allReachedTarget = true;
 
-            foreach (CharacterStats enemy in enemyParty) {
-                if (enemy != null) {
+            foreach (CharacterStats enemy in enemyParty)
+            {
+                if (enemy != null)
+                {
                     BattlePositionComponent posComp = enemy.GetComponent<BattlePositionComponent>();
-                    if (posComp != null) {
+                    if (posComp != null)
+                    {
                         Vector3 targetPos = GetSpawnPosition(posComp.currentPosition);
                         Vector3 currentPos = enemy.transform.position;
 
-                        if (Vector3.Distance(currentPos, targetPos) > 0.1f) {
+                        if (Vector3.Distance(currentPos, targetPos) > 0.1f)
+                        {
                             allReachedTarget = false;
                             Vector3 newPos = Vector3.MoveTowards(currentPos, targetPos, moveSpeed * Time.deltaTime);
                             enemy.transform.position = newPos;
@@ -311,10 +358,13 @@ public class IdleGameManager : MonoBehaviour {
         }
 
         // 切换到待机动画
-        foreach (CharacterStats enemy in enemyParty) {
-            if (enemy != null) {
+        foreach (CharacterStats enemy in enemyParty)
+        {
+            if (enemy != null)
+            {
                 DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
+                if (adapter != null)
+                {
                     adapter.PlayIdleAnimation();
                 }
             }
@@ -326,19 +376,25 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 处理战斗结束
     /// </summary>
-    private IEnumerator HandleBattleEnd(List<CharacterStats> playerParty, List<CharacterStats> enemyParty) {
+    private IEnumerator HandleBattleEnd(List<CharacterStats> playerParty, List<CharacterStats> enemyParty)
+    {
         // 判断战斗结果
-        if (HasLivingMembers(playerParty)) {
+        if (HasLivingMembers(playerParty))
+        {
             Debug.Log("🎉 玩家胜利！");
             GiveBattleVictoryRewards();
 
             // 销毁敌人
-            foreach (CharacterStats enemy in enemyParty) {
-                if (enemy != null && enemy.gameObject != null) {
+            foreach (CharacterStats enemy in enemyParty)
+            {
+                if (enemy != null && enemy.gameObject != null)
+                {
                     Destroy(enemy.gameObject);
                 }
             }
-        } else {
+        }
+        else
+        {
             Debug.Log("💀 玩家败北！");
             HandleBattleDefeat();
         }
@@ -353,12 +409,14 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 获取指定位置的spawn点坐标
     /// </summary>
-    private Vector3 GetSpawnPosition(HorizontalPosition position) {
+    private Vector3 GetSpawnPosition(HorizontalPosition position)
+    {
         if (formationManager == null) return Vector3.zero;
 
         Transform spawnPoint = null;
 
-        switch (position) {
+        switch (position)
+        {
             case HorizontalPosition.EnemyFrontLeft:
                 spawnPoint = formationManager.enemyFrontLeftSpawn;
                 break;
@@ -403,16 +461,25 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 生成敌人队伍
     /// </summary>
-    private List<CharacterStats> GenerateEnemyParty() {
+    private List<CharacterStats> GenerateEnemyParty()
+    {
         List<CharacterStats> enemyParty = new List<CharacterStats>();
 
-        if (stageConfigs == null || !stageConfigs.ContainsKey(currentStage)) {
-            Debug.LogWarning($"⚠️ 没有找到第{currentStage}阶段的配置数据");
+        if (formationManager == null)
+        {
+            Debug.LogError("❌ FormationManager为null，无法生成敌人队伍");
             return enemyParty;
         }
 
-        StageData stageData = stageConfigs[currentStage];
-        int enemyCount = Random.Range(1, 4);
+        // 获取阵型管理器中配置的敌人预制体
+        GameObject[] enemyPrefabs = {
+            formationManager.敌人前排左翼,
+            formationManager.敌人前排中锋,
+            formationManager.敌人前排右翼,
+            formationManager.敌人后排左翼,
+            formationManager.敌人后排中路,
+            formationManager.敌人后排右翼
+        };
 
         HorizontalPosition[] enemyPositions = {
             HorizontalPosition.EnemyFrontLeft,
@@ -423,110 +490,60 @@ public class IdleGameManager : MonoBehaviour {
             HorizontalPosition.EnemyBackRight
         };
 
-        for (int i = 0; i < enemyCount; i++) {
-            if (i >= enemyPositions.Length) break;
-
-            GameObject enemyPrefab = GetRandomEnemyPrefab();
-            if (enemyPrefab == null) continue;
+        // 按照阵型管理器配置生成敌人，有预制体才生成
+        for (int i = 0; i < enemyPrefabs.Length; i++)
+        {
+            GameObject enemyPrefab = enemyPrefabs[i];
+            if (enemyPrefab == null) continue; // 跳过未配置的位置
 
             Vector3 spawnPos = GetSpawnPosition(enemyPositions[i]);
             GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
+            // 设置敌人朝向（面向玩家）
+            enemyObj.transform.localScale = new Vector3(-1, 1, 1);
+
             CharacterStats enemyStats = enemyObj.GetComponent<CharacterStats>();
-            if (enemyStats == null) {
-                enemyStats = enemyObj.AddComponent<CharacterStats>();
+            if (enemyStats == null)
+            {
+                Debug.LogError($"❌ 敌人预制体 {enemyPrefab.name} 缺少CharacterStats组件！");
+                continue;
             }
 
-            ConfigureEnemyStats(enemyStats, stageData);
+            // 确保敌人属于敌方阵营
+            enemyStats.battleSide = BattleSide.Enemy;
 
             BattlePositionComponent posComp = enemyObj.GetComponent<BattlePositionComponent>();
-            if (posComp == null) {
+            if (posComp == null)
+            {
                 posComp = enemyObj.AddComponent<BattlePositionComponent>();
             }
             posComp.currentPosition = enemyPositions[i];
 
             enemyParty.Add(enemyStats);
 
-            Debug.Log($"🧌 生成敌人: {enemyStats.GetDisplayName()} 在位置 {enemyPositions[i]}");
+            Debug.Log($"���� 生成敌人: {enemyStats.GetDisplayName()} 在位置 {enemyPositions[i]} 使用预制体 {enemyPrefab.name}");
         }
 
         return enemyParty;
     }
 
     /// <summary>
-    /// 获取随机敌人预制体
-    /// </summary>
-    private GameObject GetRandomEnemyPrefab() {
-        if (formationManager == null) return null;
-
-        GameObject[] enemyPrefabs = {
-            formationManager.敌人前排左翼,
-            formationManager.敌人前排中锋,
-            formationManager.敌人前排右翼,
-            formationManager.敌人后排左翼,
-            formationManager.敌人后排中路,
-            formationManager.敌人后排右翼
-        };
-
-        List<GameObject> validPrefabs = new List<GameObject>();
-        foreach (GameObject prefab in enemyPrefabs) {
-            if (prefab != null) {
-                validPrefabs.Add(prefab);
-            }
-        }
-
-        if (validPrefabs.Count == 0) {
-            Debug.LogError("❌ 没有找到有效的敌人预制体！");
-            return null;
-        }
-
-        return validPrefabs[Random.Range(0, validPrefabs.Count)];
-    }
-
-    /// <summary>
-    /// 配置敌人属性
-    /// </summary>
-    private void ConfigureEnemyStats(CharacterStats enemyStats, StageData stageData) {
-        enemyStats.characterLevel = stageData.enemyLevel;
-        enemyStats.battleSide = BattleSide.Enemy;
-
-        CharacterClass[] enemyClasses = {
-            CharacterClass.Fighter,
-            CharacterClass.Rogue,
-            CharacterClass.Wizard,
-            CharacterClass.Ranger
-        };
-        enemyStats.characterClass = enemyClasses[Random.Range(0, enemyClasses.Length)];
-
-        int baseHp = 20 + (stageData.enemyLevel * 5);
-        enemyStats.maxHitPoints = baseHp;
-        enemyStats.currentHitPoints = baseHp;
-
-        enemyStats.strength = Random.Range(10, 16);
-        enemyStats.dexterity = Random.Range(10, 16);
-        enemyStats.constitution = Random.Range(10, 16);
-        enemyStats.intelligence = Random.Range(8, 14);
-        enemyStats.wisdom = Random.Range(8, 14);
-        enemyStats.charisma = Random.Range(8, 14);
-
-        enemyStats.armorClass = 12 + stageData.enemyLevel;
-
-        Debug.Log($"🎯 配置敌人: {enemyStats.GetDisplayName()} - 等级{enemyStats.characterLevel} - 血量{enemyStats.currentHitPoints} - AC{enemyStats.armorClass}");
-    }
-
-    /// <summary>
     /// 获取有效的玩家队伍
     /// </summary>
-    private List<CharacterStats> GetValidPlayerParty() {
+    private List<CharacterStats> GetValidPlayerParty()
+    {
         List<CharacterStats> validParty = new List<CharacterStats>();
 
-        foreach (CharacterStats player in currentPlayerTeam) {
-            if (player != null && player.currentHitPoints > 0) {
+        foreach (CharacterStats player in currentPlayerTeam)
+        {
+            if (player != null && player.currentHitPoints > 0)
+            {
                 validParty.Add(player);
             }
         }
 
-        if (validParty.Count == 0) {
+        if (validParty.Count == 0)
+        {
             Debug.LogWarning("⚠️ 没有有效的玩家角色！");
         }
 
@@ -536,11 +553,14 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 检查队伍是否还有存活成员
     /// </summary>
-    private bool HasLivingMembers(List<CharacterStats> party) {
+    private bool HasLivingMembers(List<CharacterStats> party)
+    {
         if (party == null || party.Count == 0) return false;
 
-        foreach (CharacterStats character in party) {
-            if (character != null && character.currentHitPoints > 0) {
+        foreach (CharacterStats character in party)
+        {
+            if (character != null && character.currentHitPoints > 0)
+            {
                 return true;
             }
         }
@@ -551,8 +571,10 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 生成初始队伍
     /// </summary>
-    public void GenerateInitialTeams() {
-        if (formationManager == null) {
+    public void GenerateInitialTeams()
+    {
+        if (formationManager == null)
+        {
             Debug.LogError("❌ FormationManager为null，无法生成队伍");
             return;
         }
@@ -564,7 +586,8 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 生成玩家队伍
     /// </summary>
-    private void GeneratePlayerTeam() {
+    private void GeneratePlayerTeam()
+    {
         currentPlayerTeam.Clear();
 
         HorizontalPosition[] playerPositions = {
@@ -579,35 +602,39 @@ public class IdleGameManager : MonoBehaviour {
             formationManager.玩家后排右翼
         };
 
-        for (int i = 0; i < Mathf.Min(playerPartySize, playerPositions.Length, playerPrefabs.Length); i++) {
+        for (int i = 0; i < Mathf.Min(playerPartySize, playerPositions.Length, playerPrefabs.Length); i++)
+        {
             if (playerPrefabs[i] == null) continue;
 
             Vector3 spawnPos = GetSpawnPosition(playerPositions[i]);
             GameObject playerObj = Instantiate(playerPrefabs[i], spawnPos, Quaternion.identity);
 
             CharacterStats playerStats = playerObj.GetComponent<CharacterStats>();
-            if (playerStats == null) {
+            if (playerStats == null)
+            {
                 playerStats = playerObj.AddComponent<CharacterStats>();
             }
 
             ConfigurePlayerStats(playerStats, i);
 
             BattlePositionComponent posComp = playerObj.GetComponent<BattlePositionComponent>();
-            if (posComp == null) {
+            if (posComp == null)
+            {
                 posComp = playerObj.AddComponent<BattlePositionComponent>();
             }
             posComp.currentPosition = playerPositions[i];
 
             currentPlayerTeam.Add(playerStats);
 
-            Debug.Log($"🦸 生成玩家: {playerStats.GetDisplayName()} ���位置 {playerPositions[i]}");
+            Debug.Log($"🦸 生成玩家: {playerStats.GetDisplayName()} 在位置 {playerPositions[i]}");
         }
     }
 
     /// <summary>
     /// 配置玩家属性
     /// </summary>
-    private void ConfigurePlayerStats(CharacterStats playerStats, int index) {
+    private void ConfigurePlayerStats(CharacterStats playerStats, int index)
+    {
         playerStats.characterLevel = 3;
         playerStats.battleSide = BattleSide.Player;
 
@@ -617,9 +644,12 @@ public class IdleGameManager : MonoBehaviour {
             CharacterClass.Cleric
         };
 
-        if (index < playerClasses.Length) {
+        if (index < playerClasses.Length)
+        {
             playerStats.characterClass = playerClasses[index];
-        } else {
+        }
+        else
+        {
             playerStats.characterClass = CharacterClass.Fighter;
         }
 
@@ -638,12 +668,17 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 设置玩家队伍动画
     /// </summary>
-    private void SetPlayerPartyAnimation(string animationName) {
-        foreach (CharacterStats player in currentPlayerTeam) {
-            if (player != null) {
+    private void SetPlayerPartyAnimation(string animationName)
+    {
+        foreach (CharacterStats player in currentPlayerTeam)
+        {
+            if (player != null)
+            {
                 DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
-                    switch (animationName) {
+                if (adapter != null)
+                {
+                    switch (animationName)
+                    {
                         case "walk":
                             adapter.PlayWalkAnimation();
                             break;
@@ -659,11 +694,15 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 初始化所有角色动画
     /// </summary>
-    private void InitializeAllCharacterAnimations() {
-        foreach (CharacterStats player in currentPlayerTeam) {
-            if (player != null) {
+    private void InitializeAllCharacterAnimations()
+    {
+        foreach (CharacterStats player in currentPlayerTeam)
+        {
+            if (player != null)
+            {
                 DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
-                if (adapter != null) {
+                if (adapter != null)
+                {
                     adapter.PlayIdleAnimation();
                 }
             }
@@ -673,21 +712,24 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 更新探索进度
     /// </summary>
-    private void UpdateExploreProgress() {
+    private void UpdateExploreProgress()
+    {
         // 探索进度更新逻辑
     }
 
     /// <summary>
     /// 更新UI
     /// </summary>
-    private void UpdateUI() {
+    private void UpdateUI()
+    {
         // UI更新逻辑
     }
 
     /// <summary>
     /// 给予波次奖励
     /// </summary>
-    private void GiveWaveRewards(StageData stageData) {
+    private void GiveWaveRewards(StageData stageData)
+    {
         int expReward = stageData.baseExpReward / 5;
         int goldReward = stageData.baseGoldReward / 5;
 
@@ -700,7 +742,8 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 给予阶段完成奖励
     /// </summary>
-    private void GiveStageCompletionRewards(StageData stageData) {
+    private void GiveStageCompletionRewards(StageData stageData)
+    {
         accumulatedRewards.totalExp += stageData.baseExpReward;
         accumulatedRewards.totalGold += stageData.baseGoldReward;
         accumulatedRewards.stagesCompleted++;
@@ -711,7 +754,8 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 给予战斗胜利奖励
     /// </summary>
-    private void GiveBattleVictoryRewards() {
+    private void GiveBattleVictoryRewards()
+    {
         int battleExp = 50 + (currentStage * 10);
         int battleGold = 25 + (currentStage * 5);
 
@@ -725,7 +769,8 @@ public class IdleGameManager : MonoBehaviour {
     /// <summary>
     /// 处理战斗失败
     /// </summary>
-    private void HandleBattleDefeat() {
+    private void HandleBattleDefeat()
+    {
         Debug.Log("💀 玩家队伍全灭，游戏结束！");
         idleModeEnabled = false;
     }
@@ -735,7 +780,8 @@ public class IdleGameManager : MonoBehaviour {
 /// 阶段数据结构
 /// </summary>
 [System.Serializable]
-public class StageData {
+public class StageData
+{
     public string stageName;
     public int enemyLevel;
     public int wavesPerStage;
@@ -747,7 +793,8 @@ public class StageData {
 /// 挂机奖励数据结构
 /// </summary>
 [System.Serializable]
-public class IdleRewards {
+public class IdleRewards
+{
     public int totalExp;
     public int totalGold;
     public int battlesWon;

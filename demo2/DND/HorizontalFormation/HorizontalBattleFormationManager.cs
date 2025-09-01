@@ -11,7 +11,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     [Space(5)]
 
     [Header("前排")]
-    [Tooltip("玩家前排左翼角色预制体")]
+    [Tooltip("玩家前排��翼角色预制体")]
     public GameObject 玩家前排左翼;
     [Tooltip("玩家前排中锋角色预制体")]
     public GameObject 玩家前排中锋;
@@ -21,7 +21,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     [Header("后排")]
     [Tooltip("玩家后排左翼角色预制体")]
     public GameObject 玩家后排左翼;
-    [Tooltip("玩家后排中路角色预制体")]
+    [Tooltip("玩��后排中路角色预制体")]
     public GameObject 玩家后排中路;
     [Tooltip("玩家后排右翼角色预制体")]
     public GameObject 玩家后排右翼;
@@ -123,8 +123,8 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     /// 角色生成请直接调用IdleGameManager API或手动配置
     /// </summary>
     public void InitializeBattle() {
-        Debug.Log("🏗️ BattleFormationManager初始化 - 专注于spawn点管理");
-        Debug.Log("⚠️ 注意：角色生成请使用IdleGameManager.GenerateInitialTeams()或手动配置");
+        Debug.Log("BattleFormationManager初始化 - 专注于spawn点管理");
+        Debug.Log("注意：角色生成请使用IdleGameManager.GenerateInitialTeams()或手动配置");
 
         // 只负责生成spawn点，不生成角色
         // 角色生成由IdleGameManager或其他挂机系统负责
@@ -136,12 +136,12 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     public void InitializeBattleWithExistingCharacters(List<CharacterStats> playerTeam, List<CharacterStats> enemyTeam) {
         // 检查角色队伍参数
         if (playerTeam == null) {
-            Debug.LogError("❌ 玩家队伍参数为null！");
+            Debug.LogError("玩家队伍参数为null！");
             return;
         }
 
         if (enemyTeam == null) {
-            Debug.LogError("❌ 敌人队伍参数为null！");
+            Debug.LogError("敌人队伍参数为null！");
             return;
         }
 
@@ -202,7 +202,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         // 占用新位置
         positionOccupancy[position] = character;
 
-        // 记录角色的战斗位置
+        // 记录角色��战斗位置
         BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
         if (positionComponent != null) {
             positionComponent.currentPosition = position;
@@ -216,10 +216,22 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
 
     /// <summary>
     /// 将角色移动到指定Transform位置
+    /// 🎯 只设置position，保持预制体原有的scale和rotation不被修改
     /// </summary>
     private void MoveCharacterToTransform(CharacterStats character, Transform targetTransform) {
         if (character != null && targetTransform != null) {
+            // 🎯 只设置位置，不修改缩放和旋转
+            // 保持预制体手动配置的scale和rotation值
+            Vector3 originalScale = character.transform.localScale;
+            Quaternion originalRotation = character.transform.rotation;
+
             character.transform.position = targetTransform.position;
+
+            // 确保缩放和旋转保持不变
+            character.transform.localScale = originalScale;
+            character.transform.rotation = originalRotation;
+
+            Debug.Log($"🎯 角色 {character.characterName} 移动到位置 {targetTransform.position}，保持原有缩放 {originalScale} 和旋转 {originalRotation}");
         }
     }
 
@@ -230,7 +242,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         if (character == null) return;
 
         // 查找并清空角色占用的位置
-        foreach (System.Collections.Generic.KeyValuePair<HorizontalPosition, CharacterStats> kvp in positionOccupancy) {
+        foreach (var kvp in positionOccupancy) {
             if (kvp.Value == character) {
                 positionOccupancy[kvp.Key] = null;
                 break;
@@ -263,8 +275,6 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             case 3:
             case 4:
                 return FormationType.Balanced; // 中等队伍采用平衡阵型
-            case 5:
-            case 6:
             default:
                 return FormationType.Aggressive; // 大队伍采用攻击阵型
         }
@@ -278,14 +288,14 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             // 玩家方位置（左侧）
             switch (formation) {
                 case FormationType.Defensive:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.PlayerFrontLeft,
                         HorizontalPosition.PlayerBackLeft,
                         HorizontalPosition.PlayerBackCenter,
                         HorizontalPosition.PlayerBackRight
                     };
                 case FormationType.Balanced:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.PlayerFrontLeft,
                         HorizontalPosition.PlayerFrontCenter,
                         HorizontalPosition.PlayerBackLeft,
@@ -294,7 +304,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
                     };
                 case FormationType.Aggressive:
                 default:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.PlayerFrontLeft,
                         HorizontalPosition.PlayerFrontCenter,
                         HorizontalPosition.PlayerFrontRight,
@@ -308,14 +318,14 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             // 敌人方位置（右侧）
             switch (formation) {
                 case FormationType.Defensive:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.EnemyFrontLeft,
                         HorizontalPosition.EnemyBackLeft,
                         HorizontalPosition.EnemyBackCenter,
                         HorizontalPosition.EnemyBackRight
                     };
                 case FormationType.Balanced:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.EnemyFrontLeft,
                         HorizontalPosition.EnemyFrontCenter,
                         HorizontalPosition.EnemyBackLeft,
@@ -324,7 +334,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
                     };
                 case FormationType.Aggressive:
                 default:
-                    return new HorizontalPosition[] {
+                    return new[] {
                         HorizontalPosition.EnemyFrontLeft,
                         HorizontalPosition.EnemyFrontCenter,
                         HorizontalPosition.EnemyFrontRight,
@@ -414,59 +424,6 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 创建虚拟Transform用于位置计算
-    /// </summary>
-    private Transform CreateVirtualTransform(HorizontalPosition position) {
-        GameObject virtualObj = new GameObject($"VirtualPosition_{position}");
-        virtualObj.transform.SetParent(this.transform);
-        virtualObj.transform.position = CalculatePosition(position);
-
-        // 添加标记组件便于识别
-        virtualObj.AddComponent<BattlePositionComponent>().currentPosition = position;
-
-        return virtualObj.transform;
-    }
-
-    /// <summary>
-    /// 根据位置枚举计算实际世界坐标
-    /// 中锋位置在y=-2，左翼位置在y=-0.6，适配背景布局
-    /// </summary>
-    private Vector3 CalculatePosition(HorizontalPosition position) {
-        switch (position) {
-            // 玩家方位置（左侧，X为负值）
-            case HorizontalPosition.PlayerFrontLeft:
-                return new Vector3(-3f, -0.6f, 0f);  // 前排左翼，y=-0.6
-            case HorizontalPosition.PlayerFrontCenter:
-                return new Vector3(-2.5f, -2f, 0f);  // 前排中锋，y=-2
-            case HorizontalPosition.PlayerFrontRight:
-                return new Vector3(-3f, -3.4f, 0f);  // 前排右翼，y=-3.4 (对称左翼)
-            case HorizontalPosition.PlayerBackLeft:
-                return new Vector3(-5f, -0.6f, 0f);  // 后排左翼，y=-0.6
-            case HorizontalPosition.PlayerBackCenter:
-                return new Vector3(-5f, -2f, 0f);    // 后排中锋，y=-2
-            case HorizontalPosition.PlayerBackRight:
-                return new Vector3(-5f, -3.4f, 0f);  // 后排右翼，y=-3.4
-
-            // 敌人方位置（右侧，X为正值）
-            case HorizontalPosition.EnemyFrontLeft:
-                return new Vector3(2f, -0.6f, 0f);   // 前排左翼，y=-0.6
-            case HorizontalPosition.EnemyFrontCenter:
-                return new Vector3(2.5f, -2f, 0f);   // 前排中锋，y=-2
-            case HorizontalPosition.EnemyFrontRight:
-                return new Vector3(2f, -3.4f, 0f);   // 前排右翼，y=-3.4
-            case HorizontalPosition.EnemyBackLeft:
-                return new Vector3(5f, -0.6f, 0f);   // 后排左翼，y=-0.6
-            case HorizontalPosition.EnemyBackCenter:
-                return new Vector3(5f, -2f, 0f);     // 后排中锋，y=-2
-            case HorizontalPosition.EnemyBackRight:
-                return new Vector3(5f, -3.4f, 0f);   // 后排右翼，y=-3.4
-
-            default:
-                return Vector3.zero;
-        }
-    }
-
-    /// <summary>
     /// 🎯 生成完整玩家阵型（按具体位置生成，不按数组顺序）
     /// </summary>
     public List<CharacterStats> GeneratePlayerFormation() {
@@ -492,11 +449,11 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
 
         // 按位置而非数组顺序生成角色
         CreateCharacterAtPosition(敌人前排左翼, "敌人前排左翼", HorizontalPosition.EnemyFrontLeft, enemyTeam);
-        CreateCharacterAtPosition(敌人前排中锋, "敌人前排中锋", HorizontalPosition.EnemyFrontCenter, enemyTeam);
+        CreateCharacterAtPosition(敌人前排中锋, "敌人前排��锋", HorizontalPosition.EnemyFrontCenter, enemyTeam);
         CreateCharacterAtPosition(敌人前排右翼, "敌人前排右翼", HorizontalPosition.EnemyFrontRight, enemyTeam);
         CreateCharacterAtPosition(敌人后排左翼, "敌人后排左翼", HorizontalPosition.EnemyBackLeft, enemyTeam);
         CreateCharacterAtPosition(敌人后排中路, "敌人后排中路", HorizontalPosition.EnemyBackCenter, enemyTeam);
-        CreateCharacterAtPosition(敌人后排右翼, "敌人后排右翼", HorizontalPosition.EnemyBackRight, enemyTeam);
+        CreateCharacterAtPosition(敌人后排右翼, "敌人后排右���", HorizontalPosition.EnemyBackRight, enemyTeam);
 
         Debug.Log($"🔴 生成敌人阵型完成，共 {enemyTeam.Count} 人");
         return enemyTeam;
@@ -510,6 +467,9 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
 
         GameObject instance = Instantiate(prefab);
         instance.name = positionName;
+
+        // 🎯 完全保持预制体原有的Transform配置，不进行任何重置
+        // 预制体已经手动调整了正确���缩放、位置和朝向信息，不应被修改
 
         CharacterStats stats = instance.GetComponent<CharacterStats>();
         if (stats == null) {
@@ -531,7 +491,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         // 🎯 从prefab获取配置好的DND_CharacterAdapter组件（不硬编码添加）
         DND_CharacterAdapter adapter = instance.GetComponent<DND_CharacterAdapter>();
         if (adapter == null) {
-            Debug.LogError($"❌ 角色预制体 {positionName} 缺少DND_CharacterAdapter组件！请在prefab中预先配置此组件");
+            Debug.LogError($"❌ 角色预制体 {positionName} 缺少DND_CharacterAdapter组件！请在prefab中预���配置此组件");
             return;
         }
 
@@ -542,18 +502,41 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             return;
         }
 
-        // 仅设置必要的运行时引用，其他属性通过prefab配置
+        // 仅设置必要的运行时引用，其他属性通���prefab配置
         adapter.characterStats = stats;
 
-        Debug.Log($"✅ 角色 {positionName} 的组件配置验证完成");
+        Debug.Log($"✅ 角色 {positionName} 的组件配置验证完成，完全保持预制体原有Transform设置");
 
-        // 直接放置到指定位置
-        PlaceCharacterAtPosition(stats, position);
+        // 🎯 先设置位置组件，再移动到spawn点，避免错位问题
+        BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
+        if (positionComponent == null) {
+            positionComponent = instance.AddComponent<BattlePositionComponent>();
+        }
+        positionComponent.currentPosition = position;
+
+        // 直接放置到指定位置（但不调用PlaceCharacterAtPosition，避免重复设置）
+        Transform spawnTransform = GetPositionTransform(position);
+        if (spawnTransform != null) {
+            // 🎯 只设置位��，保持预制体原有的scale和rotation
+            Vector3 originalScale = instance.transform.localScale;
+            Quaternion originalRotation = instance.transform.rotation;
+
+            instance.transform.position = spawnTransform.position;
+
+            // 确保缩放和旋转保持不变
+            instance.transform.localScale = originalScale;
+            instance.transform.rotation = originalRotation;
+
+            Debug.Log($"🎯 角色 {positionName} 直接放置到位置 {spawnTransform.position}，保持原有缩放 {originalScale} 和旋转 {originalRotation}");
+        }
+
+        // 占用位置
+        positionOccupancy[position] = stats;
 
         team.Add(stats);
         Debug.Log($"✅ 创建角色 {positionName} 到位置 {position}");
     }
-
+    /// 🎯 获取阵型配置摘要（��于调试）
     /// <summary>
     /// 🎯 获取阵型配置摘要（用于调试）
     /// </summary>
