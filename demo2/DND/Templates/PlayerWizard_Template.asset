@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a399c018af62444ab2899cab35feba92, type: 3}
   m_Name: PlayerWizard_Template
   m_EditorClassIdentifier: 
-  characterName: "\u73A9\u5BB6\u6CD5\u5E08"
-  characterClass: 2
-  level: 3
+  characterName: "\u827E\u62C9"
+  characterClass: 1
+  level: 1
   defaultSide: 0
   strength: 8
   dexterity: 14

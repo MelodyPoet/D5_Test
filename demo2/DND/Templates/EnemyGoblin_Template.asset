@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: EnemyGoblin_Template
   m_EditorClassIdentifier: 
   characterName: "\u9B54\u5316\u673A\u5175"
-  characterClass: 1
+  characterClass: 2
   level: 1
   defaultSide: 1
   strength: 8

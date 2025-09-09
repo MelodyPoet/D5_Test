@@ -223,7 +223,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   template: {fileID: 11400000, guid: a1fd7e528de1a754bbaf49cc66bb0178, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
-  characterName: "\u73A9\u5BB6"
+  characterName: "\u65CB\u5F8B\u8BD7\u4EBA"
   characterClass: 0
   characterLevel: 1
   battleSide: 0

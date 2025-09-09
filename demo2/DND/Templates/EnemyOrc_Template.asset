@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: "\u9AB7\u9AC5\u6218\u58EB"
   characterClass: 0
-  level: 2
+  level: 1
   defaultSide: 1
   strength: 14
   dexterity: 12
