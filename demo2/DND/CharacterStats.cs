@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using demo2.DND.HorizontalFormation;
 
 /// <summary>
 /// 角色属性组件 - 简化版本，使用CharacterTemplate作为数据源
@@ -7,6 +8,9 @@ using UnityEngine;
 public class CharacterStats : MonoBehaviour {
     [Header("角色模板")]
     public CharacterTemplate template;
+
+    [Header("事件通道")]
+    public DamageEventChannel_SO damageEventChannel; // 拖入伤害事件通道资产
 
     [Header("运行时数据")]
     public string characterName = "角色";
@@ -46,6 +50,92 @@ public class CharacterStats : MonoBehaviour {
         // 如果有模板，从模板初始化
         if (template != null) {
             InitializeFromTemplate();
+        }
+    }
+
+    private void OnEnable() {
+        // 订阅伤害事件
+        if (damageEventChannel != null) {
+            damageEventChannel.OnEventRaised += HandleDamageEvent;
+        }
+    }
+
+    private void OnDisable() {
+        // 取消订阅伤害事件
+        if (damageEventChannel != null) {
+            damageEventChannel.OnEventRaised -= HandleDamageEvent;
+        }
+    }
+
+    /// <summary>
+    /// 处理伤害事件 - 只有当自己是受伤目标时才处理
+    /// </summary>
+    private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damage) {
+        if (recipient != this) return; // 确保是自己受伤的事件
+
+        // 处理伤害逻辑（原TakeDamage方法的核心逻辑）
+        ApplyDamageToSelf(damage, dealer);
+
+        // 播放受击动画
+        PlayHitAnimation();
+    }
+
+    /// <summary>
+    /// 应用伤害到自身（从原TakeDamage方法重构）
+    /// </summary>
+    private void ApplyDamageToSelf(int damage, CharacterStats dealer) {
+        if (template != null) {
+            // 检查免疫（这里简化处理，实际应该从攻击中获取伤害类型）
+            DamageType damageType = DamageType.Bludgeoning; // 默认钝击伤害
+
+            if (template.immunities.Contains(damageType)) {
+                Debug.Log($"{GetDisplayName()} 免疫 {damageType} 伤害!");
+                return;
+            }
+
+            // 检查抗性和弱点
+            if (template.resistances.Contains(damageType)) {
+                damage = Mathf.Max(1, damage / 2);
+                Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性!");
+            }
+            else if (template.vulnerabilities.Contains(damageType)) {
+                damage *= 2;
+                Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有弱点!");
+            }
+        }
+
+        // 先扣除临时生命值
+        if (temporaryHitPoints > 0) {
+            if (temporaryHitPoints >= damage) {
+                temporaryHitPoints -= damage;
+                damage = 0;
+            }
+            else {
+                damage -= temporaryHitPoints;
+                temporaryHitPoints = 0;
+            }
+        }
+
+        // 扣除实际生命值
+        currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
+
+        Debug.Log($"{GetDisplayName()} 受到 {damage} 点伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+
+        // 检查是否失去意识
+        if (currentHitPoints <= 0) {
+            AddStatusEffect(StatusEffectType.Unconscious);
+            Debug.Log($"{GetDisplayName()} 失去意识!");
+        }
+    }
+
+    /// <summary>
+    /// 播放受击动画
+    /// </summary>
+    private void PlayHitAnimation() {
+        // 获取角色动画适配器组件
+        DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
+        if (characterAdapter != null) {
+            characterAdapter.PlayHitAnimation();
         }
     }
 
@@ -145,7 +235,7 @@ public class CharacterStats : MonoBehaviour {
     }
 
     /// <summary>
-    /// 检查是否���有特定状态效果
+    /// 检查是否具有特定状态效果
     /// </summary>
     public bool HasStatusEffect(StatusEffectType type) {
         return statusEffects.Contains(type);

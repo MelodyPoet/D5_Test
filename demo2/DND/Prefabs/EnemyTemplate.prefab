@@ -202,6 +202,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   template: {fileID: 11400000, guid: a5e44c5e12dffa841a5fa47b8a0f423e, type: 2}
+  damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
   characterName: "\u89D2\u8272"
   characterClass: 0
   characterLevel: 1
