@@ -99,7 +99,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         // 玩家角色立即播放走路动画（探索状态）
         SetPlayerFormationWalkingState();
 
-        Debug.Log($"玩家阵型生成完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
+        Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
     }
 
     /// <summary>
@@ -165,6 +165,19 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             return;
         }
 
+        // 添加位置组件并设置正确的位置信息
+        BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
+        if (positionComponent == null)
+        {
+            positionComponent = instance.AddComponent<BattlePositionComponent>();
+        }
+
+        // 根据索引设置正确的位置枚举
+        positionComponent.currentPosition = GetPlayerPositionByIndex(index);
+        positionComponent.isOccupied = true;
+
+        Debug.Log($"玩家角色 {prefab.name} 重置组件设置: {positionComponent.currentPosition}");
+
         // 添加到指定索引位置
         activePlayerCharacters[index] = instance;
 
@@ -206,6 +219,19 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             return;
         }
 
+        // 添加位置组件并设置正确的位置信息
+        BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
+        if (positionComponent == null)
+        {
+            positionComponent = instance.AddComponent<BattlePositionComponent>();
+        }
+
+        // 根据索引设置正确的位置枚举
+        positionComponent.currentPosition = GetEnemyPositionByIndex(index);
+        positionComponent.isOccupied = true;
+
+        Debug.Log($"敌人角色 {prefab.name} 位置组件设置: {positionComponent.currentPosition}");
+
         // 获取动画适配器并设置敌人朝向
         DND_CharacterAdapter adapter = instance.GetComponent<DND_CharacterAdapter>();
         if (adapter != null)
@@ -243,7 +269,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 延迟设置敌人朝向（当Spine组件还未完全初始化时）
+    /// ���迟设置敌人朝向（当Spine组件还未完全初始化时）
     /// </summary>
     private IEnumerator SetEnemyDirectionDelayed(DND_CharacterAdapter adapter)
     {
@@ -298,7 +324,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
             }
         }
 
-        // 敌人队伍也切换到待机状态（如果已经进场完毕）
+        // ��人队���也切换到待机状态（如果已经进场完毕）
         foreach (GameObject character in activeEnemyCharacters)
         {
             if (character != null)
@@ -375,7 +401,7 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         List<CharacterStats> frontline = new List<CharacterStats>();
         List<GameObject> targetList = (battleSide == BattleSide.Player) ? activePlayerCharacters : activeEnemyCharacters;
 
-        // 前排是数组索引 0,1,2
+        // 前排是��组索引 0,1,2
         for (int i = 0; i < 3 && i < targetList.Count; i++)
         {
             if (targetList[i] != null)
@@ -539,4 +565,44 @@ public class HorizontalBattleFormationManager : MonoBehaviour {
         }
         return info;
     }
+
+    /// <summary>
+    /// 根据索引获取玩家位置枚举
+    /// </summary>
+    private HorizontalPosition GetPlayerPositionByIndex(int index)
+    {
+        switch (index)
+        {
+            case 0: return HorizontalPosition.PlayerFrontLeft;
+            case 1: return HorizontalPosition.PlayerFrontCenter;
+            case 2: return HorizontalPosition.PlayerFrontRight;
+            case 3: return HorizontalPosition.PlayerBackLeft;
+            case 4: return HorizontalPosition.PlayerBackCenter;
+            case 5: return HorizontalPosition.PlayerBackRight;
+            default:
+                Debug.LogError($"无效的玩家索引: {index}");
+                return HorizontalPosition.PlayerFrontCenter;
+        }
+    }
+
+    /// <summary>
+    /// 根据索引获取敌人位置枚举
+    /// </summary>
+    private HorizontalPosition GetEnemyPositionByIndex(int index)
+    {
+        switch (index)
+        {
+            case 0: return HorizontalPosition.EnemyFrontLeft;
+            case 1: return HorizontalPosition.EnemyFrontCenter;
+            case 2: return HorizontalPosition.EnemyFrontRight;
+            case 3: return HorizontalPosition.EnemyBackLeft;
+            case 4: return HorizontalPosition.EnemyBackCenter;
+            case 5: return HorizontalPosition.EnemyBackRight;
+            default:
+                Debug.LogError($"无效的敌人索引: {index}");
+                return HorizontalPosition.EnemyFrontCenter;
+        }
+    }
 }
+
+

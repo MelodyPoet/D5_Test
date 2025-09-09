@@ -316,6 +316,7 @@ public class AutoBattleAI : MonoBehaviour
 
     /// <summary>
     /// 查找可攻击的目标
+    /// 规则：前排只能攻击敌方前排（除非前排全灭），后排可攻击前后排
     /// </summary>
     private List<CharacterStats> FindAvailableTargets(CharacterStats attacker)
     {
@@ -327,12 +328,48 @@ public class AutoBattleAI : MonoBehaviour
 
         // 查找所有敌方角色
         CharacterStats[] allCharacters = FindObjectsOfType<CharacterStats>();
+        List<CharacterStats> enemyFrontLine = new List<CharacterStats>();
+        List<CharacterStats> enemyBackLine = new List<CharacterStats>();
+
+        // 将敌方角色分类为前排和后排
         foreach (CharacterStats character in allCharacters)
         {
             if (character.battleSide == enemySide && character.currentHitPoints > 0)
             {
-                targets.Add(character);
+                if (IsInFrontLine(character))
+                {
+                    enemyFrontLine.Add(character);
+                }
+                else
+                {
+                    enemyBackLine.Add(character);
+                }
             }
+        }
+
+        // 判断攻击者职业类型
+        bool attackerIsMelee = IsMeleeCharacter(attacker);
+
+        if (attackerIsMelee)
+        {
+            // 前排职业攻击规则：优先攻击敌方前排，前排全灭后才能攻击后排
+            if (enemyFrontLine.Count > 0)
+            {
+                targets.AddRange(enemyFrontLine);
+                Debug.Log($"🗡️ {attacker.GetDisplayName()}(前排) 可攻击敌方前排目标 {enemyFrontLine.Count} 个");
+            }
+            else if (enemyBackLine.Count > 0)
+            {
+                targets.AddRange(enemyBackLine);
+                Debug.Log($"🗡️ {attacker.GetDisplayName()}(前排) 敌方前排全灭，可攻击后排目标 {enemyBackLine.Count} 个");
+            }
+        }
+        else
+        {
+            // 后排职业攻击规则：可以攻击敌方前排和后排任意目标
+            targets.AddRange(enemyFrontLine);
+            targets.AddRange(enemyBackLine);
+            Debug.Log($"🏹 {attacker.GetDisplayName()}(后排) 可攻击敌方所有目标 前排:{enemyFrontLine.Count}个 后排:{enemyBackLine.Count}个");
         }
 
         return targets;
@@ -371,46 +408,20 @@ public class AutoBattleAI : MonoBehaviour
 
     /// <summary>
     /// 根据战术优先级选择攻击目标
-    /// 规则：前排优先 > 血量最少
+    /// 规则：血量最少优先（FindAvailableTargets已经处理了前排后排限制）
     /// </summary>
     private CharacterStats ChooseBestAttackTarget(List<CharacterStats> targets)
     {
         if (targets.Count == 0) return null;
         if (targets.Count == 1) return targets[0];
 
-        // 按战术优先级分组：前排 > 后排
-        var frontLineTargets = new List<CharacterStats>();
-        var backLineTargets = new List<CharacterStats>();
+        // 直接按血量排序选择最低血量目标
+        // 前排后排的限制已经在FindAvailableTargets中处理过了
+        CharacterStats selectedTarget = targets.OrderBy(t => t.currentHitPoints).First();
 
-        foreach (CharacterStats target in targets)
-        {
-            bool isFrontLine = IsInFrontLine(target);
+        Debug.Log($"从{targets.Count}个可攻击目标中选择: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
 
-            if (isFrontLine)
-            {
-                frontLineTargets.Add(target);
-            }
-            else
-            {
-                backLineTargets.Add(target);
-            }
-        }
-
-        Debug.Log($"战术分析: 前排目标{frontLineTargets.Count}个, 后排目标{backLineTargets.Count}个");
-
-        // 优先攻击前排，如果前排没有存活角色则攻击后排
-        if (frontLineTargets.Count > 0)
-        {
-            CharacterStats selectedTarget = frontLineTargets.OrderBy(t => t.currentHitPoints).First();
-            Debug.Log($"选择前排目标: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
-            return selectedTarget;
-        }
-        else
-        {
-            CharacterStats selectedTarget = backLineTargets.OrderBy(t => t.currentHitPoints).First();
-            Debug.Log($"前排无目标，选择后排: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
-            return selectedTarget;
-        }
+        return selectedTarget;
     }
 
     /// <summary>
