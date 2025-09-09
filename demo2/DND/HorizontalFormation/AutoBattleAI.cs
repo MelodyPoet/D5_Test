@@ -160,7 +160,7 @@ public class AutoBattleAI : MonoBehaviour
     }
 
     /// <summary>
-    /// 前进到下一个回��
+    /// 前进到下一个回合
     /// </summary>
     private void AdvanceToNextTurn()
     {
@@ -344,19 +344,29 @@ public class AutoBattleAI : MonoBehaviour
     /// </summary>
     private bool IsMeleeCharacter(CharacterStats character)
     {
-        // 获取角色的战斗位置组件
-        BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
-        if (positionComponent != null)
+        if (character == null)
         {
-            // 根据实际阵型位置判断职业类型
-            bool isInFrontLine = IsPositionInFrontLine(positionComponent.currentPosition);
-            Debug.Log($"职业判断: {character.GetDisplayName()} - 位置:{positionComponent.currentPosition} - 判定:{(isInFrontLine ? "近战" : "远程")}职业");
-            return isInFrontLine;
+            Debug.LogError("IsMeleeCharacter: 传入的character为null");
+            return false;
         }
 
-        // 如果没有位置组件，默认为近战（安全回退）
-        Debug.LogWarning($"{character.GetDisplayName()} 缺少BattlePositionComponent，默认判定为近战职业");
-        return true;
+        // 获取阵型管理器来判断角色职业类型
+        HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+
+        if (formationManager != null)
+        {
+            Debug.Log($"🔍 AutoBattleAI职业判断: {character.GetDisplayName()} 开始判断...");
+
+            // 使用阵型管理器的职业判断方法
+            bool isMelee = formationManager.IsMeleeClass(character);
+
+            Debug.Log($"🎯 AutoBattleAI职业判断结果: {character.GetDisplayName()} - 判定:{(isMelee ? "近战" : "远程")}职业");
+            return isMelee;
+        }
+
+        // 如果无法获取阵型管理器，输出错误信息
+        Debug.LogError($"❌ AutoBattleAI: 无法找到HorizontalBattleFormationManager，{character.GetDisplayName()} 默认判定为远程职业");
+        return false; // 改为默认远程，避免后排角色被误判为近战
     }
 
     /// <summary>
@@ -491,11 +501,22 @@ public class AutoBattleAI : MonoBehaviour
     }
 
     /// <summary>
-    /// 执行近战攻击
+    /// 执行近战攻击 - 仅供前排角色使用
     /// </summary>
     private void ExecuteMeleeAttack(CharacterStats attacker, CharacterStats target)
     {
         if (attacker == null || target == null) return;
+
+        // 获取阵型管理器来判断角色类型
+        HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+
+        if (formationManager != null && formationManager.IsRangedClass(attacker))
+        {
+            // 如果是后排角色，强制使用远程攻击，不移动
+            Debug.LogWarning($"{attacker.GetDisplayName()} 是后排角色，自动转换为远程攻击");
+            ExecuteRangedAttack(attacker, target);
+            return;
+        }
 
         Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起近战攻击");
 
@@ -607,38 +628,82 @@ public class AutoBattleAI : MonoBehaviour
     }
 
     /// <summary>
-    /// 执行远程攻击
+    /// 执行远程攻击 - 原地攻击，无移动
     /// </summary>
     private void ExecuteRangedAttack(CharacterStats attacker, CharacterStats target)
     {
         if (attacker == null || target == null) return;
 
-        Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起远��攻击");
+        Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起远程攻击");
 
-        // 播放攻击动画
+        // 原地远程攻击，不需要移动
+        StartCoroutine(PerformRangedAttackSequence(attacker, target));
+    }
+
+    /// <summary>
+    /// 执行远程攻击序列：原地攻击
+    /// </summary>
+    private IEnumerator PerformRangedAttackSequence(CharacterStats attacker, CharacterStats target)
+    {
         DND_CharacterAdapter adapter = attacker.GetComponent<DND_CharacterAdapter>();
+
         if (adapter != null)
         {
-            adapter.PlayAttackAnimation();
+            // 后排角色使用远程攻击动画（原地攻击）
+            adapter.PlayRangedAttack();
+            Debug.Log($"{attacker.GetDisplayName()} 执行远程攻击动画");
         }
 
+        // 等待攻击动画播放一段时间后计算伤害
+        yield return new WaitForSeconds(0.5f);
+
+        // 执行伤害计算
+        PerformDamageCalculation(attacker, target);
+
+        // 等待动画完成
+        yield return new WaitForSeconds(1.0f);
+
+        Debug.Log($"{attacker.GetDisplayName()} 远程攻击完成");
+    }
+
+    /// <summary>
+    /// 执行伤害计算（供远程攻击使用）
+    /// </summary>
+    private void PerformDamageCalculation(CharacterStats attacker, CharacterStats target)
+    {
         // 执行攻击检定和伤害计算
         bool isCriticalHit;
         int attackRoll;
         bool hitSuccess = HorizontalCombatRules.MakeAttackRoll(attacker, target, out isCriticalHit, out attackRoll);
+
         if (hitSuccess)
         {
             int damage = HorizontalCombatRules.CalculateDamage(attacker, isCriticalHit);
             HorizontalCombatRules.ApplyDamage(target, damage);
-            Debug.Log($"攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
+
+            // 播放目标受击动画
+            DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+            if (targetAdapter != null)
+            {
+                targetAdapter.PlayHitAnimation();
+            }
+
+            Debug.Log($"远程攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
+
+            // 检查目标是否死亡
+            if (target.currentHitPoints <= 0)
+            {
+                Debug.Log($"{target.GetDisplayName()} 死亡！");
+                if (targetAdapter != null)
+                {
+                    targetAdapter.PlayDeathAnimation();
+                }
+            }
         }
         else
         {
-            Debug.Log($"远程攻击未命中！");
+            Debug.Log($"远程攻击未命中！攻击检定:{attackRoll}");
         }
-
-        // 标记回合结束
-        MarkTurnComplete(attacker);
     }
 
     /// <summary>

@@ -133,8 +133,8 @@ AutoBattleAI.ExecuteAutoBattleTurn(playerCharacter) 完整流程:
 8. 区分近战和远程职业方式: 不通过配置的模板属性中描述的字符串来判断，而通过这个prefab在阵型什么位置来判断
    - 在前排位置生成：判断其为近战职业
    - 在后排位置生成：判断其为远程职业
-
-4. DND5E规则引擎
+9. 前排职业只能攻击敌方前排，不能攻击敌方后排；且攻击行为是走到对方面前近战攻击，攻击完后走回原位
+10. 后排职业可以攻击敌方前排和后排；攻击行为是原地远程攻击，不需要走到对方面前
 
 CharacterStats 属性系统:
 - 六大属性: Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma
@@ -153,14 +153,6 @@ HorizontalCombatRules 战斗规则:
 
 重要，需求清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
-
--当前功能已经实现，但是存在以下逻辑错误
-1.现在运行游戏时候主角和队友在开始几帧时间内没有播放走路动画，而是在飘移
-2.敌人前排怪物进场时候也没播放走路动画，而是直接飘移
-3.遇敌时候会有几帧错误的提前加载敌人后排prefab的情况
-4.敌人后排进场时加载的prefab会缩放值不对，初始的prefab缩放值是人为调整的，但是运行时加载的prefab缩放值是1，
-导致敌人后排prefab在进场时候会变大
-5.当前使用协程动画脚本逻辑，经常产生问题，是否可以改成使用DOTween或者unity自己的状态机配合timeline来实现动画
 
 集成点:
 - 扩展AutoBattleAI.ExecuteAutoBattleTurn()支持敌方角色

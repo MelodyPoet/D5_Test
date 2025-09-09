@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
+using DG.Tweening;
 
 public class DND_CharacterAdapter : MonoBehaviour {
     // 角色统计数据
@@ -33,6 +34,10 @@ public class DND_CharacterAdapter : MonoBehaviour {
     // 控制动画初始化的标志
     private bool isEnemyInEntrance = false;
 
+    // 事件驱动动画控制
+    private Vector3 originalPosition;
+    private bool isMovingForAttack = false;
+
     // 初始化
     private void Start() {
         // 获取角色统计数据
@@ -48,20 +53,76 @@ public class DND_CharacterAdapter : MonoBehaviour {
             skeletonAnimation = GetComponent<SkeletonAnimation>();
         }
 
-        // 简化初始化：直接播放待机动画，不使用复杂的协程
+        // 订阅Spine动画事件
+        if (skeletonAnimation != null) {
+            skeletonAnimation.AnimationState.Event += OnSpineAnimationEvent;
+            skeletonAnimation.AnimationState.Complete += OnAnimationComplete;
+        }
+
+        // 记录原始位置
+        originalPosition = transform.position;
+
+        // 简化初始化：玩家角色开始就播放走路动画（探索模式）
         if (characterStats != null && characterStats.battleSide == BattleSide.Player) {
-            // 玩家角色立即播放待机动画
-            PlayIdleAnimation();
+            PlayWalkAnimation();
         }
         // 敌人角色不播放任何动画，等待IdleGameManager控制
     }
 
-    /// <summary>
-    /// 手动初始化敌人动画（由IdleGameManager调用）
-    /// </summary>
-    public void InitializeEnemyAnimation() {
-        // 敌人初始化时不做任何动画，等待进场动画控制
-        Debug.Log($"{gameObject.name} 敌人动画初始化完成，等待进场动画");
+    private void OnDestroy() {
+        // 取消订阅事件
+        if (skeletonAnimation != null) {
+            skeletonAnimation.AnimationState.Event -= OnSpineAnimationEvent;
+            skeletonAnimation.AnimationState.Complete -= OnAnimationComplete;
+        }
+
+        // 停止所有DOTween动画
+        transform.DOKill();
+    }
+
+    // Spine动画事件处理
+    private void OnSpineAnimationEvent(Spine.TrackEntry trackEntry, Spine.Event e) {
+        if (e.Data.Name == "deal_damage") {
+            // 触发伤害计算事件
+            OnDealDamage();
+        }
+    }
+
+    // 动画完成事件处理
+    private void OnAnimationComplete(Spine.TrackEntry trackEntry) {
+        string animName = trackEntry.Animation.Name;
+
+        // 攻击动画完成后的处理
+        if (animName == animationMapping.attackAnimation) {
+            OnAttackAnimationComplete();
+        }
+        // 受击动画完成后返回待机
+        else if (animName == animationMapping.hitAnimation) {
+            if (characterStats != null && characterStats.currentHitPoints > 0) {
+                PlayIdleAnimation();
+            }
+        }
+        // 过渡动画完成后播放待机
+        else if (animName == animationMapping.moveToIdleAnimation) {
+            PlayIdleAnimation();
+        }
+    }
+
+    // 伤害触发事件（在攻击动画的关键帧触发）
+    private void OnDealDamage() {
+        // 这个方法会被AutoBattleAI订阅，用于精确的伤害计算时机
+        Debug.Log($"{gameObject.name} 在动画关键帧触发伤害计算");
+    }
+
+    // 攻击动画完成事件
+    private void OnAttackAnimationComplete() {
+        if (isMovingForAttack) {
+            // 如果是近战攻击，返回原位置
+            ReturnToOriginalPosition();
+        } else {
+            // 远程攻击直接返回待机
+            PlayIdleAnimation();
+        }
     }
 
     // 回合开始事件处理
@@ -94,13 +155,52 @@ public class DND_CharacterAdapter : MonoBehaviour {
         }
     }
 
-    // 播放攻击动画
+    // 播放攻击动画（根据职业类型选择攻击方式）
     public void PlayAttackAnimation() {
-        PlayAnimation(animationMapping.attackAnimation, false);
-        StartCoroutine(ReturnToIdle(skeletonAnimation.AnimationState.GetCurrent(0).Animation.Duration));
+        // 获取阵型管理器来判断职业类型
+        HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+
+        if (formationManager != null && characterStats != null) {
+            if (formationManager.IsMeleeClass(characterStats)) {
+                // 前排近战职业：原地播放攻击动画（目标会自动移动到攻击范围）
+                PlayAnimation(animationMapping.attackAnimation, false);
+            } else {
+                // 后排远程职业：原地远程攻击
+                PlayRangedAttack();
+            }
+        } else {
+            // 如果无法判断职业类型，默认使用原地攻击
+            PlayAnimation(animationMapping.attackAnimation, false);
+        }
     }
 
-    // 播放受击动画
+    // 播放近战攻击（带位移）- 仅供近战职业使用
+    public void PlayMeleeAttack(Vector3 targetPosition) {
+        isMovingForAttack = true;
+
+        // 使用DOTween移动到目标位置
+        transform.DOMove(targetPosition, 0.3f).OnComplete(() => {
+            // 到达位置后播放攻击动画
+            PlayAnimation(animationMapping.attackAnimation, false);
+        });
+    }
+
+    // 播放远程攻击（原地）- 供远程职业使用
+    public void PlayRangedAttack() {
+        isMovingForAttack = false;
+        PlayAnimation(animationMapping.attackAnimation, false);
+        // 不再使用协程，依赖AnimationState.Complete事件
+    }
+
+    // 返回原位置
+    private void ReturnToOriginalPosition() {
+        transform.DOMove(originalPosition, 0.3f).OnComplete(() => {
+            isMovingForAttack = false;
+            PlayIdleAnimation();
+        });
+    }
+
+    // 播放受击动画（移除协程依赖）
     public void PlayHitAnimation() {
         try {
             if (skeletonAnimation == null) {
@@ -167,19 +267,12 @@ public class DND_CharacterAdapter : MonoBehaviour {
 
                 // 设置混合时间
                 trackEntry.MixDuration = 0.1f;
-
-                // 使用正���的��间缩放
                 trackEntry.TimeScale = 1.0f;
 
                 // 记录当前动画
                 currentAnimation = hitAnimName;
 
-                // 获取动画持续时间
-                float duration = trackEntry.Animation.Duration;
-
-                // 使用协程在动画结束后返回空闲状态
-                // 增加一点额外时间，确保动画能够完全播放
-                StartCoroutine(ReturnToIdle(duration + 0.1f));
+                // 不再使用协程，依赖AnimationState.Complete事件
             }
             else {
                 Debug.LogError($"无法播放受击动画: skeletonAnimation={skeletonAnimation}, hitAnimName={hitAnimName}");
@@ -271,10 +364,10 @@ public class DND_CharacterAdapter : MonoBehaviour {
         }
     }
 
-    // 播放施法动画
+    // 播放施法动画（移除协程依赖）
     public void PlayCastAnimation() {
         PlayAnimation(animationMapping.castAnimation, false);
-        StartCoroutine(ReturnToIdle(skeletonAnimation.AnimationState.GetCurrent(0).Animation.Duration));
+        // 不再使用协程，依赖AnimationState.Complete事件
     }
 
     // 播放移动动画
@@ -287,11 +380,10 @@ public class DND_CharacterAdapter : MonoBehaviour {
         Debug.Log($"{gameObject.name} 开始播放走路动画: {animationMapping.walkAnimation}");
     }
 
-    // 停止行走动画并播放过渡动画
+    // 停止行走动画并播放过渡动画（移除协程依赖）
     public void StopWalkWithTransition() {
         // 检查角色是否已死亡
         if (characterStats != null && characterStats.currentHitPoints <= 0) {
-            // 如果角色已死亡，播放死���动画
             Debug.Log($"{gameObject.name} 已死亡，不播放过渡动画");
             PlayAnimation(animationMapping.deathAnimation, false);
         }
@@ -300,21 +392,16 @@ public class DND_CharacterAdapter : MonoBehaviour {
             if (skeletonAnimation != null && skeletonAnimation.Skeleton != null && skeletonAnimation.Skeleton.Data != null) {
                 Spine.Animation transitionAnim = skeletonAnimation.Skeleton.Data.FindAnimation(animationMapping.moveToIdleAnimation);
                 if (transitionAnim != null) {
-                    // 播放过渡动画
                     PlayAnimation(animationMapping.moveToIdleAnimation, false);
                     Debug.Log($"{gameObject.name} 播放移动到待机的过渡动画: {animationMapping.moveToIdleAnimation}");
-
-                    // 使用协程在过渡动画结束后播放待机动画
-                    StartCoroutine(ReturnToIdle(transitionAnim.Duration));
+                    // 不再使用协程，依赖AnimationState.Complete事件
                 }
                 else {
-                    // 如果过渡动画不存在，直���播放待机动画
                     Debug.LogWarning($"{gameObject.name} 过渡动画 {animationMapping.moveToIdleAnimation} 不存在，直接切换到待机动画");
                     PlayIdleAnimation();
                 }
             }
             else {
-                // 如果SkeletonAnimation组件有问题，直接播放待机动画
                 PlayIdleAnimation();
             }
         }
@@ -337,15 +424,5 @@ public class DND_CharacterAdapter : MonoBehaviour {
     /// </summary>
     public void PlaySpellAnimation() {
         PlayCastAnimation();
-    }
-
-    // 返回空闲状态的协程
-    private IEnumerator ReturnToIdle(float delay) {
-        yield return new WaitForSeconds(delay);
-
-        // 检查角色是否还活着
-        if (characterStats != null && characterStats.currentHitPoints > 0) {
-            PlayIdleAnimation();
-        }
     }
 }
