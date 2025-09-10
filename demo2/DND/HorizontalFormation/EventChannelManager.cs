@@ -25,7 +25,7 @@ namespace demo2.DND.HorizontalFormation
             if (damageEventChannel != null)
             {
                 // 设置HorizontalCombatRules的静态事件通道引用
-                HorizontalCombatRules.damageEventChannel = damageEventChannel;
+                HorizontalCombatRules.DamageEventChannel = damageEventChannel; // 修正字段名
                 Debug.Log("伤害事件通道已初始化");
             }
             else
@@ -37,7 +37,7 @@ namespace demo2.DND.HorizontalFormation
         private void OnDestroy()
         {
             // 清理静态引用
-            HorizontalCombatRules.damageEventChannel = null;
+            HorizontalCombatRules.DamageEventChannel = null; // 修正字段名
         }
     }
 }

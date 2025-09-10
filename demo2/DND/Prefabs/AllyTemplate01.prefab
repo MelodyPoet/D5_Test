@@ -223,7 +223,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   template: {fileID: 11400000, guid: a85a66d0e405a3649984eba84cdb51e1, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
-  characterName: "\u961F\u53CB"
+  characterName: "\u827E\u62C9"
   characterClass: 2
   characterLevel: 1
   battleSide: 0
@@ -258,5 +258,6 @@ MonoBehaviour:
     moveToIdleAnimation: m_to_i
     attackAnimation: Atk01
     hitAnimation: Dmg
-    deathAnimation: Down
+    deathAnimation: 
     castAnimation: Atk03
+    unconsciousAnimation: Down

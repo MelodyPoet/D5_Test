@@ -53,27 +53,93 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         private void InitializeIdleSystem()
         {
+            Debug.Log("=== 开始初始化挂机系统 ===");
+
+            // 自动查找组件引用（如果没有手动设置）
             if (formationManager == null)
             {
-                Debug.LogError("IdleGameManager: formationManager 引用未设置！请在Inspector中手动拖入HorizontalBattleFormationManager组件");
-                return;
+                formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+                if (formationManager == null)
+                {
+                    Debug.LogError("❌ IdleGameManager: 场景中没有找到 HorizontalBattleFormationManager 组件！");
+                    return;
+                }
+                else
+                {
+                    Debug.Log("✅ 自动找到 HorizontalBattleFormationManager 组件");
+                }
             }
 
             if (autoBattleAI == null)
             {
-                Debug.LogError("IdleGameManager: autoBattleAI 引用未设置！请在Inspector中手动拖入AutoBattleAI组件");
-                return;
+                autoBattleAI = FindObjectOfType<AutoBattleAI>();
+                if (autoBattleAI == null)
+                {
+                    Debug.LogError("❌ IdleGameManager: 场景中没有找到 AutoBattleAI 组件！");
+                    return;
+                }
+                else
+                {
+                    Debug.Log("✅ 自动找到 AutoBattleAI 组件");
+                }
             }
 
             nextEncounterTime = Time.time + encounterInterval;
 
             if (useFormationManager)
             {
+                Debug.Log("🎯 开始生成初始队伍...");
                 GenerateInitialTeams();
-                if (formationManager.GetAllAliveCharacters(BattleSide.Player).Count > 0)
+
+                // 添加延迟检查，确保角色生成完成
+                StartCoroutine(CheckTeamGenerationResult());
+            }
+            else
+            {
+                Debug.LogWarning("⚠️ useFormationManager 已禁用，跳过队伍生成");
+            }
+        }
+
+        /// <summary>
+        /// 检查队伍生成结果的协程
+        /// </summary>
+        private IEnumerator CheckTeamGenerationResult()
+        {
+            yield return new WaitForSeconds(0.5f); // 等待生成完成
+
+            var aliveCharacters = formationManager.GetAllAliveCharacters(BattleSide.Player);
+            if (aliveCharacters.Count > 0)
+            {
+                Debug.Log($"✅ 队伍生成成功！存活角色数量: {aliveCharacters.Count}");
+                foreach (var character in aliveCharacters)
                 {
-                    Debug.Log("队伍生成完成，启动探索模式...");
+                    Debug.Log($"   - {character.GetDisplayName()} (HP: {character.currentHitPoints}/{character.maxHitPoints})");
+                }
+                StartExploreMode();
+            }
+            else
+            {
+                Debug.LogError("❌ 队伍生成失败！没有找到任何存活的玩家角色");
+                Debug.LogError("请检查以下配置:");
+                Debug.LogError("1. HorizontalBattleFormationManager 的预制体字段是否已设置");
+                Debug.LogError("2. playerSpawnPoints 数组是否已正确配置（需要6个Transform）");
+                Debug.LogError("3. 预制体是否包含 CharacterStats 和 DND_CharacterAdapter 组件");
+
+                // 尝试重新生成一次
+                Debug.Log("🔄 尝试重新生成队伍...");
+                yield return new WaitForSeconds(1f);
+                GenerateInitialTeams();
+
+                yield return new WaitForSeconds(0.5f);
+                var retryResult = formationManager.GetAllAliveCharacters(BattleSide.Player);
+                if (retryResult.Count > 0)
+                {
+                    Debug.Log($"✅ 重试成功！存活角色数量: {retryResult.Count}");
                     StartExploreMode();
+                }
+                else
+                {
+                    Debug.LogError("❌ 重试失败！请检查配置或使用 FormationDebugger 进行诊断");
                 }
             }
         }

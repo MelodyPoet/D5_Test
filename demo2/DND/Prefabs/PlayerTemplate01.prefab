@@ -258,5 +258,6 @@ MonoBehaviour:
     moveToIdleAnimation: m_to_i
     attackAnimation: Atk01
     hitAnimation: Dmg
-    deathAnimation: Down
+    deathAnimation: 
     castAnimation: Atk03
+    unconsciousAnimation: Down

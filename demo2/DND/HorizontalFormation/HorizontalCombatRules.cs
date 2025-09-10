@@ -12,7 +12,7 @@ namespace demo2.DND.HorizontalFormation
         /// <summary>
         /// 伤害事件通道 - 用于解耦伤害处理
         /// </summary>
-        public static DamageEventChannel_SO damageEventChannel;
+        public static DamageEventChannel_SO DamageEventChannel; // 修正命名规范
 
         /// <summary>
         /// DND5E先攻检定 - 1d20 + 敏捷调整值
@@ -84,7 +84,7 @@ namespace demo2.DND.HorizontalFormation
             int attributeModifier = attacker.StrMod; // 默认使用力量
 
             // 熟练加值
-            int proficiencyBonus = GetProficiencyBonus(attacker.level);
+            int proficiencyBonus = GetProficiencyBonus(attacker.Level); // 修正为 Level（大写）
 
             // 最终攻击检定
             attackRoll = d20 + attributeModifier + proficiencyBonus;
@@ -132,8 +132,8 @@ namespace demo2.DND.HorizontalFormation
             Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 造成 {damage} 点伤害");
 
             // 通过事件通道发布伤害事件，而不是直接修改目标血量
-            if (damageEventChannel != null) {
-                damageEventChannel.RaiseEvent(target, attacker, damage);
+            if (DamageEventChannel != null) { // 使用修正后的字段名
+                DamageEventChannel.RaiseEvent(target, attacker, damage);
             } else {
                 Debug.LogError("伤害事件通道未设置！请在Inspector中拖入DamageEventChannel_SO资产");
             }

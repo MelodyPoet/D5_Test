@@ -61,6 +61,23 @@ IdleGameManager (挂机游戏主控制器)
 ├── ScrollLayer[] (背景滚动系统)
 └── CharacterStats[] (角色数据管理)
 
+核心功能逻辑(模块职责)
+HorizontalBattleFormationManager-管理玩家和敌人的阵型生成与布局
+AutoBattleAI-执行自动战斗决策和攻击行为
+ScrollLayer-实现多层次背景滚动效果
+CharacterStats-存储角色属性、技能和状态信息
+DND_CharacterAdapter-统一管理角色动画播放和状态切换
+BattlePositionComponent-标记角色在阵型中的位置（前排/后排）
+HorizontalCombatRules-封装DND5E战斗规则和计算逻辑
+HorizontalFormationTypes-定义阵型类型和位置映射
+EventChannelManager-管理全局事件通道用于解耦系统间通信
+DamageEventChannel-专门用于伤害事件的ScriptableObject事件通道
+IdleGameManager 使用状态机管理游戏流程
+InitiativeEntry-存储先攻检定结果和顺序
+UI_HealthBar-角色血条UI组件
+CharacterTemplate-存储角色和怪物的基础数据模板
+GameEnums-定义游戏中使用的枚举类型
+
 挂机游戏循环逻辑
 
 探索阶段:
@@ -148,9 +165,22 @@ HorizontalCombatRules 战斗规则:
 - 伤害计算: 武器伤害骰 + 属性调整值（部分后续扩展职业特殊说明）
 - 暴击机制: 攻击检定=20时触发暴击，伤害骰翻倍
 - 距离判断: 近战/远程攻击距离限制
+- 先攻检定: 1d20 + Dexterity调整值 + 熟练加值，决定回合顺序
+- 回合制流程: 按先攻顺序依次行动，每回合6秒
+- 状态效果: 简单的中毒、眩晕等状态效果框架（后续扩展）
+- 战斗结束条件: 一方全灭或逃跑
+- 战斗奖励: 经验值和金币（后续扩展）
+- 战斗日志: 记录每次攻击和伤害结果（后续扩展）
+- 怪物死亡：怪物血量扣到0以下，播放死亡动画并且执行消失流程
+- 角色死亡：角色血量扣到0以下，播放昏迷动画并且执行昏迷流程，昏迷状态下无法行动，执行3回合的体质豁免判断，3点失败则死亡，
+3点成功则恢复1点血量并且脱离昏迷状态，恢复行动能力,DC=10，队友可以用治疗法术直接恢复该角色；此时怪物也有可能攻击该角色，此时伤害扣除该
+角色的体质值，扣到0则判断为死亡
 
 ---使用ScriptableObject存储角色和怪物数据
 ---使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
+---由于场景中存在手动放置的角色预制体，因此禁止在代码中使用AddComponent动态添加组件，所有组件必须手动挂载
+---并且由于存在手动摆放的预制体，但是实际加载并且受到伤害的是动态生成的预制体，因此伤害事件的监听必须通过ScriptableObject事件通道
+来监听当前实际受到伤害的这个预制体，避免UI监听错误的预制体从而导致血条无实时更新状态
 
 重要，需求清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
