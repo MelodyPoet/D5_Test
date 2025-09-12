@@ -114,7 +114,8 @@ GameEnums-定义游戏中使用的枚举类型
 - 先攻系统 → 按DND5E规则进行先攻检定排序
 - 回合制 → 每回合6秒，严格按先攻顺序执行
 
----
+朝向一致性：
+spine素材因为朝向问题，所有角色（玩家/中立/敌人）预制体必须面向右侧，战斗时仅需要将敌人阵型镜像翻转即可
 
 当前实现状态总览
 
@@ -190,6 +191,15 @@ HorizontalCombatRules 战斗规则:
 ---并且由于存在手动摆放的预制体，但是实际加载并且受到伤害的是动态生成的预制体，因此伤害事件的监听必须通过ScriptableObject事件通道
 来监听当前实际受到伤害的这个预制体，避免UI监听错误的预制体从而导致血条无实时更新状态
 
+受击时候头上冒字的伤害显示系统以及血条受击扣血系统
+- 使用DamageEventChannel事件通道广播伤害事件
+- 伤害计算后调用DamageEventChannel.RaiseEvent(attacker, target, damageAmount, isCritical)
+- 角色预制体挂载UI_HealthBar组件监听事件
+- UI_HealthBar更新血条
+- DamageDisplayManager监听事件显示伤害数字
+- 只保留一套基于预制体的逻辑
+- 统一坐标转换方法，只使用标准的RectTransformUtility.ScreenPointToLocalPointInRectangle方法
+    
 重要，需求清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
 

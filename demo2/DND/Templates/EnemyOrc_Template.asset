@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a399c018af62444ab2899cab35feba92, type: 3}
   m_Name: EnemyOrc_Template
   m_EditorClassIdentifier: 
-  characterName: "\u9AB7\u9AC5\u6218\u58EB"
+  characterName: "\u673A\u5173\u5723\u9A91\u58EB"
   characterClass: 0
   level: 1
   defaultSide: 1

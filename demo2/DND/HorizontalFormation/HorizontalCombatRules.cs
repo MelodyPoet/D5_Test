@@ -169,9 +169,11 @@ namespace demo2.DND.HorizontalFormation
                 // 攻击命中，计算并应用伤害
                 int damage = CalculateDamage(attacker, isCriticalHit);
                 ApplyDamage(target, attacker, damage);
+                Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()} 命中！攻击骰: {attackRoll}");
             } else {
                 // 攻击失败，显示MISS
                 HandleAttackMiss(target, attacker);
+                Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()} 失败！攻击骰: {attackRoll}");
             }
         }
 

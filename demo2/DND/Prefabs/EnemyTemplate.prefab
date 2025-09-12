@@ -203,7 +203,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   template: {fileID: 11400000, guid: a5e44c5e12dffa841a5fa47b8a0f423e, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
-  characterName: "\u9AB7\u9AC5\u6218\u58EB"
+  characterName: "\u673A\u5173\u5723\u9A91\u58EB"
   characterClass: 0
   characterLevel: 1
   battleSide: 1
@@ -240,6 +240,7 @@ MonoBehaviour:
     hitAnimation: hit
     deathAnimation: dead
     castAnimation: cast
+    unconsciousAnimation: unconscious
 --- !u!1 &1302596216031906752
 GameObject:
   m_ObjectHideFlags: 0

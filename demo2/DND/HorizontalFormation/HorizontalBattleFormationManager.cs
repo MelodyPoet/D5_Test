@@ -175,6 +175,7 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// 实例化敌人角色（指定索引位置，带进场动画）
+        /// 统一朝向规范：所有预制体制作时都面向右侧，敌人在代码中翻转朝向
         /// </summary>
         private void InstantiateEnemyCharacterAtIndex(GameObject prefab, Transform spawnPoint, BattleSide battleSide, int index, float entranceDelay)
         {
@@ -223,59 +224,41 @@ namespace demo2.DND.HorizontalFormation
 
             Debug.Log($"敌人角色 {prefab.name} 位置组件设置: {positionComponent.currentPosition}");
 
-            // 获取动画适配器并设置敌人朝向
+            // 获取动画适配器
             DND_CharacterAdapter adapter = instance.GetComponent<DND_CharacterAdapter>();
             if (adapter != null)
             {
-                // 修复敌人朝向：敌人应该面向左侧（玩家方向）
-                SkeletonAnimation skeletonAnim = adapter.skeletonAnimation;
-                if (skeletonAnim != null && skeletonAnim.skeleton != null)
-                {
-                    skeletonAnim.skeleton.ScaleX = -Mathf.Abs(skeletonAnim.skeleton.ScaleX); // 使用ScaleX替代FlipX
-                    Debug.Log($"{prefab.name} 敌人朝向已设置为面向玩家");
-                }
-                else
-                {
-                    // 如果Spine组件还没初始化，延迟设置朝向
-                    StartCoroutine(SetEnemyDirectionDelayed(adapter));
-                }
-
-                // 立即播放走路动画
+                // 先播放走路动画，让Spine完成初始化
                 adapter.PlayWalkAnimation();
 
-                // 使用DOTween进场动画（解决飘移问题）
+                // 使用协程确保朝向设置在Spine完全初始化后执行
+                StartCoroutine(EnsureEnemyOrientation(instance, prefab.name, entranceDelay, spawnPoint.position));
+            }
+            else
+            {
+                // 没有适配器的情况：立即翻转朝向
+                Vector3 enemyScale = instance.transform.localScale;
+                // 统一翻转逻辑：直接翻转X轴，不管原始值是正是负
+                enemyScale.x = -enemyScale.x;
+                instance.transform.localScale = enemyScale;
+
+                Debug.LogWarning($"敌人 {prefab.name} 没有DND_CharacterAdapter组件，但朝向已正确设置");
+
+                // 没有适配器也要执行进场动画，并在完成后切换到待机状态
                 Sequence entranceSequence = DOTween.Sequence();
                 entranceSequence.AppendInterval(entranceDelay);
                 entranceSequence.Append(instance.transform.DOMove(spawnPoint.position, 1.0f));
+
+                // 进场动画完成后的回调（针对没有适配器的情况）
                 entranceSequence.OnComplete(() => {
-                    // 进场完成后播放过渡动画
-                    adapter.StopWalkWithTransition();
+                    Debug.LogWarning($"敌人 {prefab.name} 进场完成，但没有适配器无法播放待机动画");
                 });
             }
 
             // 添加到指定索引位置
             activeEnemyCharacters[index] = instance;
 
-            Debug.Log($"敌人角色 {prefab.name} 已生成在索引{index}并开始进场，缩放值: {instance.transform.localScale}，朝向: 面向玩家");
-        }
-
-        /// <summary>
-        /// 延迟设置敌人朝向（当Spine组件还未完全初始化时）
-        /// </summary>
-        private IEnumerator SetEnemyDirectionDelayed(DND_CharacterAdapter adapter)
-        {
-            // 等待几帧让Spine组件完全初始化
-            yield return new WaitForSeconds(0.1f);
-
-            if (adapter != null && adapter.skeletonAnimation != null && adapter.skeletonAnimation.skeleton != null)
-            {
-                adapter.skeletonAnimation.skeleton.ScaleX = -Mathf.Abs(adapter.skeletonAnimation.skeleton.ScaleX); // 使用ScaleX替代FlipX
-                Debug.Log($"{adapter.gameObject.name} 延迟设置敌人朝向完成");
-            }
-            else
-            {
-                Debug.LogWarning($"{adapter?.gameObject.name} 无法设置敌人朝向，Spine组件初始化失败");
-            }
+            Debug.Log($"敌人角色 {prefab.name} 已生成在索引{index}并开始进场，最终缩放值: {instance.transform.localScale}");
         }
 
         /// <summary>
@@ -722,6 +705,48 @@ namespace demo2.DND.HorizontalFormation
                 default:
                     Debug.LogError($"无效的敌人索引: {index}");
                     return HorizontalPosition.EnemyFrontCenter;
+            }
+        }
+
+        /// <summary>
+        /// 确保敌人朝向在Spine动画初始化后设置
+        /// 统一朝向规范：所有预制体制作时都面向右侧，敌人需要翻转X轴来面向左侧玩家
+        /// </summary>
+        private IEnumerator EnsureEnemyOrientation(GameObject enemy, string prefabName, float delay, Vector3 targetPosition)
+        {
+            // 等待一段时间，确保Spine动画初始化完成
+            yield return new WaitForSeconds(delay);
+
+            if (enemy != null)
+            {
+                // 统一翻转敌人朝向：所有预制体都面向右侧，敌人需要翻转X轴来面向左侧
+                Vector3 enemyScale = enemy.transform.localScale;
+                // 直接翻转X轴，不管原始值是正是负
+                enemyScale.x = -enemyScale.x;
+                enemy.transform.localScale = enemyScale;
+
+                Debug.Log($"{prefabName} 敌人朝向已翻转为面向玩家，缩放值: {enemy.transform.localScale}");
+
+                // 执行进场动画
+                Sequence entranceSequence = DOTween.Sequence();
+                entranceSequence.Append(enemy.transform.DOMove(targetPosition, 1.0f));
+
+                // 进场动画完成后，切换到待机动画
+                entranceSequence.OnComplete(() => {
+                    if (enemy != null)
+                    {
+                        DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                        if (adapter != null)
+                        {
+                            adapter.PlayIdleAnimation();
+                            Debug.Log($"{prefabName} 敌人进场完成，已切换到待机动画");
+                        }
+                    }
+                });
+            }
+            else
+            {
+                Debug.LogWarning($"敌人实例 {prefabName} 已被销毁，无法设置朝向或执行进场动画");
             }
         }
     }
