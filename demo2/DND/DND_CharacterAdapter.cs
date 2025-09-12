@@ -172,19 +172,45 @@ namespace demo2.DND
         public void PlayAttackAnimation()
         {
             // 获取阵型管理器来判断职业类型
-            HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+            // 注意：使用FindObjectsOfType避免类名冲突问题
+            var managers = FindObjectsOfType<MonoBehaviour>();
+            object formationManager = null;
+
+            // 查找HorizontalBattleFormationManager类型的对象
+            foreach (var manager in managers)
+            {
+                if (manager.GetType().Name == "HorizontalBattleFormationManager")
+                {
+                    formationManager = manager;
+                    break;
+                }
+            }
 
             if (formationManager != null && characterStats != null)
             {
-                if (formationManager.IsMeleeClass(characterStats))
+                // 使用反射调用IsMeleeClass方法 - 解决类名冲突问题
+                var managerType = formationManager.GetType();
+                var isMeleeMethod = managerType.GetMethod("IsMeleeClass");
+
+                if (isMeleeMethod != null)
                 {
-                    // 前排近战职业：原地播放攻击动画（目标会自动移动到攻击范围）
-                    PlayAnimation(animationMapping.attackAnimation, false);
+                    bool isMelee = (bool)isMeleeMethod.Invoke(formationManager, new object[] { characterStats });
+
+                    if (isMelee)
+                    {
+                        // 前排近战职业：原地播放攻击动画（目标会自动移动到攻击范围）
+                        PlayAnimation(animationMapping.attackAnimation, false);
+                    }
+                    else
+                    {
+                        // 后排远程职业：原地远程攻击
+                        PlayRangedAttack();
+                    }
                 }
                 else
                 {
-                    // 后排远程职业：原地远程攻击
-                    PlayRangedAttack();
+                    // 如果反射调用失败，默认使用原地攻击
+                    PlayAnimation(animationMapping.attackAnimation, false);
                 }
             }
             else

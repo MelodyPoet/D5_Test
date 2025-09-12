@@ -9,6 +9,7 @@ namespace demo2.DND.HorizontalFormation
     /// <summary>
     /// 横版战斗阵型管理器 - 负责阵型配置和位置管理
     /// 使用容器化配置简化预制体管理
+    /// 修复版本：解决敌人朝向时序问题
     /// </summary>
     public class HorizontalBattleFormationManager : MonoBehaviour {
         [Header("阵型容器配置")]
@@ -30,6 +31,15 @@ namespace demo2.DND.HorizontalFormation
         public Transform[] playerSpawnPoints = new Transform[6];
         [Tooltip("敌人阵型spawn点 - 严格按序：前排左/中/右，后排左/中/右")]
         public Transform[] enemySpawnPoints = new Transform[6];
+        [Tooltip("敌人生成点的父节点 - 用于整体移动控制")]
+        public Transform enemySpawnParent;
+
+        [Space(10)]
+        [Header("敌人进场配置")]
+        [Tooltip("敌人整体进场起始偏移距离（屏幕右侧）")]
+        public float enemyEntranceOffset = 8f;
+        [Tooltip("敌人整体进场动画时长")]
+        public float enemyEntranceDuration = 2f;
 
         [Space(15)]
         [Header("UI Prefab")]
@@ -84,7 +94,8 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 生成敌人阵型（带进场动画）
+        /// 生成敌人阵型（带整体进场动画）
+        /// 新方案：整个敌人生成点父节点从屏幕右侧远端整体移动进入，避免单个角色位置跳帧
         /// </summary>
         public void GenerateEnemyFormation()
         {
@@ -102,6 +113,12 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
+            if (enemySpawnParent == null)
+            {
+                Debug.LogError("敌人生成点父节点未配置！请在Inspector中设置enemySpawnParent");
+                return;
+            }
+
             // 确保列表有6个位置，即使某些预制体为null
             activeEnemyCharacters.Clear();
             for (int i = 0; i < 6; i++)
@@ -109,15 +126,61 @@ namespace demo2.DND.HorizontalFormation
                 activeEnemyCharacters.Add(null); // 先用null占位
             }
 
-            // 按阵型顺序生成角色，使用容器获取预制体，并设置不同的进场延迟
-            float[] entranceDelays = { 0f, 0.1f, 0.2f, 0.8f, 0.9f, 1.0f };
+            // 记录父节点的原始位置
+            Vector3 originalParentPosition = enemySpawnParent.position;
+
+            // 将整个敌人生成点父节点移动到屏幕右侧远端
+            enemySpawnParent.position = originalParentPosition + Vector3.right * enemyEntranceOffset;
+
+            // 在当前位置（已偏移的spawn点）生成所有敌人角色
             for (int i = 0; i < 6; i++)
             {
                 GameObject prefab = formationContainer.GetEnemyPrefab(i);
-                InstantiateEnemyCharacterAtIndex(prefab, enemySpawnPoints[i], BattleSide.Enemy, i, entranceDelays[i]);
+                InstantiateEnemyCharacterAtCurrentPosition(prefab, enemySpawnPoints[i], BattleSide.Enemy, i);
             }
 
-            Debug.Log($"敌人阵型生成完成，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
+            // 执行整体进场动画
+            StartCoroutine(ExecuteFormationEntranceAnimation(originalParentPosition));
+
+            Debug.Log($"敌人阵型生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
+        }
+
+        /// <summary>
+        /// 执行整个阵型的进场动画
+        /// </summary>
+        private IEnumerator ExecuteFormationEntranceAnimation(Vector3 targetParentPosition)
+        {
+            // 小延迟确保所有角色完成初始化
+            yield return new WaitForSeconds(0.1f);
+
+            // 整体移动父节点回到目标位置
+            Sequence formationEntranceSequence = DOTween.Sequence();
+            formationEntranceSequence.Append(enemySpawnParent.transform.DOMove(targetParentPosition, enemyEntranceDuration));
+
+            // 进场动画完成后的处理
+            formationEntranceSequence.OnComplete(() => {
+                // 切换所有敌人到待机动画
+                SetAllEnemyToIdleAnimation();
+                Debug.Log("敌人阵型整体进场完成，已切换到待机状态");
+            });
+        }
+
+        /// <summary>
+        /// 设置所有敌人切换到待机动画
+        /// </summary>
+        private void SetAllEnemyToIdleAnimation()
+        {
+            foreach (GameObject enemy in activeEnemyCharacters)
+            {
+                if (enemy != null)
+                {
+                    DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                    if (adapter != null)
+                    {
+                        adapter.PlayIdleAnimation();
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -174,10 +237,10 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 实例化敌人角色（指定索引位置，带进场动画）
-        /// 统一朝向规范：所有预制体制作时都面向右侧，敌人在代码中翻转朝向
+        /// 在当前位置实例化敌人角色（修复版本 - 解决朝向继承问题）
+        /// 关键修复：先生成敌人，设置正确朝向，再设置为spawn点的子物体
         /// </summary>
-        private void InstantiateEnemyCharacterAtIndex(GameObject prefab, Transform spawnPoint, BattleSide battleSide, int index, float entranceDelay)
+        private void InstantiateEnemyCharacterAtCurrentPosition(GameObject prefab, Transform spawnPoint, BattleSide battleSide, int index)
         {
             if (prefab == null || spawnPoint == null)
             {
@@ -188,13 +251,31 @@ namespace demo2.DND.HorizontalFormation
             // 记录预制体的原始缩放值
             Vector3 originalScale = prefab.transform.localScale;
 
-            // 计算进场起始位置（屏幕右侧外）
-            Vector3 entrancePosition = spawnPoint.position + Vector3.right * 5f;
+            // 🔥 关键修复：先在世界坐标系中生成，避免父子继承问题
+            GameObject instance = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
 
-            GameObject instance = Instantiate(prefab, entrancePosition, spawnPoint.rotation);
-
-            // 保持原始缩放值（解决敌人后排缩放问题）
+            // 保持原始缩放值
             instance.transform.localScale = originalScale;
+
+            // 🔥 新的朝向控制方法：使用Spine的ScaleX属性
+            SkeletonAnimation skeletonAnimation = instance.GetComponent<SkeletonAnimation>();
+            if (skeletonAnimation != null)
+            {
+                // 敌人面向左侧（面向玩家），设置ScaleX为负值
+                skeletonAnimation.skeleton.ScaleX = -Mathf.Abs(skeletonAnimation.skeleton.ScaleX);
+                Debug.Log($"敌人 {instance.name} 使用Spine ScaleX设置朝向：{skeletonAnimation.skeleton.ScaleX}");
+            }
+            else
+            {
+                // 如果没有SkeletonAnimation组件，回退到缩放方法
+                Debug.LogWarning($"敌人 {instance.name} 没有SkeletonAnimation组件，使用缩放方法设置朝向");
+                Vector3 enemyScale = instance.transform.localScale;
+                enemyScale.x = -Mathf.Abs(enemyScale.x);
+                instance.transform.localScale = enemyScale;
+            }
+
+            // 🔥 在朝向设置完成后，再设置父子关系
+            instance.transform.SetParent(spawnPoint, true); // worldPositionStays = true 保持世界位置
 
             // 配置角色阵营
             CharacterStats stats = instance.GetComponent<CharacterStats>();
@@ -224,41 +305,18 @@ namespace demo2.DND.HorizontalFormation
 
             Debug.Log($"敌人角色 {prefab.name} 位置组件设置: {positionComponent.currentPosition}");
 
-            // 获取动画适配器
+            // 获取动画适配器并播放走路动画（朝向已经正确设置）
             DND_CharacterAdapter adapter = instance.GetComponent<DND_CharacterAdapter>();
             if (adapter != null)
             {
-                // 先播放走路动画，让Spine完成初始化
+                // 播放走路动画，整体进场时保持走路状态
                 adapter.PlayWalkAnimation();
-
-                // 使用协程确保朝向设置在Spine完全初始化后执行
-                StartCoroutine(EnsureEnemyOrientation(instance, prefab.name, entranceDelay, spawnPoint.position));
-            }
-            else
-            {
-                // 没有适配器的情况：立即翻转朝向
-                Vector3 enemyScale = instance.transform.localScale;
-                // 统一翻转逻辑：直接翻转X轴，不管原始值是正是负
-                enemyScale.x = -enemyScale.x;
-                instance.transform.localScale = enemyScale;
-
-                Debug.LogWarning($"敌人 {prefab.name} 没有DND_CharacterAdapter组件，但朝向已正确设置");
-
-                // 没有适配器也要执行进场动画，并在完成后切换到待机状态
-                Sequence entranceSequence = DOTween.Sequence();
-                entranceSequence.AppendInterval(entranceDelay);
-                entranceSequence.Append(instance.transform.DOMove(spawnPoint.position, 1.0f));
-
-                // 进场动画完成后的回调（针对没有适配器的情况）
-                entranceSequence.OnComplete(() => {
-                    Debug.LogWarning($"敌人 {prefab.name} 进场完成，但没有适配器无法播放待机动画");
-                });
             }
 
             // 添加到指定索引位置
             activeEnemyCharacters[index] = instance;
 
-            Debug.Log($"敌人角色 {prefab.name} 已生成在索引{index}并开始进场，最终缩放值: {instance.transform.localScale}");
+            Debug.Log($"敌人角色 {prefab.name} 已生成在索引{index}，最终缩放值: {instance.transform.localScale}，父物体: {instance.transform.parent?.name}");
         }
 
         /// <summary>
@@ -369,6 +427,12 @@ namespace demo2.DND.HorizontalFormation
             activeEnemyCharacters.Clear();
             // 只清理敌人血条
             ClearEnemyHealthBars();
+
+            // 确保敌人生成点父节点回到原始位置，以防清理时父节点还在偏移位置
+            if (enemySpawnParent != null)
+            {
+                enemySpawnParent.DOKill(); // 停止父节点的动画
+            }
         }
 
         /// <summary>
@@ -397,15 +461,6 @@ namespace demo2.DND.HorizontalFormation
                     Destroy(child.gameObject);
                 }
             }
-        }
-
-        /// <summary>
-        /// 清理所有血条UI对象（保留用于完全重置）
-        /// </summary>
-        private void ClearHealthBars()
-        {
-            ClearPlayerHealthBars();
-            ClearEnemyHealthBars();
         }
 
         /// <summary>
@@ -487,14 +542,6 @@ namespace demo2.DND.HorizontalFormation
             {
                 Debug.LogWarning($"HealthBar Container for {characterStats.battleSide} is not set in HorizontalBattleFormationManager.");
             }
-        }
-
-        /// <summary>
-        /// 清理所有血条UI对象
-        /// </summary>
-        private void ClearAllHealthBars()
-        {
-            ClearHealthBars();
         }
 
         /// <summary>
@@ -705,48 +752,6 @@ namespace demo2.DND.HorizontalFormation
                 default:
                     Debug.LogError($"无效的敌人索引: {index}");
                     return HorizontalPosition.EnemyFrontCenter;
-            }
-        }
-
-        /// <summary>
-        /// 确保敌人朝向在Spine动画初始化后设置
-        /// 统一朝向规范：所有预制体制作时都面向右侧，敌人需要翻转X轴来面向左侧玩家
-        /// </summary>
-        private IEnumerator EnsureEnemyOrientation(GameObject enemy, string prefabName, float delay, Vector3 targetPosition)
-        {
-            // 等待一段时间，确保Spine动画初始化完成
-            yield return new WaitForSeconds(delay);
-
-            if (enemy != null)
-            {
-                // 统一翻转敌人朝向：所有预制体都面向右侧，敌人需要翻转X轴来面向左侧
-                Vector3 enemyScale = enemy.transform.localScale;
-                // 直接翻转X轴，不管原始值是正是负
-                enemyScale.x = -enemyScale.x;
-                enemy.transform.localScale = enemyScale;
-
-                Debug.Log($"{prefabName} 敌人朝向已翻转为面向玩家，缩放值: {enemy.transform.localScale}");
-
-                // 执行进场动画
-                Sequence entranceSequence = DOTween.Sequence();
-                entranceSequence.Append(enemy.transform.DOMove(targetPosition, 1.0f));
-
-                // 进场动画完成后，切换到待机动画
-                entranceSequence.OnComplete(() => {
-                    if (enemy != null)
-                    {
-                        DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
-                        if (adapter != null)
-                        {
-                            adapter.PlayIdleAnimation();
-                            Debug.Log($"{prefabName} 敌人进场完成，已切换到待机动画");
-                        }
-                    }
-                });
-            }
-            else
-            {
-                Debug.LogWarning($"敌人实例 {prefabName} 已被销毁，无法设置朝向或执行进场动画");
             }
         }
     }

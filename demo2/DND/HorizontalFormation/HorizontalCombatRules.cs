@@ -186,8 +186,9 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// 检查是否可以攻击目标（基于位置规则）
+        /// 注意：使用反射解决HorizontalBattleFormationManager类名冲突问题
         /// </summary>
-        public static bool CanAttackTarget(CharacterStats attacker, CharacterStats target, HorizontalBattleFormationManager formationManager) {
+        public static bool CanAttackTarget(CharacterStats attacker, CharacterStats target, object formationManager) {
             if (attacker == null || target == null || formationManager == null) return false;
 
             // 同阵营无法攻击
@@ -196,15 +197,26 @@ namespace demo2.DND.HorizontalFormation
             // 目标已死亡无法攻击
             if (target.currentHitPoints <= 0) return false;
 
-            // 近战角色只能攻击前排，前排全灭后可攻击后排
-            if (formationManager.IsMeleeClass(attacker)) {
-                var enemyFrontline = formationManager.GetFrontlineCharacters(target.battleSide);
+            // 使用反射调用方法 - 解决类名冲突问题
+            var managerType = formationManager.GetType();
+            var isMeleeMethod = managerType.GetMethod("IsMeleeClass");
 
-                // 如果前排还有存活角色，近战只能攻击前排
-                if (enemyFrontline.Count > 0) {
-                    return enemyFrontline.Contains(target);
+            if (isMeleeMethod != null) {
+                bool isMelee = (bool)isMeleeMethod.Invoke(formationManager, new object[] { attacker });
+
+                // 近战角色只能攻击前排，前排全灭后可攻击后排
+                if (isMelee) {
+                    var getFrontlineMethod = managerType.GetMethod("GetFrontlineCharacters");
+                    if (getFrontlineMethod != null) {
+                        var enemyFrontline = (List<CharacterStats>)getFrontlineMethod.Invoke(formationManager, new object[] { target.battleSide });
+
+                        // 如果前排还有存活角色，近战只能攻击前排
+                        if (enemyFrontline.Count > 0) {
+                            return enemyFrontline.Contains(target);
+                        }
+                        // 前排全灭，可以攻击后排
+                    }
                 }
-                // 前排全灭，可以攻击后排
             }
 
             // 远程角色可以攻击任意目标
@@ -213,8 +225,9 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// 获取角色的可攻击目标列表
+        /// 注意：使用反射解决HorizontalBattleFormationManager类名冲突问题
         /// </summary>
-        public static List<CharacterStats> GetValidTargets(CharacterStats attacker, HorizontalBattleFormationManager formationManager) {
+        public static List<CharacterStats> GetValidTargets(CharacterStats attacker, object formationManager) {
             List<CharacterStats> validTargets = new List<CharacterStats>();
 
             if (attacker == null || formationManager == null) return validTargets;
@@ -222,13 +235,18 @@ namespace demo2.DND.HorizontalFormation
             // 确定敌方阵营
             BattleSide enemySide = (attacker.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
 
-            // 获取所有敌方存活角色
-            List<CharacterStats> enemies = formationManager.GetAllAliveCharacters(enemySide);
+            // 使用反射调用方法 - 解决类名冲突问题
+            var managerType = formationManager.GetType();
+            var getAllAliveMethod = managerType.GetMethod("GetAllAliveCharacters");
 
-            // 筛选可攻击的目标
-            foreach (CharacterStats enemy in enemies) {
-                if (CanAttackTarget(attacker, enemy, formationManager)) {
-                    validTargets.Add(enemy);
+            if (getAllAliveMethod != null) {
+                var enemies = (List<CharacterStats>)getAllAliveMethod.Invoke(formationManager, new object[] { enemySide });
+
+                // 筛选可攻击的目标
+                foreach (CharacterStats enemy in enemies) {
+                    if (CanAttackTarget(attacker, enemy, formationManager)) {
+                        validTargets.Add(enemy);
+                    }
                 }
             }
 
@@ -237,8 +255,9 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// AI目标选择 - 优先攻击前排，前排全灭后攻击后排
+        /// 注意：使用反射解决HorizontalBattleFormationManager类名冲突问题
         /// </summary>
-        public static CharacterStats SelectBestTarget(CharacterStats attacker, HorizontalBattleFormationManager formationManager) {
+        public static CharacterStats SelectBestTarget(CharacterStats attacker, object formationManager) {
             List<CharacterStats> validTargets = GetValidTargets(attacker, formationManager);
 
             if (validTargets.Count == 0) return null;
@@ -246,13 +265,18 @@ namespace demo2.DND.HorizontalFormation
             // 确定敌方阵营
             BattleSide enemySide = (attacker.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
 
-            // 优先攻击前排
-            var frontlineTargets = formationManager.GetFrontlineCharacters(enemySide);
-            var availableFrontline = validTargets.Where(t => frontlineTargets.Contains(t)).ToList();
+            // 使用反射调用方法 - 解决类名冲突问题
+            var managerType = formationManager.GetType();
+            var getFrontlineMethod = managerType.GetMethod("GetFrontlineCharacters");
 
-            if (availableFrontline.Count > 0) {
-                // 从前排中选择血量最少的目标
-                return availableFrontline.OrderBy(t => t.currentHitPoints).First();
+            if (getFrontlineMethod != null) {
+                var frontlineTargets = (List<CharacterStats>)getFrontlineMethod.Invoke(formationManager, new object[] { enemySide });
+                var availableFrontline = validTargets.Where(t => frontlineTargets.Contains(t)).ToList();
+
+                if (availableFrontline.Count > 0) {
+                    // 从前排中选择血量最少的目标
+                    return availableFrontline.OrderBy(t => t.currentHitPoints).First();
+                }
             }
 
             // 前排无目标，攻击后排血量最少的
