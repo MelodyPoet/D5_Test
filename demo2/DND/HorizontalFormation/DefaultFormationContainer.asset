@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c967933e0755409c927fdd2907614e84, type: 3}
+  m_Name: DefaultFormationContainer
+  m_EditorClassIdentifier: 
+  configurationNotes: "\u7D22\u5F15\u5BF9\u5E94\u5173\u7CFB\uFF1A\n[0]\u524D\u6392\u5DE6\u7FFC
+    [1]\u524D\u6392\u4E2D\u950B [2]\u524D\u6392\u53F3\u7FFC\n[3]\u540E\u6392\u5DE6\u7FFC
+    [4]\u540E\u6392\u4E2D\u8DEF [5]\u540E\u6392\u53F3\u7FFC\nnull\u503C\u8868\u793A\u8BE5\u4F4D\u7F6E\u65E0\u89D2\u8272"
+  playerFormationPrefabs:
+  - {fileID: 0}
+  - {fileID: 7984810970041705236, guid: 68434df3ed361f441a0f418d9205a7ed, type: 3}
+  - {fileID: 0}
+  - {fileID: 7984810970041705236, guid: d1972121095c54b48999543f02e39513, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
+  enemyFormationPrefabs:
+  - {fileID: 0}
+  - {fileID: 1110104639557568765, guid: d36edcf2564a6f644960c617bea719d4, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 5992248824920210409, guid: bba1c48f3214dfd4e8860826e6fdac0d, type: 3}
+  - {fileID: 0}

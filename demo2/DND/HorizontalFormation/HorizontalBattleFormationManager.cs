@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
 using DG.Tweening;
@@ -8,47 +8,12 @@ namespace demo2.DND.HorizontalFormation
 {
     /// <summary>
     /// 横版战斗阵型管理器 - 负责阵型配置和位置管理
-    /// 提供清晰的中文标识阵型配置面板
+    /// 使用容器化配置简化预制体管理
     /// </summary>
     public class HorizontalBattleFormationManager : MonoBehaviour {
-        [Header("玩家阵型配置 (左侧)")]
-        [Space(5)]
-
-        [Header("前排")]
-        [Tooltip("玩家前排左翼角色预制体")]
-        public GameObject playerFrontLeft;
-        [Tooltip("玩家前排中锋角色预制体")]
-        public GameObject playerFrontCenter;
-        [Tooltip("玩家前排右翼角色预制体")]
-        public GameObject playerFrontRight;
-
-        [Header("后排")]
-        [Tooltip("玩家后排左翼角色预制体")]
-        public GameObject playerBackLeft;
-        [Tooltip("玩家后排中路角色预制体")]
-        public GameObject playerBackCenter;
-        [Tooltip("玩家后排右翼角色预制体")]
-        public GameObject playerBackRight;
-
-        [Space(15)]
-        [Header("敌人阵型配置 (右侧)")]
-        [Space(5)]
-
-        [Header("前排")]
-        [Tooltip("敌人前排左翼角色预制体")]
-        public GameObject enemyFrontLeft;
-        [Tooltip("敌人前排中锋角色预制体")]
-        public GameObject enemyFrontCenter;
-        [Tooltip("敌人前排右翼角色预制体")]
-        public GameObject enemyFrontRight;
-
-        [Header("后排")]
-        [Tooltip("敌人后排左翼角色预制体")]
-        public GameObject enemyBackLeft;
-        [Tooltip("敌人后排中路角色预制体")]
-        public GameObject enemyBackCenter;
-        [Tooltip("敌人后排右翼角色预制体")]
-        public GameObject enemyBackRight;
+        [Header("阵型容器配置")]
+        [Tooltip("阵型配置容器 - 统一管理所有预制体")]
+        [SerializeField] private FormationContainer formationContainer;
 
         [Space(15)]
         [Header("阵型参数设置")]
@@ -86,6 +51,12 @@ namespace demo2.DND.HorizontalFormation
         {
             ClearPlayerFormation();
 
+            if (formationContainer == null)
+            {
+                Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
+                return;
+            }
+
             if (playerSpawnPoints.Length < 6)
             {
                 Debug.LogError("玩家spawn点配置不足！需要6个位置点");
@@ -99,13 +70,12 @@ namespace demo2.DND.HorizontalFormation
                 activePlayerCharacters.Add(null); // 先用null占位
             }
 
-            // 按阵型顺序生成角色，保持索引对应关系
-            InstantiatePlayerCharacterAtIndex(playerFrontLeft, playerSpawnPoints[0], BattleSide.Player, 0);
-            InstantiatePlayerCharacterAtIndex(playerFrontCenter, playerSpawnPoints[1], BattleSide.Player, 1);
-            InstantiatePlayerCharacterAtIndex(playerFrontRight, playerSpawnPoints[2], BattleSide.Player, 2);
-            InstantiatePlayerCharacterAtIndex(playerBackLeft, playerSpawnPoints[3], BattleSide.Player, 3);
-            InstantiatePlayerCharacterAtIndex(playerBackCenter, playerSpawnPoints[4], BattleSide.Player, 4);
-            InstantiatePlayerCharacterAtIndex(playerBackRight, playerSpawnPoints[5], BattleSide.Player, 5);
+            // 按阵型顺序生成角色，使用容器获取预制体
+            for (int i = 0; i < 6; i++)
+            {
+                GameObject prefab = formationContainer.GetPlayerPrefab(i);
+                InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
+            }
 
             // 玩家角色立即播放走路动画（探索状态）
             SetPlayerFormationWalkingState();
@@ -120,6 +90,12 @@ namespace demo2.DND.HorizontalFormation
         {
             ClearEnemyFormation();
 
+            if (formationContainer == null)
+            {
+                Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
+                return;
+            }
+
             if (enemySpawnPoints.Length < 6)
             {
                 Debug.LogError("敌人spawn点配置不足！需要6个位置点");
@@ -133,13 +109,13 @@ namespace demo2.DND.HorizontalFormation
                 activeEnemyCharacters.Add(null); // 先用null占位
             }
 
-            // 按阵型顺序生成角色，保持索引对应关系
-            InstantiateEnemyCharacterAtIndex(enemyFrontLeft, enemySpawnPoints[0], BattleSide.Enemy, 0, 0f);
-            InstantiateEnemyCharacterAtIndex(enemyFrontCenter, enemySpawnPoints[1], BattleSide.Enemy, 1, 0.1f);
-            InstantiateEnemyCharacterAtIndex(enemyFrontRight, enemySpawnPoints[2], BattleSide.Enemy, 2, 0.2f);
-            InstantiateEnemyCharacterAtIndex(enemyBackLeft, enemySpawnPoints[3], BattleSide.Enemy, 3, 0.8f);
-            InstantiateEnemyCharacterAtIndex(enemyBackCenter, enemySpawnPoints[4], BattleSide.Enemy, 4, 0.9f);
-            InstantiateEnemyCharacterAtIndex(enemyBackRight, enemySpawnPoints[5], BattleSide.Enemy, 5, 1.0f);
+            // 按阵型顺序生成角色，使用容器获取预制体，并设置不同的进场延迟
+            float[] entranceDelays = { 0f, 0.1f, 0.2f, 0.8f, 0.9f, 1.0f };
+            for (int i = 0; i < 6; i++)
+            {
+                GameObject prefab = formationContainer.GetEnemyPrefab(i);
+                InstantiateEnemyCharacterAtIndex(prefab, enemySpawnPoints[i], BattleSide.Enemy, i, entranceDelays[i]);
+            }
 
             Debug.Log($"敌人阵型生成完成，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
         }
