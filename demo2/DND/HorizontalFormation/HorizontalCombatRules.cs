@@ -140,6 +140,42 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
+        /// 处理攻击失败 - 显示MISS
+        /// </summary>
+        public static void HandleAttackMiss(CharacterStats target, CharacterStats attacker) {
+            Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()} 失败 - MISS!");
+
+            // 使用统一的伤害显示管理器
+            if (DamageDisplayManager.Instance != null) {
+                DamageDisplayManager.Instance.ShowMiss(target.transform);
+            } else {
+                Debug.LogWarning("没有找到伤害显示管理器，无法显示MISS");
+            }
+        }
+
+        /// <summary>
+        /// 执行完整的攻击序列（包含命中判定和伤害计算）
+        /// </summary>
+        public static void PerformAttack(CharacterStats attacker, CharacterStats target) {
+            if (attacker == null || target == null) {
+                Debug.LogError("攻击者或目标为空！");
+                return;
+            }
+
+            // 进行攻击检定
+            bool hits = MakeAttackRoll(attacker, target, out bool isCriticalHit, out int attackRoll);
+
+            if (hits) {
+                // 攻击命中，计算并应用伤害
+                int damage = CalculateDamage(attacker, isCriticalHit);
+                ApplyDamage(target, attacker, damage);
+            } else {
+                // 攻击失败，显示MISS
+                HandleAttackMiss(target, attacker);
+            }
+        }
+
+        /// <summary>
         /// 获取基于等级的熟练加值
         /// </summary>
         public static int GetProficiencyBonus(int level) {

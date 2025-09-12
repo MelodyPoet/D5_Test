@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using demo2.DND; // 添加此引用以访问DND_CharacterAdapter
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -141,7 +142,8 @@ namespace demo2.DND.HorizontalFormation
 
             if (chosenAction != null)
             {
-                ExecuteBattleAction(character, chosenAction);
+                // 使用协程版本正确等待攻击完成
+                yield return StartCoroutine(ExecuteBattleActionCoroutine(character, chosenAction));
             }
 
             yield return new WaitForSeconds(decisionDelay);
@@ -263,7 +265,8 @@ namespace demo2.DND.HorizontalFormation
 
             if (chosenAction != null)
             {
-                ExecuteBattleAction(character, chosenAction);
+                // 使用协程版本正确等待攻击完成
+                yield return StartCoroutine(ExecuteBattleActionCoroutine(character, chosenAction));
             }
 
             yield return new WaitForSeconds(decisionDelay);
@@ -485,6 +488,35 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
+        /// 执行战斗行动（协程版本）
+        /// </summary>
+        private IEnumerator ExecuteBattleActionCoroutine(CharacterStats actor, BattleAction action)
+        {
+            if (action == null || actor == null) yield break;
+
+            Debug.Log($"执行行动: {actor.GetDisplayName()} -> {action.description}");
+
+            switch (action.type)
+            {
+                case BattleActionType.MeleeAttack:
+                    yield return StartCoroutine(PerformMeleeAttackSequence(actor, action.target));
+                    break;
+
+                case BattleActionType.RangedAttack:
+                    yield return StartCoroutine(PerformRangedAttackSequence(actor, action.target));
+                    break;
+
+                case BattleActionType.Defend:
+                    ExecuteDefend(actor);
+                    break;
+
+                default:
+                    Debug.LogWarning($"未知的战斗行动类型: {action.type}");
+                    break;
+            }
+        }
+
+        /// <summary>
         /// 执行战斗行动
         /// </summary>
         private void ExecuteBattleAction(CharacterStats actor, BattleAction action)
@@ -592,20 +624,8 @@ namespace demo2.DND.HorizontalFormation
             // 等待攻击动画播放一段时间
             yield return new WaitForSeconds(0.5f);
 
-            // 执行攻击检定和伤害计算
-            bool isCriticalHit;
-            int attackRoll;
-            bool hitSuccess = HorizontalCombatRules.MakeAttackRoll(attacker, target, out isCriticalHit, out attackRoll);
-            if (hitSuccess)
-            {
-                int damage = HorizontalCombatRules.CalculateDamage(attacker, isCriticalHit);
-                HorizontalCombatRules.ApplyDamage(target, attacker, damage); // 添加攻击者参数
-                Debug.Log($"攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
-            }
-            else
-            {
-                Debug.Log($"攻击未命中！");
-            }
+            // 使用统一的战斗系统执行攻击检定和伤害计算
+            HorizontalCombatRules.PerformAttack(attacker, target);
 
             // 等待攻击动画完成
             yield return new WaitForSeconds(0.5f);
@@ -677,6 +697,9 @@ namespace demo2.DND.HorizontalFormation
             yield return new WaitForSeconds(1.0f);
 
             Debug.Log($"{attacker.GetDisplayName()} 远程攻击完成");
+
+            // 标记回合结束
+            MarkTurnComplete(attacker);
         }
 
         /// <summary>
@@ -716,6 +739,12 @@ namespace demo2.DND.HorizontalFormation
             else
             {
                 Debug.Log($"远程攻击未命中！攻击检定:{attackRoll}");
+
+                // 显示MISS效果
+                if (target != null)
+                {
+                    target.ShowMiss();
+                }
             }
         }
 

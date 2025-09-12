@@ -704,6 +704,58 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &651159376
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 651159378}
+  - component: {fileID: 651159377}
+  m_Layer: 0
+  m_Name: DamageDisplayManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &651159377
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 651159376}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f75f500302c94cc2a674db7f8bb52353, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  damageNumberPrefab: {fileID: 3627337939812853302, guid: 962f4bc2fd1425440bce62b9d09a0228, type: 3}
+  missPrefab: {fileID: 3627337939812853302, guid: f2e02bd81f2cde54c9975b71f2619d46, type: 3}
+  uiCanvas: {fileID: 1641010537}
+  headOffset: {x: 0, y: 2, z: 0}
+  randomOffset: {x: 0.5, y: 0.3}
+  floatHeight: 50
+  animationDuration: 1.5
+  fadeOutDuration: 0.5
+--- !u!4 &651159378
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 651159376}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 16013.8545, y: 24881.848, z: -14.315381}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &737976940
 GameObject:
   m_ObjectHideFlags: 0
@@ -1534,3 +1586,4 @@ SceneRoots:
   - {fileID: 746661146}
   - {fileID: 1641010538}
   - {fileID: 253267444}
+  - {fileID: 651159378}

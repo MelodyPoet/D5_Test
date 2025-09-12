@@ -121,6 +121,12 @@ namespace demo2.DND
 
             Debug.Log($"{GetDisplayName()} 受到 {damage} 点伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
+            // 播放受击动画（关键修复）
+            PlayHitAnimation();
+
+            // 显示伤害数字
+            ShowDamageNumber(damage);
+
             // 检查是否死亡
             if (currentHitPoints <= 0) {
                 HandleDeath();
@@ -168,6 +174,17 @@ namespace demo2.DND
 
             // 启动尸体消失逻辑
             StartCoroutine(HandleCorpseDisappearance());
+        }
+
+        /// <summary>
+        /// 播放受击动画
+        /// </summary>
+        private void PlayHitAnimation() {
+            // 获取角色动画适配器组件
+            DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
+            if (characterAdapter != null) {
+                characterAdapter.PlayHitAnimation();
+            }
         }
 
         /// <summary>
@@ -410,7 +427,11 @@ namespace demo2.DND
         /// </summary>
         public void HealDamage(int amount) {
             currentHitPoints = Mathf.Min(maxHitPoints, currentHitPoints + amount);
+
             Debug.Log($"{GetDisplayName()} 恢复 {amount} 点生命值! 当前生命值: {currentHitPoints}/{maxHitPoints}");
+
+            // 显示治疗数字
+            ShowHealNumber(amount);
 
             // 如果恢复意识
             if (currentHitPoints > 0 && HasStatusEffect(StatusEffectType.Unconscious)) {
@@ -476,21 +497,42 @@ namespace demo2.DND
         private void PlayReviveAnimation() {
             DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
             if (characterAdapter != null) {
-                characterAdapter.PlayReviveAnimation();
+                characterAdapter.PlayIdleAnimation();
             }
         }
 
         /// <summary>
-        /// 治疗法术 - 可以被其他角色调用来治疗昏迷队友
+        /// 显示伤害数字
         /// </summary>
-        /// <param name="healer">施法者</param>
-        /// <param name="healAmount">治疗量</param>
-        public void ReceiveHealing(CharacterStats healer, int healAmount) {
-            if (healer != null) {
-                Debug.Log($"{healer.GetDisplayName()} 对 {GetDisplayName()} 施展治疗法术");
+        /// <param name="damage">伤害值</param>
+        /// <param name="isDamage">是否为伤害（true）还是治疗（false）</param>
+        private void ShowDamageNumber(int damage, bool isDamage = true) {
+            // 使用统一的伤害显示管理器
+            if (DamageDisplayManager.Instance != null) {
+                DamageDisplayManager.Instance.ShowDamageNumber(transform, damage, isDamage);
+            } else {
+                Debug.LogWarning($"没有找到伤害显示管理器，无法显示伤害数字");
             }
+        }
 
-            HealDamage(healAmount);
+        /// <summary>
+        /// 显示MISS
+        /// </summary>
+        public void ShowMiss() {
+            // 使用统一的伤害显示管理器
+            if (DamageDisplayManager.Instance != null) {
+                DamageDisplayManager.Instance.ShowMiss(transform);
+            } else {
+                Debug.LogWarning($"没有找到伤害显示管理器，无法显示MISS");
+            }
+        }
+
+        /// <summary>
+        /// 显示治疗数字
+        /// </summary>
+        /// <param name="healAmount">治疗量</param>
+        private void ShowHealNumber(int healAmount) {
+            ShowDamageNumber(healAmount, false); // false表示治疗
         }
 
         /// <summary>
