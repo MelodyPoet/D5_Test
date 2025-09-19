@@ -9,7 +9,7 @@ namespace demo2.DND.HorizontalFormation
     /// <summary>
     /// 横版战斗阵型管理器 - 负责阵型配置和位置管理
     /// 使用容器化配置简化预制体管理
-    /// 修复版本：解决敌人朝向时序问题
+    /// 修复版本：解决敌人朝向时序问题和重复方法定义
     /// </summary>
     public class HorizontalBattleFormationManager : MonoBehaviour {
         [Header("阵型容器配置")]
@@ -95,7 +95,7 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// 生成敌人阵型（带整体进场动画）
-        /// 新方案：整个敌人生成点父节点从屏幕右侧远端整体移动进入，避免单个角色位置跳帧
+        /// 使用DOTween事件驱动，摒弃协程
         /// </summary>
         public void GenerateEnemyFormation()
         {
@@ -139,30 +139,54 @@ namespace demo2.DND.HorizontalFormation
                 InstantiateEnemyCharacterAtCurrentPosition(prefab, enemySpawnPoints[i], BattleSide.Enemy, i);
             }
 
-            // 执行整体进场动画
-            StartCoroutine(ExecuteFormationEntranceAnimation(originalParentPosition));
+            // 使用DOTween执行整体进场动画
+            ExecuteFormationEntranceAnimationDOTween(originalParentPosition);
 
             Debug.Log($"敌人阵型生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
         }
 
         /// <summary>
-        /// 执行整个阵型的进场动画
+        /// 执行整个阵型的进场动画 - DOTween版本
         /// </summary>
-        private IEnumerator ExecuteFormationEntranceAnimation(Vector3 targetParentPosition)
+        private void ExecuteFormationEntranceAnimationDOTween(Vector3 targetParentPosition)
         {
+            // 创建DOTween序列
+            Sequence entranceSequence = DOTween.Sequence();
+
             // 小延迟确保所有角色完成初始化
-            yield return new WaitForSeconds(0.1f);
+            entranceSequence.AppendInterval(0.1f);
 
             // 整体移动父节点回到目标位置
-            Sequence formationEntranceSequence = DOTween.Sequence();
-            formationEntranceSequence.Append(enemySpawnParent.transform.DOMove(targetParentPosition, enemyEntranceDuration));
+            entranceSequence.Append(enemySpawnParent.DOMove(targetParentPosition, enemyEntranceDuration));
 
             // 进场动画完成后的处理
-            formationEntranceSequence.OnComplete(() => {
+            entranceSequence.OnComplete(() => {
                 // 切换所有敌人到待机动画
                 SetAllEnemyToIdleAnimation();
-                Debug.Log("敌人阵型整体进场完成，已切换到待机状态");
+
+                // 关键修复：更新所有敌人的原始位置
+                UpdateAllEnemyOriginalPositions();
+
+                Debug.Log("敌人阵型整体进场完成，已切换到待机状态并更新原始位置");
             });
+        }
+
+        /// <summary>
+        /// 更新所有敌人的原始位置 - 修复战斗移动问题
+        /// </summary>
+        private void UpdateAllEnemyOriginalPositions()
+        {
+            foreach (GameObject enemy in activeEnemyCharacters)
+            {
+                if (enemy != null)
+                {
+                    DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                    if (adapter != null)
+                    {
+                        adapter.UpdateOriginalPosition();
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -339,60 +363,149 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 设置阵型动画状态（战斗模式）
+        /// 检查角色是否在前排
+        /// 根据技术规格：SpawnPoints[0]~[2]为前排近战，SpawnPoints[3]~[5]为后排远程
+        /// </summary>
+        public bool IsCharacterInFrontRow(CharacterStats character)
+        {
+            if (character == null) return false;
+
+            // 优先通过BattlePositionComponent组件判断
+            BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
+            if (positionComponent != null)
+            {
+                return positionComponent.rowPosition == RowPosition.Front;
+            }
+
+            // 基于SpawnPoints位置索引的正确判断逻辑
+            int spawnIndex = GetCharacterSpawnIndex(character);
+            if (spawnIndex >= 0)
+            {
+                // SpawnPoints[0]~[2]：前排近战，SpawnPoints[3]~[5]：后排远程
+                bool isFrontRow = spawnIndex <= 2;
+                Debug.Log($"[DEBUG] {character.GetDisplayName()} SpawnIndex: {spawnIndex}, 判断为: {(isFrontRow ? "前排近战" : "后排远程")}");
+                return isFrontRow;
+            }
+
+            // 如果找不到SpawnIndex，使用默认前排（近战）
+            Debug.LogWarning($"[DEBUG] {character.GetDisplayName()} 找不到SpawnIndex，默认判断为前排近战");
+            return true;
+        }
+
+        /// <summary>
+        /// 获取角色在SpawnPoints数组中的索引位置
+        /// </summary>
+        private int GetCharacterSpawnIndex(CharacterStats character)
+        {
+            if (character == null) return -1;
+
+            // 根据角色阵营选择对应的spawn点数组和角色列表
+            if (character.battleSide == BattleSide.Player)
+            {
+                // 在玩家角色列表中查找
+                for (int i = 0; i < activePlayerCharacters.Count && i < playerSpawnPoints.Length; i++)
+                {
+                    if (activePlayerCharacters[i] != null)
+                    {
+                        CharacterStats stats = activePlayerCharacters[i].GetComponent<CharacterStats>();
+                        if (stats == character)
+                        {
+                            return i; // 返回在SpawnPoints数组中的索引
+                        }
+                    }
+                }
+            }
+            else if (character.battleSide == BattleSide.Enemy)
+            {
+                // 在敌人角色列表中查找
+                for (int i = 0; i < activeEnemyCharacters.Count && i < enemySpawnPoints.Length; i++)
+                {
+                    if (activeEnemyCharacters[i] != null)
+                    {
+                        CharacterStats stats = activeEnemyCharacters[i].GetComponent<CharacterStats>();
+                        if (stats == character)
+                        {
+                            return i; // 返回在SpawnPoints数组中的索引
+                        }
+                    }
+                }
+            }
+
+            return -1; // 未找到
+        }
+
+        /// <summary>
+        /// 获取指定阵营的所有存活角色
+        /// </summary>
+        public List<CharacterStats> GetAllAliveCharacters(BattleSide side)
+        {
+            List<CharacterStats> aliveCharacters = new List<CharacterStats>();
+
+            List<GameObject> characterList = (side == BattleSide.Player) ?
+                activePlayerCharacters : activeEnemyCharacters;
+
+            foreach (GameObject characterObj in characterList)
+            {
+                if (characterObj != null)
+                {
+                    CharacterStats stats = characterObj.GetComponent<CharacterStats>();
+                    if (stats != null && stats.currentHitPoints > 0)
+                    {
+                        aliveCharacters.Add(stats);
+                    }
+                }
+            }
+
+            return aliveCharacters;
+        }
+
+        /// <summary>
+        /// 检查指定阵营是否还有存活角色
+        /// </summary>
+        public bool HasAliveCharacters(BattleSide side)
+        {
+            return GetAllAliveCharacters(side).Count > 0;
+        }
+
+        /// <summary>
+        /// 设置阵型为战斗状态
         /// </summary>
         public void SetFormationBattleState()
         {
-            // 玩家队伍切换到待机状态
-            foreach (GameObject character in activePlayerCharacters)
-            {
-                if (character != null)
-                {
-                    DND_CharacterAdapter adapter = character.GetComponent<DND_CharacterAdapter>();
-                    if (adapter != null)
-                    {
-                        adapter.StopWalkWithTransition();
-                    }
-                }
-            }
+            // 停止所有角色的行走动画
+            StopAllCharacterWalkAnimations();
 
-            // 敌人队伍也切换到待机状态（如果已经进场完毕）
-            foreach (GameObject character in activeEnemyCharacters)
-            {
-                if (character != null)
-                {
-                    DND_CharacterAdapter adapter = character.GetComponent<DND_CharacterAdapter>();
-                    if (adapter != null && adapter.CurrentAnimation != "walk")
-                    {
-                        adapter.PlayIdleAnimation();
-                    }
-                }
-            }
-
-            Debug.Log("双方队伍进入战斗状态（待机动画）");
+            Debug.Log("阵型已切换到战斗状态");
         }
 
         /// <summary>
-        /// 恢复玩家队伍为探索状态
+        /// 停止所有角色的行走动画
         /// </summary>
-        public void RestorePlayerExplorationState()
+        private void StopAllCharacterWalkAnimations()
         {
-            foreach (GameObject character in activePlayerCharacters)
+            // 停止玩家角色行走动画
+            foreach (GameObject player in activePlayerCharacters)
             {
-                if (character != null)
+                if (player != null)
                 {
-                    DND_CharacterAdapter adapter = character.GetComponent<DND_CharacterAdapter>();
-                    if (adapter != null)
-                    {
-                        adapter.PlayWalkAnimation();
-                    }
+                    DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                    adapter?.StopWalkWithTransition();
                 }
             }
-            Debug.Log("玩家队伍恢复探索状态（走路动画）");
+
+            // 停止敌人角色行走动画
+            foreach (GameObject enemy in activeEnemyCharacters)
+            {
+                if (enemy != null)
+                {
+                    DND_CharacterAdapter adapter = enemy.GetComponent<DND_CharacterAdapter>();
+                    adapter?.StopWalkWithTransition();
+                }
+            }
         }
 
         /// <summary>
-        /// 清空玩家阵型
+        /// 清理玩家阵型
         /// </summary>
         public void ClearPlayerFormation()
         {
@@ -411,28 +524,47 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 清空敌人阵型
+        /// 清理敌人阵型
         /// </summary>
         public void ClearEnemyFormation()
         {
-            foreach (GameObject character in activeEnemyCharacters)
+            foreach (GameObject enemy in activeEnemyCharacters)
             {
-                if (character != null)
+                if (enemy != null)
                 {
-                    // 停止DOTween动画
-                    character.transform.DOKill();
-                    DestroyImmediate(character);
+                    Destroy(enemy);
                 }
             }
             activeEnemyCharacters.Clear();
-            // 只清理敌人血条
+
+            // 清理敌人血条
             ClearEnemyHealthBars();
+
+            Debug.Log("敌人阵型已清理");
 
             // 确保敌人生成点父节点回到原始位置，以防清理时父节点还在偏移位置
             if (enemySpawnParent != null)
             {
                 enemySpawnParent.DOKill(); // 停止父节点的动画
             }
+        }
+
+        /// <summary>
+        /// 恢复玩家探索状态
+        /// </summary>
+        public void RestorePlayerExplorationState()
+        {
+            // 恢复玩家角色行走动画
+            foreach (GameObject player in activePlayerCharacters)
+            {
+                if (player != null)
+                {
+                    DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
+                    adapter?.PlayWalkAnimation();
+                }
+            }
+
+            Debug.Log("玩家阵型已恢复探索状态");
         }
 
         /// <summary>
@@ -590,37 +722,6 @@ namespace demo2.DND.HorizontalFormation
             }
 
             return backline;
-        }
-
-        /// <summary>
-        /// 获取指定阵营的所有存活角色
-        /// </summary>
-        public List<CharacterStats> GetAllAliveCharacters(BattleSide battleSide)
-        {
-            List<CharacterStats> aliveCharacters = new List<CharacterStats>();
-            List<GameObject> targetList = (battleSide == BattleSide.Player) ? activePlayerCharacters : activeEnemyCharacters;
-
-            foreach (GameObject character in targetList)
-            {
-                if (character != null)
-                {
-                    CharacterStats stats = character.GetComponent<CharacterStats>();
-                    if (stats != null && stats.currentHitPoints > 0)
-                    {
-                        aliveCharacters.Add(stats);
-                    }
-                }
-            }
-
-            return aliveCharacters;
-        }
-
-        /// <summary>
-        /// 检查指定阵营是否还有存活角色
-        /// </summary>
-        public bool HasAliveCharacters(BattleSide battleSide)
-        {
-            return GetAllAliveCharacters(battleSide).Count > 0;
         }
 
         /// <summary>

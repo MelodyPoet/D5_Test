@@ -1,43 +1,38 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
-using System.Collections;
 
 namespace demo2.DND.HorizontalFormation
 {
     /// <summary>
-    /// 伤害显示管理器 - 统一管理所有角色的伤害数字显示
-    /// 直接使用UI预制体，无需额外组件依赖
+    /// 伤害数字显示管理器 - 使用DOTween替代协程
+    /// 单例模式，统一管理所有伤害数字的显示
     /// </summary>
     public class DamageDisplayManager : MonoBehaviour
     {
         [Header("预制体配置")]
-        [Tooltip("伤害数字UI预制体 - 应该包含Text组件")]
-        [SerializeField] private GameObject damageNumberPrefab;
+        [Tooltip("伤害数字预制体")]
+        public GameObject damageNumberPrefab;
+        [Tooltip("MISS显示预制体")]
+        public GameObject missPrefab;
 
-        [Tooltip("Miss显示UI预制体 - 应该包含Text组件")]
-        [SerializeField] private GameObject missPrefab;
-
-        [Header("显示设置")]
-        [Tooltip("UI Canvas")]
-        [SerializeField] private Canvas uiCanvas;
-
-        [Tooltip("角色头部偏移量")]
-        [SerializeField] private Vector3 headOffset = new Vector3(0, 2f, 0);
-
-        [Tooltip("随机偏移范围")]
-        [SerializeField] private Vector2 randomOffset = new Vector2(0.5f, 0.3f);
+        [Header("UI设置")]
+        [Tooltip("UI画布 - 伤害数字显示的画布")]
+        public Canvas uiCanvas;
+        [Tooltip("头部偏移 - 伤害数字相对于角色的位置偏移")]
+        public Vector3 headOffset = new Vector3(0, 2f, 0);
 
         [Header("动画设置")]
-        [Tooltip("向上浮动距离")]
-        [SerializeField] private float floatHeight = 50f;
+        [Tooltip("伤害数字显示时长")]
+        public float displayDuration = 2f;
+        [Tooltip("向上移动距离")]
+        public float moveUpDistance = 100f;
+        [Tooltip("淡出开始时间（相对于总时长的百分比）")]
+        [Range(0f, 1f)] public float fadeStartPercent = 0.5f;
 
-        [Tooltip("动画总时长")]
-        [SerializeField] private float animationDuration = 1.5f;
-
-        [Tooltip("淡出时长")]
-        [SerializeField] private float fadeOutDuration = 0.5f;
-
+        // 单例模式
         private static DamageDisplayManager instance;
         public static DamageDisplayManager Instance
         {
@@ -56,33 +51,31 @@ namespace demo2.DND.HorizontalFormation
             if (instance == null)
             {
                 instance = this;
-                DontDestroyOnLoad(gameObject);
             }
             else if (instance != this)
             {
                 Destroy(gameObject);
+                return;
+            }
+
+            // 初始化检查
+            if (damageNumberPrefab == null || uiCanvas == null)
+            {
+                Debug.LogWarning("DamageDisplayManager: 缺少必要的组件引用");
             }
         }
 
         /// <summary>
         /// 显示伤害数字
         /// </summary>
-        /// <param name="character">角色Transform</param>
-        /// <param name="damage">伤害值</param>
-        /// <param name="isDamage">是否为伤害（true）还是治疗（false）</param>
         public void ShowDamageNumber(Transform character, int damage, bool isDamage = true)
         {
-            if (character == null || damageNumberPrefab == null || uiCanvas == null)
-            {
-                Debug.LogWarning("DamageDisplayManager: 缺少必要的组件引用");
-                return;
-            }
+            if (character == null || damage < 0) return;
 
-            // 创建伤害显示UI
             GameObject damageObj = CreateDamageUI(character, damageNumberPrefab);
             if (damageObj == null) return;
 
-            // 配置文本内容和颜色
+            // 配置伤害文本
             Text textComponent = damageObj.GetComponentInChildren<Text>();
             if (textComponent != null)
             {
@@ -96,14 +89,13 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            // 播放动画
-            StartCoroutine(PlayDamageAnimation(damageObj, textComponent));
+            // 使用DOTween播放动画
+            PlayDamageAnimationDOTween(damageObj, textComponent);
         }
 
         /// <summary>
         /// 显示MISS
         /// </summary>
-        /// <param name="character">角色Transform</param>
         public void ShowMiss(Transform character)
         {
             if (character == null)
@@ -118,7 +110,6 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            // 强制要求预制体配置，移除自动创建逻辑
             GameObject prefabToUse = missPrefab != null ? missPrefab : damageNumberPrefab;
             if (prefabToUse == null)
             {
@@ -126,7 +117,6 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            // 创建MISS显示UI
             GameObject missObj = CreateDamageUI(character, prefabToUse);
             if (missObj == null)
             {
@@ -134,7 +124,6 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            // 配置MISS文本
             Text textComponent = missObj.GetComponentInChildren<Text>();
             if (textComponent != null)
             {
@@ -148,8 +137,45 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            // 播放动画
-            StartCoroutine(PlayDamageAnimation(missObj, textComponent));
+            // 使用DOTween播放动画
+            PlayDamageAnimationDOTween(missObj, textComponent);
+        }
+
+        /// <summary>
+        /// 使用DOTween播放伤害动画 - 替代协程
+        /// </summary>
+        private void PlayDamageAnimationDOTween(GameObject damageObj, Text textComponent)
+        {
+            if (damageObj == null) return;
+
+            RectTransform rectTransform = damageObj.GetComponent<RectTransform>();
+            if (rectTransform == null) return;
+
+            Vector2 startPos = rectTransform.anchoredPosition;
+            Vector2 endPos = startPos + Vector2.up * moveUpDistance;
+
+            // 创建DOTween序列
+            Sequence damageSequence = DOTween.Sequence();
+
+            // 向上移动动画
+            damageSequence.Append(rectTransform.DOAnchorPos(endPos, displayDuration).SetEase(Ease.OutCubic));
+
+            // 淡出动画（在指定时间点开始）
+            if (textComponent != null)
+            {
+                float fadeStartTime = displayDuration * fadeStartPercent;
+                float fadeOutDuration = displayDuration * (1f - fadeStartPercent);
+
+                damageSequence.Insert(fadeStartTime, textComponent.DOFade(0f, fadeOutDuration));
+            }
+
+            // 动画完成后销毁对象
+            damageSequence.OnComplete(() => {
+                if (damageObj != null)
+                {
+                    Destroy(damageObj);
+                }
+            });
         }
 
         /// <summary>
@@ -197,96 +223,24 @@ namespace demo2.DND.HorizontalFormation
                 return null;
             }
 
-            // 统一的坐标转换方法 - 只支持Screen Space - Overlay模式
+            // 坐标转换：Screen Space - Overlay模式
             Vector2 uiPos;
-            bool success = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 uiCanvas.transform as RectTransform,
                 screenPos,
-                uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : uiCanvas.worldCamera,
-                out uiPos
-            );
-
-            if (!success)
+                uiCanvas.worldCamera,
+                out uiPos))
             {
-                Debug.LogError("坐标转换失败，请检查Canvas配置");
+                rectTransform.anchoredPosition = uiPos;
+            }
+            else
+            {
+                Debug.LogWarning($"无法为角色 {character.name} 转换UI坐标");
                 Destroy(uiObj);
                 return null;
             }
 
-            // 添加随机偏移
-            uiPos.x += Random.Range(-randomOffset.x, randomOffset.x) * 50f;
-            uiPos.y += Random.Range(-randomOffset.y, randomOffset.y) * 50f;
-
-            // 设置UI位置
-            rectTransform.anchoredPosition = uiPos;
-
             return uiObj;
-        }
-
-        /// <summary>
-        /// 播放伤害动画
-        /// </summary>
-        private IEnumerator PlayDamageAnimation(GameObject damageObj, Text textComponent)
-        {
-            RectTransform rectTransform = damageObj.GetComponent<RectTransform>();
-            if (rectTransform == null)
-            {
-                Destroy(damageObj);
-                yield break;
-            }
-
-            // 初始状态
-            Vector3 startPos = rectTransform.anchoredPosition;
-            Vector3 endPos = startPos + Vector3.up * floatHeight;
-
-            // 向上浮动动画
-            rectTransform.DOAnchorPos(endPos, animationDuration).SetEase(Ease.OutQuart);
-
-            // 等待延迟后开始淡出
-            yield return new WaitForSeconds(animationDuration - fadeOutDuration);
-
-            // 淡出动画
-            if (textComponent != null)
-            {
-                textComponent.DOFade(0f, fadeOutDuration);
-            }
-
-            // 等待淡出完成
-            yield return new WaitForSeconds(fadeOutDuration);
-
-            // 销毁对象
-            if (damageObj != null)
-            {
-                Destroy(damageObj);
-            }
-        }
-
-        /// <summary>
-        /// 清理所有显示中的伤害数字
-        /// </summary>
-        public void ClearAllDamageNumbers()
-        {
-            // 查找所有由这个管理器创建的UI对象并销毁
-            if (uiCanvas != null)
-            {
-                for (int i = uiCanvas.transform.childCount - 1; i >= 0; i--)
-                {
-                    Transform child = uiCanvas.transform.GetChild(i);
-                    if (child.name.Contains("(Clone)"))
-                    {
-                        Destroy(child.gameObject);
-                    }
-                }
-            }
-        }
-
-        void OnValidate()
-        {
-            // 自动查找Canvas
-            if (uiCanvas == null)
-            {
-                uiCanvas = FindObjectOfType<Canvas>();
-            }
         }
     }
 }

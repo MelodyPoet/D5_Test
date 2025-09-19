@@ -2,11 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using demo2.DND.HorizontalFormation;
+using DG.Tweening;
 
 namespace demo2.DND
 {
     /// <summary>
-    /// 角色属性组件 - 简化版本，使用CharacterTemplate作为数据源
+    /// 角色属性组件 - 使用DOTween+事件驱动，摒弃协程
     /// </summary>
     public class CharacterStats : MonoBehaviour {
         [Header("角色模板")]
@@ -47,13 +48,64 @@ namespace demo2.DND
         public int ChaMod => (charisma - 10) / 2;
 
         // 便捷属性访问 - 修正命名规范
+        public int level => characterLevel;
         public int Level => characterLevel;
+
+        // 昏迷恢复系统的私有变量
+        private int unconsciousSuccessCount = 0;
+        private int unconsciousFailureCount = 0;
+        private float nextSavingThrowTime = 0f;
+        private bool isProcessingSavingThrows = false;
 
         void Start() {
             // 如果有模板，从模板初始化
             if (template != null) {
                 InitializeFromTemplate();
             }
+
+            // 设置DND_CharacterAdapter事件监听
+            SetupAdapterEvents();
+        }
+
+        /// <summary>
+        /// 设置DND_CharacterAdapter事件监听
+        /// </summary>
+        private void SetupAdapterEvents() {
+            DND_CharacterAdapter adapter = GetComponent<DND_CharacterAdapter>();
+            if (adapter != null) {
+                // 监听状态变化事件
+                adapter.OnStateChanged += HandleAdapterStateChange;
+
+                Debug.Log($"{GetDisplayName()} 已连接动画适配器事件");
+            }
+        }
+
+        /// <summary>
+        /// 处理动画适配器的状态变化事件
+        /// </summary>
+        private void HandleAdapterStateChange(string state) {
+            switch (state) {
+                case "unconscious":
+                    Debug.Log($"{GetDisplayName()} 动画适配器报告：进入昏迷状态");
+                    break;
+
+                case "footstep":
+                    // 播放脚步声音效
+                    PlayFootstepSound();
+                    break;
+
+                default:
+                    Debug.Log($"{GetDisplayName()} 动画状态变化: {state}");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 播放脚步声音效
+        /// </summary>
+        private void PlayFootstepSound() {
+            // 这里可以调用音效管理器播放脚步声
+            // AudioManager.Instance?.PlaySound("footstep");
         }
 
         private void OnEnable() {
@@ -73,17 +125,17 @@ namespace demo2.DND
         /// <summary>
         /// 处理伤害事件 - 只有当自己是受伤目标时才处理
         /// </summary>
-        private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damage) {
+        private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damage, bool isCritical) {
             if (recipient != this) return; // 确保是自己受伤的事件
 
             // 处理伤害逻辑（原TakeDamage方法的核心逻辑）
-            ApplyDamageToSelf(damage);
+            ApplyDamageToSelf(damage, isCritical);
         }
 
         /// <summary>
         /// 应用伤害到自身（从原TakeDamage方法重构）
         /// </summary>
-        private void ApplyDamageToSelf(int damage) {
+        private void ApplyDamageToSelf(int damage, bool isCritical = false) {
             if (template != null) {
                 // 检查免疫（这里简化处理，实际应该从攻击中获取伤害类型）
                 DamageType damageType = DamageType.Bludgeoning; // 默认钝击伤害
@@ -119,7 +171,7 @@ namespace demo2.DND
             // 扣除实际生命值
             currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
 
-            Debug.Log($"{GetDisplayName()} 受到 {damage} 点伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+            Debug.Log($"{GetDisplayName()} 受到 {damage} 点伤害{(isCritical ? " (暴击!)" : "")}! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
             // 播放受击动画（关键修复）
             PlayHitAnimation();
@@ -157,8 +209,8 @@ namespace demo2.DND
             // 播放昏迷动画
             PlayUnconsciousAnimation();
 
-            // 启动昏迷恢复机制（体质豁免判断）
-            StartCoroutine(HandleUnconsciousSavingThrows());
+            // 启动昏迷恢复机制（使用事件驱动替代协程）
+            StartUnconsciousSavingThrows();
         }
 
         /// <summary>
@@ -172,8 +224,8 @@ namespace demo2.DND
             // 播放死亡动画
             PlayDeathAnimation();
 
-            // 启动尸体消失逻辑
-            StartCoroutine(HandleCorpseDisappearance());
+            // 启动尸体消失逻辑（使用DOTween替代协程）
+            StartCorpseDisappearance();
         }
 
         /// <summary>
@@ -199,33 +251,59 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 处理昏迷状态的体质豁免判断
+        /// 播放死亡动画
         /// </summary>
-        private IEnumerator HandleUnconsciousSavingThrows() {
-            int successCount = 0;
-            int failureCount = 0;
+        private void PlayDeathAnimation() {
+            // 获取角色动画适配器组件
+            DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
+            if (characterAdapter != null) {
+                characterAdapter.PlayDeathAnimation();
+            }
+        }
+
+        /// <summary>
+        /// 启动昏迷状态的体质豁免判断 - DOTween版本
+        /// </summary>
+        private void StartUnconsciousSavingThrows() {
+            unconsciousSuccessCount = 0;
+            unconsciousFailureCount = 0;
+            isProcessingSavingThrows = true;
+            nextSavingThrowTime = Time.time + 6f; // 6秒后第一次豁免
+
+            Debug.Log($"{GetDisplayName()} 开始昏迷状态体质豁免判断");
+        }
+
+        void Update() {
+            // 处理昏迷状态的体质豁免
+            if (isProcessingSavingThrows && HasStatusEffect(StatusEffectType.Unconscious)) {
+                ProcessUnconsciousSavingThrows();
+            }
+        }
+
+        /// <summary>
+        /// 处理昏迷状态的体质豁免判断 - Update版本
+        /// </summary>
+        private void ProcessUnconsciousSavingThrows() {
+            if (Time.time < nextSavingThrowTime) return;
+
             int maxAttempts = 3;
             int savingThrowDC = 10;
 
-            while (successCount < maxAttempts && failureCount < maxAttempts) {
-                // 等待一个回合（6秒）
-                yield return new WaitForSeconds(6f);
+            // 进行体质豁免检定
+            int constitutionSave = Random.Range(1, 21) + ConMod;
 
-                // 进行体质豁免检定
-                int constitutionSave = Random.Range(1, 21) + ConMod;
-
-                if (constitutionSave >= savingThrowDC) {
-                    successCount++;
-                    Debug.Log($"{GetDisplayName()} 体质豁免成功 ({constitutionSave} vs DC{savingThrowDC}) - 成功次数: {successCount}/{maxAttempts}");
-                } else {
-                    failureCount++;
-                    Debug.Log($"{GetDisplayName()} 体质豁免失败 ({constitutionSave} vs DC{savingThrowDC}) - 失败次数: {failureCount}/{maxAttempts}");
-                }
+            if (constitutionSave >= savingThrowDC) {
+                unconsciousSuccessCount++;
+                Debug.Log($"{GetDisplayName()} 体质豁免成功 ({constitutionSave} vs DC{savingThrowDC}) - 成功次数: {unconsciousSuccessCount}/{maxAttempts}");
+            } else {
+                unconsciousFailureCount++;
+                Debug.Log($"{GetDisplayName()} 体质豁免失败 ({constitutionSave} vs DC{savingThrowDC}) - 失败次数: {unconsciousFailureCount}/{maxAttempts}");
             }
 
-            // 判断最终结果
-            if (successCount >= maxAttempts) {
+            // 检查是否达到结束条件
+            if (unconsciousSuccessCount >= maxAttempts) {
                 // 3次成功：恢复1点血量并脱离昏迷
+                isProcessingSavingThrows = false;
                 currentHitPoints = 1;
                 RemoveStatusEffect(StatusEffectType.Unconscious);
                 Debug.Log($"{GetDisplayName()} 体质豁免成功，恢复意识并获得1点血量!");
@@ -235,10 +313,14 @@ namespace demo2.DND
                 if (characterAdapter != null) {
                     characterAdapter.PlayIdleAnimation();
                 }
-            } else {
+            } else if (unconsciousFailureCount >= maxAttempts) {
                 // 3次失败：真正死亡
+                isProcessingSavingThrows = false;
                 Debug.Log($"{GetDisplayName()} 体质豁免失败，真正死亡!");
                 HandleTrueDeath();
+            } else {
+                // 继续下一次豁免
+                nextSavingThrowTime = Time.time + 6f;
             }
         }
 
@@ -251,80 +333,48 @@ namespace demo2.DND
             // 播放死亡动画
             PlayDeathAnimation();
 
-            // 启动尸体消失逻辑
-            StartCoroutine(HandleCorpseDisappearance());
+            // 启动尸体消失逻辑 - 使用DOTween替代协程
+            StartCorpseDisappearance();
         }
 
         /// <summary>
-        /// 播放死亡动画
+        /// 启动尸体消失逻辑 - DOTween版本
         /// </summary>
-        private void PlayDeathAnimation() {
-            // 获取角色动画适配器组件
-            DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
-            if (characterAdapter != null) {
-                characterAdapter.PlayDeathAnimation();
-            }
-        }
+        private void StartCorpseDisappearance() {
+            // 使用DOTween序列替代协程
+            Sequence corpseSequence = DOTween.Sequence();
 
-        /// <summary>
-        /// 处理尸体消失逻辑
-        /// </summary>
-        private IEnumerator HandleCorpseDisappearance() {
-            // 等待死亡动画播放完成（假设死亡动画时长约2-3秒）
-            yield return new WaitForSeconds(3f);
+            // 等待死亡动画播放完成
+            corpseSequence.AppendInterval(3f);
 
             // 开始淡出效果
-            yield return StartCoroutine(FadeOutCorpse());
+            corpseSequence.AppendCallback(() => StartFadeOutCorpse());
 
-            // 延迟一段时间后完全移除角色
-            yield return new WaitForSeconds(2f);
+            // 等待淡出完成后销毁
+            corpseSequence.AppendInterval(2f);
 
-            // 从阵型管理器中移除角色引用
-            RemoveFromFormation();
-
-            // 销毁游戏对象
-            Debug.Log($"{GetDisplayName()} 尸体已消失");
-            Destroy(gameObject);
+            corpseSequence.OnComplete(() => {
+                RemoveFromFormation();
+                Debug.Log($"{GetDisplayName()} 尸体已消失");
+                Destroy(gameObject);
+            });
         }
 
         /// <summary>
-        /// 淡出尸体效果
+        /// 开始淡出尸体效果 - DOTween版本
         /// </summary>
-        private IEnumerator FadeOutCorpse() {
-            // 获取角色的渲染组件
+        private void StartFadeOutCorpse() {
             DND_CharacterAdapter adapter = GetComponent<DND_CharacterAdapter>();
             if (adapter != null && adapter.skeletonAnimation != null) {
-                // 修复：使用完整的Spine.Unity命名空间
-                Spine.Unity.SkeletonAnimation skeletonAnim = adapter.skeletonAnimation;
-                float fadeTime = 2f;
-                float elapsedTime = 0f;
-
-                // 渐变透明度
-                while (elapsedTime < fadeTime) {
-                    elapsedTime += Time.deltaTime;
-                    float alpha = Mathf.Lerp(1f, 0f, elapsedTime / fadeTime);
-
-                    // 设置Skeleton的透明度
-                    if (skeletonAnim.skeleton != null) {
-                        skeletonAnim.skeleton.A = alpha;
-                    }
-
-                    yield return null;
-                }
+                // 使用DOTween对Spine角色进行淡出
+                DOTween.To(() => adapter.skeletonAnimation.skeleton.A,
+                          x => adapter.skeletonAnimation.skeleton.A = x,
+                          0f, 2f);
             } else {
                 // 如果没有Spine动画，尝试使用SpriteRenderer
                 SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
                 if (spriteRenderer != null) {
-                    float fadeTime = 2f;
-                    float elapsedTime = 0f;
-                    Color originalColor = spriteRenderer.color;
-
-                    while (elapsedTime < fadeTime) {
-                        elapsedTime += Time.deltaTime;
-                        float alpha = Mathf.Lerp(1f, 0f, elapsedTime / fadeTime);
-                        spriteRenderer.color = new Color(originalColor.r, originalColor.g, originalColor.b, alpha);
-                        yield return null;
-                    }
+                    spriteRenderer.DOFade(0f, 2f);
                 }
             }
         }
@@ -465,26 +515,31 @@ namespace demo2.DND
         /// 移除状态效果
         /// </summary>
         public void RemoveStatusEffect(StatusEffectType type) {
-            int previousHp = currentHitPoints; // 修正命名规范
-            statusEffects.Remove(type); // 移除重复的代码行
+            if (!statusEffects.Contains(type)) return; // 如果状态不存在，直接返回
+
+            statusEffects.Remove(type);
 
             // 如果移除了闪避状态，更新AC
             if (type == StatusEffectType.Dodging) {
                 UpdateArmorClass();
             }
 
-            // 如果角色之前昏迷且现在恢复了血量，让其站起来
-            if (previousHp <= 0 && currentHitPoints > 0 && HasStatusEffect(StatusEffectType.Unconscious)) {
-                ReviveFromUnconsciousness();
-            }
+            // 注意：移除昏迷状态的恢复逻辑应该在别处处理，避免递归
         }
 
         /// <summary>
         /// 从昏迷中恢复 - 玩家和队友专用
+        /// 修复：避免无限递归
         /// </summary>
         private void ReviveFromUnconsciousness() {
-            // 移除昏迷状态
-            RemoveStatusEffect(StatusEffectType.Unconscious);
+            // 直接移除昏迷状态，不调用RemoveStatusEffect避免递归
+            if (statusEffects.Contains(StatusEffectType.Unconscious)) {
+                statusEffects.Remove(StatusEffectType.Unconscious);
+            }
+
+            // 停止昏迷恢复处理
+            isProcessingSavingThrows = false;
+
             Debug.Log($"{GetDisplayName()} 从昏迷中恢复，重新站起来!");
 
             // 播放恢复动画

@@ -10,6 +10,9 @@ namespace demo2.DND.HorizontalFormation
         [Header("战斗位置")]
         public HorizontalPosition currentPosition;
 
+        [Header("排位信息")]
+        public RowPosition rowPosition = RowPosition.Front;
+
         [Header("位置状态")]
         [Tooltip("该位置是否被占用")]
         public bool isOccupied = true;
@@ -21,6 +24,26 @@ namespace demo2.DND.HorizontalFormation
         void Start() {
             // 标记该位置为已占用
             isOccupied = true;
+
+            // 根据当前位置自动设置排位信息
+            UpdateRowPosition();
+        }
+
+        /// <summary>
+        /// 根据当前位置更新排位信息
+        /// </summary>
+        void UpdateRowPosition()
+        {
+            rowPosition = HorizontalFormationAI.IsFrontRow(currentPosition) ? RowPosition.Front : RowPosition.Back;
+        }
+
+        /// <summary>
+        /// 设置新的战斗位置
+        /// </summary>
+        public void SetPosition(HorizontalPosition newPosition)
+        {
+            currentPosition = newPosition;
+            UpdateRowPosition();
         }
 
         /// <summary>
@@ -58,54 +81,36 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 检查是否为玩家位置
-        /// </summary>
-        public bool IsPlayerPosition() {
-            return currentPosition <= HorizontalPosition.PlayerBackRight;
-        }
-
-        /// <summary>
-        /// 检查是否为敌人位置
-        /// </summary>
-        public bool IsEnemyPosition() {
-            return currentPosition >= HorizontalPosition.EnemyFrontLeft;
-        }
-
-        /// <summary>
         /// 检查是否为前排位置
         /// </summary>
-        public bool IsFrontPosition() {
-            return currentPosition == HorizontalPosition.PlayerFrontLeft ||
-                   currentPosition == HorizontalPosition.PlayerFrontCenter ||
-                   currentPosition == HorizontalPosition.PlayerFrontRight ||
-                   currentPosition == HorizontalPosition.EnemyFrontLeft ||
-                   currentPosition == HorizontalPosition.EnemyFrontCenter ||
-                   currentPosition == HorizontalPosition.EnemyFrontRight;
+        public bool IsFrontRow()
+        {
+            return rowPosition == RowPosition.Front;
         }
 
         /// <summary>
         /// 检查是否为后排位置
         /// </summary>
-        public bool IsBackPosition() {
-            return !IsFrontPosition();
+        public bool IsBackRow()
+        {
+            return rowPosition == RowPosition.Back;
         }
 
-        void OnDestroy() {
-            // 当组件被销毁时，释放位置
-            isOccupied = false;
+        /// <summary>
+        /// 获取所属阵营
+        /// </summary>
+        public BattleSide GetBattleSide()
+        {
+            return HorizontalFormationAI.GetPositionSide(currentPosition);
         }
 
-#if UNITY_EDITOR
-        void OnDrawGizmos() {
-            if (showDebugInfo) {
-                // 在编辑器中显示位置信息
-                Gizmos.color = IsPlayerPosition() ? Color.blue : Color.red;
-                Gizmos.DrawWireSphere(transform.position, 0.5f);
-
-                // 显示位置名称
-                UnityEditor.Handles.Label(transform.position + Vector3.up * 1f, GetPositionDisplayName());
+        void OnDrawGizmosSelected()
+        {
+            if (showDebugInfo)
+            {
+                Gizmos.color = IsFrontRow() ? Color.red : Color.blue;
+                Gizmos.DrawWireCube(transform.position, Vector3.one * 0.5f);
             }
         }
-#endif
     }
 }

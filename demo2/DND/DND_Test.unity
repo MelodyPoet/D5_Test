@@ -268,7 +268,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 02dc0a2bee3d4184905744e2725c54ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
 --- !u!4 &253267444
 Transform:
   m_ObjectHideFlags: 0
@@ -737,10 +736,9 @@ MonoBehaviour:
   missPrefab: {fileID: 3627337939812853302, guid: f2e02bd81f2cde54c9975b71f2619d46, type: 3}
   uiCanvas: {fileID: 1641010537}
   headOffset: {x: 0, y: 2, z: 0}
-  randomOffset: {x: 0.5, y: 0.3}
-  floatHeight: 50
-  animationDuration: 1.5
-  fadeOutDuration: 0.5
+  displayDuration: 2
+  moveUpDistance: 100
+  fadeStartPercent: 0.5
 --- !u!4 &651159378
 Transform:
   m_ObjectHideFlags: 0
@@ -939,7 +937,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 02dc0a2bee3d4184905744e2725c54ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
 --- !u!4 &746661146
 Transform:
   m_ObjectHideFlags: 0

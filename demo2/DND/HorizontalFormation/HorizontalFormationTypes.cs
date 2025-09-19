@@ -34,6 +34,11 @@ namespace demo2.DND.HorizontalFormation
         EnemyBack     // 敌人后排 - 远程位置
     }
 
+    public enum RowPosition {
+        Front,  // 前排
+        Back    // 后排
+    }
+
     public enum FormationType {
         Defensive,      // 防御阵型: 坦克前排，脆皮后排
         Aggressive,     // 进攻阵型: 输出角色前置
@@ -50,50 +55,30 @@ namespace demo2.DND.HorizontalFormation
         /// <summary>
         /// 根据角色特性获取最佳位置
         /// </summary>
-        public static HorizontalPosition GetOptimalPosition(CharacterStats character, BattleSide side) {
-            // 根据职业特性决定前后排位置
-            bool shouldBeFrontLine = IsFrontLineClass(character.characterClass);
-
-            if (shouldBeFrontLine) {
-                // 近战职业优先前排中央
-                return side == BattleSide.Player ?
-                    HorizontalPosition.PlayerFrontCenter :
-                    HorizontalPosition.EnemyFrontCenter;
-            } else {
-                // 远程职业优先后排中央
-                return side == BattleSide.Player ?
-                    HorizontalPosition.PlayerBackCenter :
-                    HorizontalPosition.EnemyBackCenter;
+        public static HorizontalPosition GetOptimalPosition(CharacterStats character, BattleSide side)
+        {
+            // 简化的位置分配逻辑
+            if (side == BattleSide.Player)
+            {
+                return character.armorClass >= 15 ? HorizontalPosition.PlayerFrontCenter : HorizontalPosition.PlayerBackCenter;
+            }
+            else
+            {
+                return character.armorClass >= 15 ? HorizontalPosition.EnemyFrontCenter : HorizontalPosition.EnemyBackCenter;
             }
         }
 
         /// <summary>
-        /// 判断职业是否适合前排
+        /// 判断位置是否为前排
         /// </summary>
-        public static bool IsFrontLineClass(CharacterClass characterClass) {
-            switch (characterClass) {
-                case CharacterClass.Fighter:
-                case CharacterClass.Paladin:
-                case CharacterClass.Barbarian:
-                    return true; // 坦克职业前排
-
-                case CharacterClass.Rogue:
-                    return true; // 潜行者也可以前排
-
-                case CharacterClass.Wizard:
-                case CharacterClass.Sorcerer:
-                case CharacterClass.Warlock:
-                case CharacterClass.Ranger:
-                    return false; // 法师和射手后排
-
-                case CharacterClass.Cleric:
-                case CharacterClass.Druid:
-                case CharacterClass.Bard:
-                    return false; // 支援职业后排
-
-                default:
-                    return true; // 默认前排
-            }
+        public static bool IsFrontRow(HorizontalPosition position)
+        {
+            return position == HorizontalPosition.PlayerFrontLeft ||
+                   position == HorizontalPosition.PlayerFrontCenter ||
+                   position == HorizontalPosition.PlayerFrontRight ||
+                   position == HorizontalPosition.EnemyFrontLeft ||
+                   position == HorizontalPosition.EnemyFrontCenter ||
+                   position == HorizontalPosition.EnemyFrontRight;
         }
 
         /// <summary>
@@ -113,23 +98,6 @@ namespace demo2.DND.HorizontalFormation
             bool differentSides = GetPositionSide(from) != GetPositionSide(to);
 
             return fromIsFront && toIsFront && differentSides;
-        }
-
-        /// <summary>
-        /// 判断位置是否为前排
-        /// </summary>
-        public static bool IsFrontRow(HorizontalPosition position) {
-            switch (position) {
-                case HorizontalPosition.PlayerFrontLeft:
-                case HorizontalPosition.PlayerFrontCenter:
-                case HorizontalPosition.PlayerFrontRight:
-                case HorizontalPosition.EnemyFrontLeft:
-                case HorizontalPosition.EnemyFrontCenter:
-                case HorizontalPosition.EnemyFrontRight:
-                    return true;
-                default:
-                    return false;
-            }
         }
 
         /// <summary>

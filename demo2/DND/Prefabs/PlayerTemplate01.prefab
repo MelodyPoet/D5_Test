@@ -255,9 +255,20 @@ MonoBehaviour:
   animationMapping:
     idleAnimation: Wait
     walkAnimation: Walk
-    moveToIdleAnimation: m_to_i
+    runAnimation: run
     attackAnimation: Atk01
     hitAnimation: Dmg
     deathAnimation: 
-    castAnimation: Atk03
     unconsciousAnimation: Down
+    castSpellAnimation: cast
+    defendAnimation: defend
+    dodgeAnimation: dodge
+  eventMapping:
+    attackHitEvent: s.Attack
+    deathCompleteEvent: death_complete
+    unconsciousStartEvent: unconscious_start
+    footstepEvent: footstep
+    stateChangeEvent: state_change
+  moveSpeed: 2
+  attackDistance: 1.5
+  moveEase: 9

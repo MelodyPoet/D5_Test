@@ -87,11 +87,11 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 处理伤害事件，仅当受伤者是此血条的拥有者时才更新
+        /// 处理伤害事件 - 更新血条显示
         /// </summary>
-        private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damageAmount)
+        private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damage, bool isCritical)
         {
-            // 直接比较CharacterStats实例引用，确保是同一个对象
+            // 只有当受伤者是我们的拥有者时才更新血条
             if (recipient == owner)
             {
                 UpdateHealthDisplay();

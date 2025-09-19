@@ -1,0 +1,174 @@
+
+SpineEnemy_20100065.png
+size: 1712,171
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+jj_1
+  rotate: false
+  xy: 1040, 90
+  size: 34, 36
+  orig: 34, 37
+  offset: 0, 1
+  index: -1
+jj_10
+  rotate: false
+  xy: 702, 2
+  size: 200, 124
+  orig: 200, 124
+  offset: 0, 0
+  index: -1
+jj_11
+  rotate: true
+  xy: 1106, 2
+  size: 76, 52
+  orig: 76, 52
+  offset: 0, 0
+  index: -1
+jj_12
+  rotate: false
+  xy: 338, 8
+  size: 122, 63
+  orig: 122, 63
+  offset: 0, 0
+  index: -1
+jj_13
+  rotate: false
+  xy: 1091, 80
+  size: 139, 89
+  orig: 139, 89
+  offset: 0, 0
+  index: -1
+jj_14
+  rotate: false
+  xy: 904, 20
+  size: 134, 106
+  orig: 135, 106
+  offset: 0, 0
+  index: -1
+jj_15
+  rotate: true
+  xy: 1615, 20
+  size: 42, 50
+  orig: 42, 50
+  offset: 0, 0
+  index: -1
+jj_16
+  rotate: false
+  xy: 1618, 64
+  size: 92, 105
+  orig: 92, 105
+  offset: 0, 0
+  index: -1
+jj_17
+  rotate: false
+  xy: 587, 8
+  size: 101, 63
+  orig: 101, 63
+  offset: 0, 0
+  index: -1
+jj_18
+  rotate: true
+  xy: 1370, 89
+  size: 80, 135
+  orig: 80, 135
+  offset: 0, 0
+  index: -1
+jj_19
+  rotate: false
+  xy: 1333, 25
+  size: 74, 62
+  orig: 75, 62
+  offset: 0, 0
+  index: -1
+jj_2
+  rotate: false
+  xy: 1667, 31
+  size: 33, 31
+  orig: 33, 31
+  offset: 0, 0
+  index: -1
+jj_20
+  rotate: false
+  xy: 702, 128
+  size: 387, 41
+  orig: 388, 43
+  offset: 0, 1
+  index: -1
+jj_21
+  rotate: false
+  xy: 2, 6
+  size: 334, 163
+  orig: 334, 163
+  offset: 0, 0
+  index: -1
+jj_22
+  rotate: true
+  xy: 462, 16
+  size: 55, 123
+  orig: 55, 123
+  offset: 0, 0
+  index: -1
+jj_23
+  rotate: false
+  xy: 1040, 2
+  size: 64, 75
+  orig: 65, 75
+  offset: 1, 0
+  index: -1
+jj_24
+  rotate: false
+  xy: 338, 73
+  size: 362, 96
+  orig: 362, 98
+  offset: 0, 1
+  index: -1
+jj_3
+  rotate: false
+  xy: 1160, 5
+  size: 82, 73
+  orig: 82, 73
+  offset: 0, 0
+  index: -1
+jj_4
+  rotate: true
+  xy: 1244, 25
+  size: 63, 87
+  orig: 63, 87
+  offset: 0, 0
+  index: -1
+jj_5
+  rotate: true
+  xy: 1409, 33
+  size: 54, 78
+  orig: 54, 78
+  offset: 0, 0
+  index: -1
+jj_6
+  rotate: false
+  xy: 1562, 25
+  size: 51, 52
+  orig: 51, 52
+  offset: 0, 0
+  index: -1
+jj_7
+  rotate: true
+  xy: 1507, 79
+  size: 90, 109
+  orig: 92, 109
+  offset: 1, 0
+  index: -1
+jj_8
+  rotate: false
+  xy: 1489, 16
+  size: 71, 61
+  orig: 76, 62
+  offset: 1, 1
+  index: -1
+jj_9
+  rotate: true
+  xy: 1232, 90
+  size: 79, 136
+  orig: 81, 136
+  offset: 1, 0
+  index: -1

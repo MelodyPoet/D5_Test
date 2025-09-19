@@ -2,20 +2,20 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using demo2.DND; // 添加此引用以访问DND_CharacterAdapter
+using demo2.DND;
 
 namespace demo2.DND.HorizontalFormation
 {
     /// <summary>
     /// 自动战斗AI系统 - 线性阵型版本
-    /// 实现挂机模式的智能战斗决策和攻击动画
+    /// 使用DOTween+SpineEvent事件驱动，摒弃协程方式
     /// </summary>
     public class AutoBattleAI : MonoBehaviour
     {
         [Header("AI设置")]
         public bool enableAutoBattle = true;
-        public float decisionDelay = 1.0f; // AI决策延迟
-        public bool showAIThoughts = true; // 显示AI思考过程
+        public float decisionDelay = 1.0f;
+        public bool showAIThoughts = true;
 
         [Header("战术优先级")]
         [Range(0, 1)] public float healingPriority = 0.8f;
@@ -24,18 +24,20 @@ namespace demo2.DND.HorizontalFormation
         [Range(0, 1)] public float defensivePriority = 0.5f;
 
         [Header("先攻系统")]
-        public List<InitiativeEntry> initiativeOrder = new List<InitiativeEntry>(); // 先攻顺序列表
-        public int currentTurnIndex; // 当前回合索引
-        public bool isBattleActive; // 战斗是否激活
+        public List<InitiativeEntry> initiativeOrder = new List<InitiativeEntry>();
+        public int currentTurnIndex;
+        public bool isBattleActive;
 
         private bool isProcessingTurn;
-        private Coroutine battleSequenceCoroutine;
+        private float turnTimer;
 
         /// <summary>
         /// 开始战斗序列 - 执行先攻检定并开始回合制战斗
         /// </summary>
         public void StartBattleSequence()
         {
+            Debug.Log("🎯 ========== AutoBattleAI.StartBattleSequence 被调用 ==========");
+
             if (isBattleActive)
             {
                 Debug.LogWarning("战斗已经在进行中！");
@@ -46,109 +48,283 @@ namespace demo2.DND.HorizontalFormation
             List<CharacterStats> allCombatants = new List<CharacterStats>();
             CharacterStats[] allCharacters = FindObjectsOfType<CharacterStats>();
 
+            Debug.Log($"🎯 找到角色总数: {allCharacters.Length}");
+
             foreach (CharacterStats character in allCharacters)
             {
                 if (character.currentHitPoints > 0)
                 {
                     allCombatants.Add(character);
+                    Debug.Log($"🎯 添加参战角色: {character.GetDisplayName()} - 阵营: {character.battleSide} - 血量: {character.currentHitPoints}");
+                }
+                else
+                {
+                    Debug.Log($"🎯 跳过死亡角色: {character.GetDisplayName()} - 血量: {character.currentHitPoints}");
                 }
             }
 
             if (allCombatants.Count < 2)
             {
-                Debug.LogWarning("参战角色不足，无法开始战斗");
+                Debug.LogWarning($"🎯 参战角色不足，无法开始战斗。当前参战角色数: {allCombatants.Count}");
                 return;
             }
 
             // 执行先攻检定并排序
-            Debug.Log("开始战斗！执行先攻检定...");
+            Debug.Log("🎯 开始战斗！执行先攻检定...");
             initiativeOrder = HorizontalCombatRules.RollAndSortInitiative(allCombatants);
             currentTurnIndex = 0;
             isBattleActive = true;
+            isProcessingTurn = false;
+            turnTimer = 0f;
 
-            // 开始回合制战斗循环
-            if (battleSequenceCoroutine != null)
+            Debug.Log("🎯 先攻顺序：");
+            for (int i = 0; i < initiativeOrder.Count; i++)
             {
-                StopCoroutine(battleSequenceCoroutine);
+                Debug.Log($"🎯 {i + 1}. {initiativeOrder[i].character.GetDisplayName()} (先攻值: {initiativeOrder[i].initiativeRoll})");
             }
-            battleSequenceCoroutine = StartCoroutine(BattleSequenceLoop());
+
+            // 开始第一个回合
+            Debug.Log("🎯 准备开始第一个回合...");
+            StartNextTurn();
+        }
+
+        void Update()
+        {
+            if (!isBattleActive || !enableAutoBattle) return;
+
+            // 处理回合计时器
+            if (!isProcessingTurn)
+            {
+                turnTimer += Time.deltaTime;
+                if (turnTimer >= decisionDelay)
+                {
+                    ProcessCurrentTurn();
+                }
+            }
         }
 
         /// <summary>
-        /// 战斗序列循环 - 按先攻顺序执行每个角色的回合
+        /// 开始下一个回合
         /// </summary>
-        private IEnumerator BattleSequenceLoop()
+        private void StartNextTurn()
         {
-            while (isBattleActive && enableAutoBattle)
+            if (!isBattleActive) return;
+
+            // 检查战斗是否结束
+            if (IsBattleOver())
             {
-                // 检查战斗是否结束
-                if (IsBattleOver())
-                {
-                    EndBattle();
-                    yield break;
-                }
+                EndBattle();
+                return;
+            }
 
-                // 获取当前行动角色
-                InitiativeEntry currentEntry = GetCurrentInitiativeEntry();
+            // 重置回合计时器
+            turnTimer = 0f;
+            isProcessingTurn = false;
 
-                if (currentEntry != null && currentEntry.CanAct())
-                {
-                    Debug.Log($"轮到 {currentEntry.character.GetDisplayName()} 行动 (先攻顺序 {currentTurnIndex + 1})");
+            // 获取当前行动角色
+            InitiativeEntry currentEntry = GetCurrentInitiativeEntry();
+            if (currentEntry != null)
+            {
+                Debug.Log($"轮到 {currentEntry.character.GetDisplayName()} 行动 (先攻顺序 {currentTurnIndex + 1})");
+            }
+        }
 
-                    // 执行角色回合
-                    yield return StartCoroutine(ProcessCharacterTurn(currentEntry));
+        /// <summary>
+        /// 处理当前回合
+        /// </summary>
+        private void ProcessCurrentTurn()
+        {
+            if (isProcessingTurn) return;
 
-                    // 标记已行动
-                    currentEntry.MarkAsActed();
-                }
-
-                // 移动到下一个角色
+            InitiativeEntry currentEntry = GetCurrentInitiativeEntry();
+            if (currentEntry == null || !currentEntry.CanAct())
+            {
                 AdvanceToNextTurn();
-
-                // 检查是否完成一轮，重置行动状态
-                if (currentTurnIndex == 0)
-                {
-                    ResetRoundState();
-                    Debug.Log("新的战斗轮次开始");
-                }
-
-                yield return new WaitForSeconds(0.1f); // 短暂延迟避免卡死
-            }
-        }
-
-        /// <summary>
-        /// 处理角色回合
-        /// </summary>
-        private IEnumerator ProcessCharacterTurn(InitiativeEntry initiativeEntry)
-        {
-            CharacterStats character = initiativeEntry.character;
-
-            if (character == null || character.currentHitPoints <= 0)
-            {
-                yield break;
+                return;
             }
 
             isProcessingTurn = true;
+            CharacterStats character = currentEntry.character;
 
             if (showAIThoughts)
             {
                 Debug.Log($"=== {character.GetDisplayName()} 的回合开始 ===");
             }
 
-            yield return new WaitForSeconds(decisionDelay);
-
             // AI决策流程
             BattleAction chosenAction = DecideBestAction(character);
 
             if (chosenAction != null)
             {
-                // 使用协程版本正确等待攻击完成
-                yield return StartCoroutine(ExecuteBattleActionCoroutine(character, chosenAction));
+                // 使用事件驱动方式执行战斗行动
+                ExecuteBattleActionEvent(character, chosenAction, () => {
+                    // 行动完成回调
+                    currentEntry.MarkAsActed();
+                    AdvanceToNextTurn();
+                });
+            }
+            else
+            {
+                // 无有效行动，直接结束回合
+                currentEntry.MarkAsActed();
+                AdvanceToNextTurn();
+            }
+        }
+
+        /// <summary>
+        /// 事件驱动的战斗行动执行
+        /// </summary>
+        private void ExecuteBattleActionEvent(CharacterStats attacker, BattleAction action, System.Action onComplete)
+        {
+            if (attacker == null || action == null || action.target == null)
+            {
+                onComplete?.Invoke();
+                return;
             }
 
-            yield return new WaitForSeconds(decisionDelay);
+            Debug.Log($"[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
+            Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}");
 
-            isProcessingTurn = false;
+            // 获取攻击者的动画适配器
+            DND_CharacterAdapter attackerAdapter = attacker.GetComponent<DND_CharacterAdapter>();
+            if (attackerAdapter == null)
+            {
+                Debug.LogError($"角色 {attacker.GetDisplayName()} 缺少 DND_CharacterAdapter 组件！");
+                onComplete?.Invoke();
+                return;
+            }
+
+            // 判断攻击类型：前排=近战，后排=远程
+            bool isMeleeAttack = IsCharacterInFrontRow(attacker);
+
+            Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击类型判断结果: {(isMeleeAttack ? "近战攻击" : "远程攻击")}");
+
+            if (isMeleeAttack)
+            {
+                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行近战攻击序列");
+                // 近战攻击：移动+攻击+返回
+                attackerAdapter.ExecuteMeleeAttack(
+                    action.target.transform,
+                    onAttackHit: () => {
+                        // SpineEvent触发攻击命中
+                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击命中回调触发");
+                        ProcessAttackHit(attacker, action.target);
+                    },
+                    onComplete: () => {
+                        // 攻击动画完成
+                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击完成回调触发");
+                        onComplete?.Invoke();
+                    }
+                );
+            }
+            else
+            {
+                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行远程攻击序列");
+                // 远程攻击：原地攻击
+                attackerAdapter.ExecuteRangedAttack(
+                    action.target.transform,
+                    onAttackHit: () => {
+                        // SpineEvent触发攻击命中
+                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击命中回调触发");
+                        ProcessAttackHit(attacker, action.target);
+                    },
+                    onComplete: () => {
+                        // 攻击动画完成
+                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击完成回调触发");
+                        onComplete?.Invoke();
+                    }
+                );
+            }
+
+            Debug.Log($"[DEBUG] ========== ExecuteBattleActionEvent 结束 ==========");
+        }
+
+        /// <summary>
+        /// 处理攻击命中 - 由SpineEvent触发
+        /// </summary>
+        private void ProcessAttackHit(CharacterStats attacker, CharacterStats target)
+        {
+            if (attacker == null || target == null) return;
+
+            // 执行攻击检定和伤害计算
+            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target);
+
+            if (attackResult.isHit)
+            {
+                // 命中：计算伤害
+                int damage = attackResult.damage;
+                bool isCritical = attackResult.isCritical;
+
+                if (showAIThoughts)
+                {
+                    string critText = isCritical ? " (暴击!)" : "";
+                    Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 命中! 造成 {damage} 点伤害{critText}");
+                }
+
+                // 应用伤害
+                target.TakeDamage(damage);
+
+                // 触发伤害事件用于UI更新 - 修复参数顺序：第一个参数是受害者，第二个是攻击者
+                var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
+                damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
+
+                // 播放受击动画
+                DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                targetAdapter?.PlayHitAnimation();
+            }
+            else
+            {
+                // 未命中
+                if (showAIThoughts)
+                {
+                    Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 未命中!");
+                }
+
+                // 播放闪避动画
+                DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                targetAdapter?.PlayDodgeAnimation();
+
+                // 触发未命中事件
+                var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
+                damageChannel?.RaiseEvent(attacker, target, 0, false);
+            }
+        }
+
+        /// <summary>
+        /// 判断角色是否在前排
+        /// </summary>
+        private bool IsCharacterInFrontRow(CharacterStats character)
+        {
+            Debug.Log($"[DEBUG] 判断角色 {character.GetDisplayName()} 的位置");
+
+            // 通过BattlePositionComponent组件判断位置
+            BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
+            if (positionComponent != null)
+            {
+                Debug.Log($"[DEBUG] {character.GetDisplayName()} 找到BattlePositionComponent，rowPosition: {positionComponent.rowPosition}");
+                return positionComponent.rowPosition == RowPosition.Front;
+            }
+            else
+            {
+                Debug.LogWarning($"[DEBUG] {character.GetDisplayName()} 没有BattlePositionComponent组件！");
+            }
+
+            // 备用方案：通过世界坐标判断（前排X坐标更靠前）
+            HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
+            if (formationManager != null)
+            {
+                bool isFrontRow = formationManager.IsCharacterInFrontRow(character);
+                Debug.Log($"[DEBUG] {character.GetDisplayName()} 通过FormationManager判断，isFrontRow: {isFrontRow}");
+                return isFrontRow;
+            }
+            else
+            {
+                Debug.LogWarning($"[DEBUG] 找不到HorizontalBattleFormationManager！");
+            }
+
+            // 默认为近战
+            Debug.Log($"[DEBUG] {character.GetDisplayName()} 使用默认判断：前排（近战）");
+            return true;
         }
 
         /// <summary>
@@ -171,8 +347,13 @@ namespace demo2.DND.HorizontalFormation
             currentTurnIndex++;
             if (currentTurnIndex >= initiativeOrder.Count)
             {
-                currentTurnIndex = 0; // 回到第一个角色，开始新轮次
+                currentTurnIndex = 0;
+                ResetRoundState();
+                Debug.Log("新的战斗轮次开始");
             }
+
+            // 开始下一个回合
+            StartNextTurn();
         }
 
         /// <summary>
@@ -202,7 +383,7 @@ namespace demo2.DND.HorizontalFormation
                     {
                         hasPlayerAlive = true;
                     }
-                    else
+                    else if (entry.character.battleSide == BattleSide.Enemy)
                     {
                         hasEnemyAlive = true;
                     }
@@ -220,99 +401,53 @@ namespace demo2.DND.HorizontalFormation
             isBattleActive = false;
             isProcessingTurn = false;
 
-            if (battleSequenceCoroutine != null)
+            bool playerVictory = initiativeOrder.Any(entry =>
+                entry.character.battleSide == BattleSide.Player &&
+                entry.character.currentHitPoints > 0);
+
+            if (playerVictory)
             {
-                StopCoroutine(battleSequenceCoroutine);
-                battleSequenceCoroutine = null;
+                Debug.Log("玩家胜利！");
+            }
+            else
+            {
+                Debug.Log("玩家失败！");
             }
 
-            // 确定胜利方
-            bool playerVictory = initiativeOrder.Any(e => e.character != null &&
-                                                          e.character.currentHitPoints > 0 &&
-                                                          e.character.battleSide == BattleSide.Player);
-
-            Debug.Log(playerVictory ? "玩家胜利！" : "敌人胜利！");
-
-            // 清理先攻列表
-            initiativeOrder.Clear();
-            currentTurnIndex = 0;
+            // 通知IdleGameManager战斗结束
+            IdleGameManager idleManager = FindObjectOfType<IdleGameManager>();
+            idleManager?.OnBattleCompleted(playerVictory);
         }
 
         /// <summary>
-        /// 为角色执行自动战斗回合
-        /// </summary>
-        public void ExecuteAutoBattleTurn(CharacterStats character)
-        {
-            if (isProcessingTurn || !enableAutoBattle) return;
-
-            StartCoroutine(ProcessAutoBattleTurn(character));
-        }
-
-        /// <summary>
-        /// 处理自动战斗回合
-        /// </summary>
-        private IEnumerator ProcessAutoBattleTurn(CharacterStats character)
-        {
-            isProcessingTurn = true;
-
-            if (showAIThoughts)
-                Debug.Log($"=== {character.GetDisplayName()} 的AI回合开始 ===");
-
-            yield return new WaitForSeconds(decisionDelay);
-
-            // AI决策流程
-            BattleAction chosenAction = DecideBestAction(character);
-
-            if (chosenAction != null)
-            {
-                // 使用协程版本正确等待攻击完成
-                yield return StartCoroutine(ExecuteBattleActionCoroutine(character, chosenAction));
-            }
-
-            yield return new WaitForSeconds(decisionDelay);
-
-            isProcessingTurn = false;
-        }
-
-        /// <summary>
-        /// 决定最佳行动
+        /// AI决策逻辑
         /// </summary>
         private BattleAction DecideBestAction(CharacterStats character)
         {
-            List<BattleAction> possibleActions = new List<BattleAction>();
+            if (character == null) return null;
 
-            // 1. 考虑攻击行动（优先级最高）
-            BattleAction attackAction = ConsiderAttack(character);
-            if (attackAction != null)
+            // 获取可攻击的目标列表
+            List<CharacterStats> availableTargets = GetAvailableTargets(character);
+
+            if (availableTargets.Count == 0)
             {
-                possibleActions.Add(attackAction);
+                if (showAIThoughts)
+                {
+                    Debug.Log($"{character.GetDisplayName()} 没有可攻击的目标");
+                }
+                return null;
             }
 
-            // 根据优先级排序并选择最佳行动
-            return ChooseBestAction(possibleActions);
-        }
+            // 选择最优目标
+            CharacterStats bestTarget = SelectBestTarget(character, availableTargets);
 
-        /// <summary>
-        /// 考虑攻击行动
-        /// </summary>
-        private BattleAction ConsiderAttack(CharacterStats character)
-        {
-            // 查找可攻击的目标
-            List<CharacterStats> availableTargets = FindAvailableTargets(character);
-
-            if (availableTargets.Count > 0)
+            if (bestTarget != null)
             {
-                CharacterStats bestTarget = ChooseBestAttackTarget(availableTargets);
-
-                // 根据角色职业决定攻击类型
-                bool isMeleeCharacter = IsMeleeCharacter(character);
-
                 return new BattleAction
                 {
-                    type = isMeleeCharacter ? BattleActionType.MeleeAttack : BattleActionType.RangedAttack,
-                    priority = offensivePriority + (isMeleeCharacter ? 0.1f : 0f),
+                    actionType = BattleActionType.Attack,
                     target = bestTarget,
-                    description = $"{(isMeleeCharacter ? "近战" : "远程")}攻击 {bestTarget.GetDisplayName()}"
+                    description = $"攻击 {bestTarget.GetDisplayName()}"
                 };
             }
 
@@ -320,514 +455,109 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 查找可攻击的目标
-        /// 规则：前排只能攻击敌方前排（除非前排全灭），后排可攻击前后排
+        /// 获取可攻击目标列表
         /// </summary>
-        private List<CharacterStats> FindAvailableTargets(CharacterStats attacker)
+        private List<CharacterStats> GetAvailableTargets(CharacterStats attacker)
         {
             List<CharacterStats> targets = new List<CharacterStats>();
+            BattleSide enemySide = attacker.battleSide == BattleSide.Player ? BattleSide.Enemy : BattleSide.Player;
 
-            // 获取攻击者的阵营
-            BattleSide attackerSide = attacker.battleSide;
-            BattleSide enemySide = attackerSide == BattleSide.Player ? BattleSide.Enemy : BattleSide.Player;
-
-            // 查找所有敌方角色
-            CharacterStats[] allCharacters = FindObjectsOfType<CharacterStats>();
-            List<CharacterStats> enemyFrontLine = new List<CharacterStats>();
-            List<CharacterStats> enemyBackLine = new List<CharacterStats>();
-
-            // 将敌方角色分类为前排和后排
-            foreach (CharacterStats character in allCharacters)
+            foreach (InitiativeEntry entry in initiativeOrder)
             {
-                if (character.battleSide == enemySide && character.currentHitPoints > 0)
+                CharacterStats character = entry.character;
+                if (character != null &&
+                    character.currentHitPoints > 0 &&
+                    character.battleSide == enemySide)
                 {
-                    if (IsInFrontLine(character))
+                    // 检查攻击距离限制
+                    if (CanAttackTarget(attacker, character))
                     {
-                        enemyFrontLine.Add(character);
-                    }
-                    else
-                    {
-                        enemyBackLine.Add(character);
+                        targets.Add(character);
                     }
                 }
-            }
-
-            // 判断攻击者职业类型
-            bool attackerIsMelee = IsMeleeCharacter(attacker);
-
-            if (attackerIsMelee)
-            {
-                // 前排职业攻击规则：优先攻击敌方前排，前排全灭后才能攻击后排
-                if (enemyFrontLine.Count > 0)
-                {
-                    targets.AddRange(enemyFrontLine);
-                    Debug.Log($"🗡️ {attacker.GetDisplayName()}(前排) 可攻击敌方前排目标 {enemyFrontLine.Count} 个");
-                }
-                else if (enemyBackLine.Count > 0)
-                {
-                    targets.AddRange(enemyBackLine);
-                    Debug.Log($"🗡️ {attacker.GetDisplayName()}(前排) 敌方前排全灭，可攻击后排目标 {enemyBackLine.Count} 个");
-                }
-            }
-            else
-            {
-                // 后排职业攻击规则：可以攻击敌方前排和后排任意目标
-                targets.AddRange(enemyFrontLine);
-                targets.AddRange(enemyBackLine);
-                Debug.Log($"🏹 {attacker.GetDisplayName()}(后排) 可攻击敌方所有目标 前排:{enemyFrontLine.Count}个 后排:{enemyBackLine.Count}个");
             }
 
             return targets;
         }
 
         /// <summary>
-        /// 判断角色是否为近战职业
-        /// 根据角色在阵型中的实际位置判断：前排=近战，后排=远程
+        /// 检查是否可以攻击目标
         /// </summary>
-        private bool IsMeleeCharacter(CharacterStats character)
+        private bool CanAttackTarget(CharacterStats attacker, CharacterStats target)
         {
-            if (character == null)
+            bool attackerInFront = IsCharacterInFrontRow(attacker);
+            bool targetInFront = IsCharacterInFrontRow(target);
+
+            // 近战角色只能攻击敌方前排，除非敌方前排全灭
+            if (attackerInFront)
             {
-                Debug.LogError("IsMeleeCharacter: 传入的character为null");
-                return false;
+                if (targetInFront) return true;
+
+                // 检查敌方前排是否全灭
+                bool enemyFrontRowExists = HasEnemyInFrontRow(target.battleSide);
+                return !enemyFrontRowExists;
             }
 
-            // 获取阵型管理器来判断角色职业类型
-            HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
-
-            if (formationManager != null)
-            {
-                Debug.Log($"🔍 AutoBattleAI职业判断: {character.GetDisplayName()} 开始判断...");
-
-                // 使用阵型管理器的职业判断方法
-                bool isMelee = formationManager.IsMeleeClass(character);
-
-                Debug.Log($"🎯 AutoBattleAI职业判断结果: {character.GetDisplayName()} - 判定:{(isMelee ? "近战" : "远程")}职业");
-                return isMelee;
-            }
-
-            // 如果无法获取阵型管理器，输出错误信息
-            Debug.LogError($"❌ AutoBattleAI: 无法找到HorizontalBattleFormationManager，{character.GetDisplayName()} 默认判定为远程职业");
-            return false; // 改为默认远程，避免后排角色被误判为近战
-        }
-
-        /// <summary>
-        /// 根据战术优先级选择攻击目标
-        /// 规则：血量最少优先（FindAvailableTargets已经处理了前排后排限制）
-        /// </summary>
-        private CharacterStats ChooseBestAttackTarget(List<CharacterStats> targets)
-        {
-            if (targets.Count == 0) return null;
-            if (targets.Count == 1) return targets[0];
-
-            // 直接按血量排序选择最低血量目标
-            // 前排后排的限制已经在FindAvailableTargets中处理过了
-            CharacterStats selectedTarget = targets.OrderBy(t => t.currentHitPoints).First();
-
-            Debug.Log($"从{targets.Count}个可攻击目标中选择: {selectedTarget.GetDisplayName()} (血量:{selectedTarget.currentHitPoints})");
-
-            return selectedTarget;
-        }
-
-        /// <summary>
-        /// 判断角色是否在前排位置
-        /// 根据BattlePositionComponent或实际spawn点坐标判断
-        /// </summary>
-        private bool IsInFrontLine(CharacterStats character)
-        {
-            // 方法1：通过BattlePositionComponent判断（优先使用）
-            BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
-            if (positionComponent != null)
-            {
-                bool result = IsPositionInFrontLine(positionComponent.currentPosition);
-                Debug.Log($"位置组件判断: {character.GetDisplayName()} - 枚举位置:{positionComponent.currentPosition} - 判定:{(result ? "前排" : "后排")}");
-                return result;
-            }
-
-            // 默认判断为前排
-            Debug.LogWarning($"无法判断 {character.GetDisplayName()} 的位置，默认为前排");
+            // 远程角色可以攻击任何目标
             return true;
         }
 
         /// <summary>
-        /// 通过位置枚举判断是否为前排
+        /// 检查指定阵营是否还有前排角色存活
         /// </summary>
-        private bool IsPositionInFrontLine(HorizontalPosition position)
+        private bool HasEnemyInFrontRow(BattleSide side)
         {
-            switch (position)
+            foreach (InitiativeEntry entry in initiativeOrder)
             {
-                case HorizontalPosition.PlayerFrontLeft:
-                case HorizontalPosition.PlayerFrontCenter:
-                case HorizontalPosition.PlayerFrontRight:
-                case HorizontalPosition.EnemyFrontLeft:
-                case HorizontalPosition.EnemyFrontCenter:
-                case HorizontalPosition.EnemyFrontRight:
+                if (entry.character != null &&
+                    entry.character.currentHitPoints > 0 &&
+                    entry.character.battleSide == side &&
+                    IsCharacterInFrontRow(entry.character))
+                {
                     return true;
-                case HorizontalPosition.PlayerBackLeft:
-                case HorizontalPosition.PlayerBackCenter:
-                case HorizontalPosition.PlayerBackRight:
-                case HorizontalPosition.EnemyBackLeft:
-                case HorizontalPosition.EnemyBackCenter:
-                case HorizontalPosition.EnemyBackRight:
-                    return false;
-                default:
-                    return true; // 默认前排
-            }
-        }
-
-        /// <summary>
-        /// 选择最佳行动
-        /// </summary>
-        private BattleAction ChooseBestAction(List<BattleAction> actions)
-        {
-            if (actions.Count == 0) return null;
-            if (actions.Count == 1) return actions[0];
-
-            // 按优先级排序，选择最高优先级的行动
-            return actions.OrderByDescending(a => a.priority).First();
-        }
-
-        /// <summary>
-        /// 执行战斗行动（协程版本）
-        /// </summary>
-        private IEnumerator ExecuteBattleActionCoroutine(CharacterStats actor, BattleAction action)
-        {
-            if (action == null || actor == null) yield break;
-
-            Debug.Log($"执行行动: {actor.GetDisplayName()} -> {action.description}");
-
-            switch (action.type)
-            {
-                case BattleActionType.MeleeAttack:
-                    yield return StartCoroutine(PerformMeleeAttackSequence(actor, action.target));
-                    break;
-
-                case BattleActionType.RangedAttack:
-                    yield return StartCoroutine(PerformRangedAttackSequence(actor, action.target));
-                    break;
-
-                case BattleActionType.Defend:
-                    ExecuteDefend(actor);
-                    break;
-
-                default:
-                    Debug.LogWarning($"未知的战斗行动类型: {action.type}");
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// 执行战斗行动
-        /// </summary>
-        private void ExecuteBattleAction(CharacterStats actor, BattleAction action)
-        {
-            if (action == null || actor == null) return;
-
-            Debug.Log($"执行行动: {actor.GetDisplayName()} -> {action.description}");
-
-            switch (action.type)
-            {
-                case BattleActionType.MeleeAttack:
-                    ExecuteMeleeAttack(actor, action.target);
-                    break;
-
-                case BattleActionType.RangedAttack:
-                    ExecuteRangedAttack(actor, action.target);
-                    break;
-
-                case BattleActionType.Defend:
-                    ExecuteDefend(actor);
-                    break;
-
-                default:
-                    Debug.LogWarning($"未知的战斗行动类型: {action.type}");
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// 执行近战攻击 - 仅供前排角色使用
-        /// </summary>
-        private void ExecuteMeleeAttack(CharacterStats attacker, CharacterStats target)
-        {
-            if (attacker == null || target == null) return;
-
-            // 获取阵型管理器来判断角色类型
-            HorizontalBattleFormationManager formationManager = FindObjectOfType<HorizontalBattleFormationManager>();
-
-            if (formationManager != null && formationManager.IsRangedClass(attacker))
-            {
-                // 如果是后排角色，强制使用远程攻击，不移动
-                Debug.LogWarning($"{attacker.GetDisplayName()} 是后排角色，自动转换为远程攻击");
-                ExecuteRangedAttack(attacker, target);
-                return;
-            }
-
-            Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起近战攻击");
-
-            // 启动近战攻击协程，包含移动-攻击-返回的完整流程
-            StartCoroutine(PerformMeleeAttackSequence(attacker, target));
-        }
-
-        /// <summary>
-        /// 执行近战攻击序列：移动-攻击-返回
-        /// </summary>
-        private IEnumerator PerformMeleeAttackSequence(CharacterStats attacker, CharacterStats target)
-        {
-            // 记录攻击者的原始位置
-            Vector3 originalPosition = attacker.transform.position;
-
-            // 计算目标攻击位置（目标前方1.5单位）
-            Vector3 targetPosition = target.transform.position;
-            Vector3 attackPosition;
-
-            // 根据阵营决定攻击位置
-            if (attacker.battleSide == BattleSide.Player)
-            {
-                // 玩家攻击敌人，移动到敌人左侧
-                attackPosition = new Vector3(targetPosition.x - 1.5f, targetPosition.y, targetPosition.z);
-            }
-            else
-            {
-                // 敌人攻击玩家，移动到玩家右侧
-                attackPosition = new Vector3(targetPosition.x + 1.5f, targetPosition.y, targetPosition.z);
-            }
-
-            // 阶段1：移动到攻击位置
-            Debug.Log($"{attacker.GetDisplayName()} 移动到攻击位置");
-
-            DND_CharacterAdapter adapter = attacker.GetComponent<DND_CharacterAdapter>();
-            if (adapter != null)
-            {
-                adapter.PlayWalkAnimation();
-            }
-
-            float moveSpeed = 5f;
-            while (Vector3.Distance(attacker.transform.position, attackPosition) > 0.1f)
-            {
-                attacker.transform.position = Vector3.MoveTowards(
-                    attacker.transform.position,
-                    attackPosition,
-                    moveSpeed * Time.deltaTime
-                );
-                yield return null;
-            }
-
-            // 阶段2：执行攻击
-            Debug.Log($"{attacker.GetDisplayName()} 到达攻击位置，开始攻击");
-
-            if (adapter != null)
-            {
-                adapter.PlayAttackAnimation();
-            }
-
-            // 等待攻击动画播放一段时间
-            yield return new WaitForSeconds(0.5f);
-
-            // 使用统一的战斗系统执行攻击检定和伤害计算
-            HorizontalCombatRules.PerformAttack(attacker, target);
-
-            // 等待攻击动画完成
-            yield return new WaitForSeconds(0.5f);
-
-            // 阶段3：返回原位
-            Debug.Log($"{attacker.GetDisplayName()} 返回原位置");
-
-            if (adapter != null)
-            {
-                adapter.PlayWalkAnimation();
-            }
-
-            while (Vector3.Distance(attacker.transform.position, originalPosition) > 0.1f)
-            {
-                attacker.transform.position = Vector3.MoveTowards(
-                    attacker.transform.position,
-                    originalPosition,
-                    moveSpeed * Time.deltaTime
-                );
-                yield return null;
-            }
-
-            // 阶段4：恢复待机状态
-            if (adapter != null)
-            {
-                adapter.PlayIdleAnimation();
-            }
-
-            Debug.Log($"{attacker.GetDisplayName()} 近战攻击序列完成");
-
-            // 标记回合结束
-            MarkTurnComplete(attacker);
-        }
-
-        /// <summary>
-        /// 执行远程攻击 - 原地攻击，无移动
-        /// </summary>
-        private void ExecuteRangedAttack(CharacterStats attacker, CharacterStats target)
-        {
-            if (attacker == null || target == null) return;
-
-            Debug.Log($"{attacker.GetDisplayName()} 对 {target.GetDisplayName()} 发起远程攻击");
-
-            // 原地远程攻击，不需要移动
-            StartCoroutine(PerformRangedAttackSequence(attacker, target));
-        }
-
-        /// <summary>
-        /// 执行远程攻击序列：原地攻击
-        /// </summary>
-        private IEnumerator PerformRangedAttackSequence(CharacterStats attacker, CharacterStats target)
-        {
-            DND_CharacterAdapter adapter = attacker.GetComponent<DND_CharacterAdapter>();
-
-            if (adapter != null)
-            {
-                // 后排角色使用远程攻击动画（原地攻击）
-                adapter.PlayRangedAttack();
-                Debug.Log($"{attacker.GetDisplayName()} 执行远程攻击动画");
-            }
-
-            // 等待攻击动画播放一段时间后计算伤害
-            yield return new WaitForSeconds(0.5f);
-
-            // 执行伤害计算
-            PerformDamageCalculation(attacker, target);
-
-            // 等待动画完成
-            yield return new WaitForSeconds(1.0f);
-
-            Debug.Log($"{attacker.GetDisplayName()} 远程攻击完成");
-
-            // 标记回合结束
-            MarkTurnComplete(attacker);
-        }
-
-        /// <summary>
-        /// 执行伤害计算（供远程攻击使用）
-        /// </summary>
-        private void PerformDamageCalculation(CharacterStats attacker, CharacterStats target)
-        {
-            // 执行攻击检定和伤害计算
-            bool isCriticalHit;
-            int attackRoll;
-            bool hitSuccess = HorizontalCombatRules.MakeAttackRoll(attacker, target, out isCriticalHit, out attackRoll);
-
-            if (hitSuccess)
-            {
-                int damage = HorizontalCombatRules.CalculateDamage(attacker, isCriticalHit);
-                HorizontalCombatRules.ApplyDamage(target, attacker, damage); // 添加攻击者参数
-
-                // 播放目标受击动画
-                DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-                if (targetAdapter != null)
-                {
-                    targetAdapter.PlayHitAnimation();
-                }
-
-                Debug.Log($"远程攻击命中！造成 {damage} 点伤害，{target.GetDisplayName()} 剩余血量: {target.currentHitPoints}");
-
-                // 检查目标是否死亡
-                if (target.currentHitPoints <= 0)
-                {
-                    Debug.Log($"{target.GetDisplayName()} 死亡！");
-                    if (targetAdapter != null)
-                    {
-                        targetAdapter.PlayDeathAnimation();
-                    }
                 }
             }
-            else
-            {
-                Debug.Log($"远程攻击未命中！攻击检定:{attackRoll}");
+            return false;
+        }
 
-                // 显示MISS效果
-                if (target != null)
+        /// <summary>
+        /// 选择最优攻击目标
+        /// </summary>
+        private CharacterStats SelectBestTarget(CharacterStats attacker, List<CharacterStats> targets)
+        {
+            if (targets.Count == 0) return null;
+            if (targets.Count == 1) return targets[0];
+
+            // 优先攻击血量最少的敌人
+            CharacterStats bestTarget = targets[0];
+            foreach (CharacterStats target in targets)
+            {
+                if (target.currentHitPoints < bestTarget.currentHitPoints)
                 {
-                    target.ShowMiss();
+                    bestTarget = target;
                 }
             }
-        }
 
-        /// <summary>
-        /// 执行防御动作
-        /// </summary>
-        private void ExecuteDefend(CharacterStats character)
-        {
-            Debug.Log($"{character.GetDisplayName()} 采取防御姿态");
-
-            // 播放防御动画或保持待机
-            DND_CharacterAdapter adapter = character.GetComponent<DND_CharacterAdapter>();
-            if (adapter != null)
-            {
-                adapter.PlayIdleAnimation();
-            }
-
-            // 标记回合结束
-            MarkTurnComplete(character);
-        }
-
-        /// <summary>
-        /// 标记回合完成
-        /// </summary>
-        private void MarkTurnComplete(CharacterStats character)
-        {
-            if (character == null) return;
-
-            Debug.Log($"{character.GetDisplayName()} 回合结束");
-
-            // 回合结束后，继续下一个角色的回合
-            StartCoroutine(NextTurnCoroutine());
-        }
-
-        /// <summary>
-        /// 下一回合协程
-        /// </summary>
-        private IEnumerator NextTurnCoroutine()
-        {
-            yield return new WaitForSeconds(0.5f); // 短暂延迟让动画播放完
-
-            if (isBattleActive)
-            {
-                ProcessNextTurn();
-            }
-        }
-
-        /// <summary>
-        /// 处理下一个回合
-        /// </summary>
-        private void ProcessNextTurn()
-        {
-            if (!isBattleActive) return;
-
-            // 在战斗序列循环中已经处理了回合推进逻辑
-            // 这里只需要确保战斗状态正确
-            Debug.Log("处理下一回合...");
+            return bestTarget;
         }
 
         /// <summary>
         /// 战斗行动数据结构
         /// </summary>
-        [System.Serializable]
         public class BattleAction
         {
-            public BattleActionType type;
-            public float priority;
+            public BattleActionType actionType;
             public CharacterStats target;
-            public Vector3 targetPosition;
             public string description;
         }
 
-        /// <summary>
-        /// 战斗行动类型枚举
-        /// </summary>
         public enum BattleActionType
         {
-            MeleeAttack,    // 近战攻击
-            RangedAttack,   // 远程攻击
-            Spell,          // 法术
-            Move,           // 移动
-            Defend,         // 防御
-            Item            // 使用物品
+            Attack,
+            Defend,
+            Cast,
+            Move,
+            Wait
         }
     }
 }
