@@ -4,7 +4,6 @@ using UnityEngine;
 using Spine.Unity;
 using Spine;
 using DG.Tweening;
-using demo2.DND.HorizontalFormation;
 
 namespace demo2.DND
 {
@@ -18,16 +17,12 @@ namespace demo2.DND
         public CharacterStats characterStats;
         public SkeletonAnimation skeletonAnimation;
 
-        [Header("动画配置")]
-        public AnimationMapping animationMapping;
-
-        [Header("事件配置")]
-        public SpineEventMapping eventMapping;
+        [Header("动画表现配置（ScriptableObject驱动）")]
+        public CharacterAnimationConfig animationConfig;
 
         [Header("位移设置")]
-        public float moveSpeed = 2.0f;
-        public float attackDistance = 1.5f;
-        public Ease moveEase = Ease.OutCubic;
+        // public float moveSpeed = 2.0f; // 已移除，统一由SO配置
+        // public float attackDistance = 1.5f; // 已移除，统一由SO配置
 
         private Vector3 originalPosition;
         private bool isAnimating;
@@ -40,54 +35,52 @@ namespace demo2.DND
 
         private bool isForceAttackAnimation = false;
 
-        [System.Serializable]
-        public class AnimationMapping
+        public enum CharacterState
         {
-            [Header("基础动画")]
-            public string idleAnimation = "idle";
-            public string walkAnimation = "walk";
-            public string runAnimation = "run";
-
-            [Header("战斗动画")]
-            public string attackAnimation = "attack";
-            public string hitAnimation = "hit";
-            public string deathAnimation = "death";
-            public string unconsciousAnimation = "unconscious";
-
-            [Header("技能动画")]
-            public string castSpellAnimation = "cast";
-            public string defendAnimation = "defend";
-            public string dodgeAnimation = "dodge";
+            Idle,
+            Walk,
+            Run,
+            Attack,
+            Hit,
+            Death,
+            Skill,
+            Defend,
+            Dodge,
+            Unconscious
+            // ...可扩展
         }
 
-        [System.Serializable]
-        public class SpineEventMapping
-        {
-            [Header("攻击事件映射")]
-            [Tooltip("攻击命中事件名称 - 不同素材可能叫attack_hit/damage_frame/hit等")]
-            public string attackHitEvent = "attack_hit";
-
-            [Header("状态事件映射")]
-            [Tooltip("死亡完成事件名称 - 不同素材可能叫death_complete/dead_end等")]
-            public string deathCompleteEvent = "death_complete";
-
-            [Tooltip("昏迷开始事件名称 - 不同素材可能叫unconscious_start/down_start等")]
-            public string unconsciousStartEvent = "unconscious_start";
-
-            [Header("音效事件映射")]
-            [Tooltip("脚步声事件名称 - 不同素材可能叫footstep/step等")]
-            public string footstepEvent = "footstep";
-
-            [Header("通用状态事件")]
-            [Tooltip("通用状态变化事件名称")]
-            public string stateChangeEvent = "state_change";
-        }
+        public CharacterState CurrentState { get; private set; } = CharacterState.Idle;
 
         void Awake()
         {
             InitializeComponents();
             SetupSpineEvents();
             originalPosition = transform.position;
+            // 不再需要赋值moveSpeed和attackDistance，全部通过animationConfig访问
+        }
+
+        void OnEnable()
+        {
+            if (skeletonAnimation != null)
+            {
+                skeletonAnimation.AnimationState.Event += OnSpineEvent;
+                skeletonAnimation.AnimationState.Complete += OnSpineAnimationComplete;
+            }
+        }
+
+        void OnDisable()
+        {
+            if (skeletonAnimation != null)
+            {
+                skeletonAnimation.AnimationState.Event -= OnSpineEvent;
+                skeletonAnimation.AnimationState.Complete -= OnSpineAnimationComplete;
+            }
+            if (currentMoveTween != null && currentMoveTween.IsActive())
+            {
+                currentMoveTween.Kill();
+                currentMoveTween = null;
+            }
         }
 
         void InitializeComponents()
@@ -119,11 +112,7 @@ namespace demo2.DND
 
             // 更智能的攻击事件识别 - 支持多种命名规范
             bool isAttackEvent = false;
-
-            // 检查是否包含攻击相关的关键词
             string lowerEventName = eventName.ToLower();
-
-            // 基础攻击关键词检查
             if (lowerEventName.Contains("atk") ||
                 lowerEventName.Contains("attack") ||
                 lowerEventName.Contains("damage") ||
@@ -132,19 +121,15 @@ namespace demo2.DND
             {
                 isAttackEvent = true;
             }
-
-            // 特殊模式检查 - 支持 atk_E, atk01_E, atk02_E 等格式
             if (!isAttackEvent)
             {
-                // 使用正则表达式检查更复杂的攻击事件模式
                 var attackPatterns = new string[]
                 {
-                    "atk\\d*_e",      // atk_E, atk01_E, atk02_E 等
-                    "attack\\d*_e",   // attack_E, attack01_E 等
-                    "hit\\d*_e",      // hit_E, hit01_E 等
-                    "strike\\d*_e"    // strike_E, strike01_E 等
+                    "atk\\d*_e",
+                    "attack\\d*_e",
+                    "hit\\d*_e",
+                    "strike\\d*_e"
                 };
-
                 foreach (var pattern in attackPatterns)
                 {
                     if (System.Text.RegularExpressions.Regex.IsMatch(lowerEventName, pattern))
@@ -155,7 +140,6 @@ namespace demo2.DND
                     }
                 }
             }
-
             if (isAttackEvent)
             {
                 Debug.Log($"[{gameObject.name}] 识别为攻击命中事件: {eventName}");
@@ -163,29 +147,29 @@ namespace demo2.DND
                 return;
             }
 
-            // 如果有事件映射配置，使用精确匹配
-            if (eventMapping != null)
+            // 使用SO配置的事件名进行精确匹配
+            if (animationConfig != null)
             {
-                if (eventName == eventMapping.attackHitEvent)
+                if (eventName == animationConfig.attackHitEvent)
                 {
                     Debug.Log($"[{gameObject.name}] 攻击命中事件触发（映射匹配）: {eventName}");
                     OnAttackHit?.Invoke();
                 }
-                else if (eventName == eventMapping.deathCompleteEvent)
+                else if (eventName == animationConfig.deathCompleteEvent)
                 {
                     Debug.Log($"[{gameObject.name}] 死亡完成事件触发: {eventName}");
                     OnAnimationComplete?.Invoke();
                 }
-                else if (eventName == eventMapping.unconsciousStartEvent)
+                else if (eventName == animationConfig.unconsciousStartEvent)
                 {
                     Debug.Log($"[{gameObject.name}] 昏迷开始事件触发: {eventName}");
                     OnStateChanged?.Invoke("unconscious");
                 }
-                else if (eventName == eventMapping.stateChangeEvent)
+                else if (eventName == animationConfig.stateChangeEvent)
                 {
                     OnStateChanged?.Invoke(e.String ?? "");
                 }
-                else if (eventName == eventMapping.footstepEvent)
+                else if (eventName == animationConfig.footstepEvent)
                 {
                     OnStateChanged?.Invoke("footstep");
                 }
@@ -196,7 +180,7 @@ namespace demo2.DND
             }
             else
             {
-                Debug.Log($"[{gameObject.name}] eventMapping为空，事件: {eventName} 未被处理");
+                Debug.Log($"[{gameObject.name}] animationConfig为空，事件: {eventName} 未被处理");
             }
         }
 
@@ -207,12 +191,11 @@ namespace demo2.DND
 
             OnAnimationComplete?.Invoke();
 
-            // 修复：使用智能匹配来判断是否为攻击动画
-            string expectedAttackAnimName = FindBestAttackAnimationName();
+            string expectedAttackAnimName = animationConfig != null ? animationConfig.attackAnimation : "attack";
 
             if (completedAnimationName == expectedAttackAnimName ||
-                completedAnimationName == animationMapping.hitAnimation ||
-                completedAnimationName == animationMapping.dodgeAnimation)
+                completedAnimationName == (animationConfig != null ? animationConfig.hitAnimation : "hit") ||
+                completedAnimationName == (animationConfig != null ? animationConfig.dodgeAnimation : "dodge"))
             {
                 if (isForceAttackAnimation)
                 {
@@ -245,7 +228,7 @@ namespace demo2.DND
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Idle");
                 return;
             }
-            PlayAnimation(animationMapping.idleAnimation, true);
+            PlayAnimation(animationConfig.idleAnimation, true);
         }
 
         public void PlayWalkAnimation()
@@ -255,7 +238,7 @@ namespace demo2.DND
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Walk");
                 return;
             }
-            PlayAnimation(animationMapping.walkAnimation, true);
+            PlayAnimation(animationConfig.walkAnimation, true);
         }
 
         public void PlayRunAnimation()
@@ -265,7 +248,7 @@ namespace demo2.DND
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Run");
                 return;
             }
-            PlayAnimation(animationMapping.runAnimation, true);
+            PlayAnimation(animationConfig.runAnimation, true);
         }
 
         // 战斗动画
@@ -274,11 +257,11 @@ namespace demo2.DND
             Debug.Log($"[{gameObject.name}] ========== PlayAttackAnimation 开始 ==========");
             Debug.Log($"[{gameObject.name}] 当前isAnimating状态: {isAnimating}");
             Debug.Log($"[{gameObject.name}] skeletonAnimation是否为空: {skeletonAnimation == null}");
-            Debug.Log($"[{gameObject.name}] animationMapping是否为空: {animationMapping == null}");
+            Debug.Log($"[{gameObject.name}] animationConfig是否为空: {animationConfig == null}");
 
-            if (animationMapping != null)
+            if (animationConfig != null)
             {
-                Debug.Log($"[{gameObject.name}] 配置的攻击动画名称: '{animationMapping.attackAnimation}'");
+                Debug.Log($"[{gameObject.name}] 配置的攻击动画名称: '{animationConfig.attackAnimation}'");
             }
 
             string attackAnimName = FindBestAttackAnimationName();
@@ -310,24 +293,24 @@ namespace demo2.DND
 
         public void PlayHitAnimation()
         {
-            PlayAnimation(animationMapping.hitAnimation, false);
+            PlayAnimation(animationConfig.hitAnimation, false);
         }
 
         public void PlayDeathAnimation()
         {
-            PlayAnimation(animationMapping.deathAnimation, false);
+            PlayAnimation(animationConfig.deathAnimation, false);
         }
 
         public void PlayUnconsciousAnimation()
         {
-            PlayAnimation(animationMapping.unconsciousAnimation, true);
+            PlayAnimation(animationConfig.unconsciousAnimation, true);
         }
 
         public void ForcePlayAttackAnimation()
         {
             // 强制播放，仍设置锁以防止覆盖
             isForceAttackAnimation = true;
-            PlayAnimation(animationMapping.attackAnimation, false);
+            PlayAnimation(animationConfig.attackAnimation, false);
         }
 
         #endregion
@@ -338,17 +321,17 @@ namespace demo2.DND
         {
             if (isAnimating) return;
 
-            PlayAnimation(animationMapping.castSpellAnimation, false);
+            PlayAnimation(animationConfig.skillAnimation, false);
         }
 
         public void PlayDefendAnimation()
         {
-            PlayAnimation(animationMapping.defendAnimation, false);
+            PlayAnimation(animationConfig.defendAnimation, false);
         }
 
         public void PlayDodgeAnimation()
         {
-            PlayAnimation(animationMapping.dodgeAnimation, false);
+            PlayAnimation(animationConfig.dodgeAnimation, false);
         }
 
         #endregion
@@ -385,26 +368,43 @@ namespace demo2.DND
             PlayWalkAnimation();
 
             float moveDistance = Vector3.Distance(transform.position, attackPosition);
-            float moveDuration = moveDistance / moveSpeed;
+            float moveDuration = moveDistance / animationConfig.moveSpeed;
+
+            // 新Tween前Kill旧Tween
+            if (currentMoveTween != null && currentMoveTween.IsActive())
+            {
+                currentMoveTween.Kill();
+                currentMoveTween = null;
+            }
 
             currentMoveTween = transform.DOMove(attackPosition, moveDuration)
-                .SetEase(moveEase)
+                .SetEase(animationConfig.moveEase)
                 .OnComplete(() => {
                     try
                     {
                         Debug.Log($"[{gameObject.name}] 阶段2：到达攻击位置，执行攻击");
-
-                        // 使用和远程攻击相同的逻辑来执行攻击
                         ExecuteAttackAtPosition(target, onAttackHit, () => {
-                            // 攻击完成后返回原位
                             Debug.Log($"[{gameObject.name}] 阶段3：攻击完成，返回原位");
-                            ReturnToOriginalPosition(onComplete);
+                            // 返回原位
+                            if (currentMoveTween != null && currentMoveTween.IsActive())
+                            {
+                                currentMoveTween.Kill();
+                                currentMoveTween = null;
+                            }
+                            currentMoveTween = transform.DOMove(originalPosition, moveDuration)
+                                .SetEase(animationConfig.moveEase)
+                                .OnComplete(() => {
+                                    isAnimating = false;
+                                    PlayIdleAnimation();
+                                    onComplete?.Invoke();
+                                });
                         });
                     }
                     catch (System.Exception ex)
                     {
-                        Debug.LogError($"[{gameObject.name}] 近战攻击移动完成回调错误: {ex.Message}");
+                        Debug.LogError($"[{gameObject.name}] ExecuteMeleeAttack异常: {ex.Message}");
                         isAnimating = false;
+                        PlayIdleAnimation();
                         onComplete?.Invoke();
                     }
                 });
@@ -612,9 +612,9 @@ namespace demo2.DND
         private Vector3 CalculateAttackPosition(Transform target)
         {
             Vector3 direction = (target.position - transform.position).normalized;
-            Vector3 attackPos = target.position - direction * attackDistance;
+            Vector3 attackPos = target.position - direction * animationConfig.attackDistance;
 
-            Debug.Log($"计算攻击位置 - 目标: {target.position}, 攻击位置: {attackPos}, 距离: {attackDistance}");
+            Debug.Log($"计算攻击位置 - 目标: {target.position}, 攻击位置: {attackPos}, 距离: {animationConfig.attackDistance}");
             return attackPos;
         }
 
@@ -622,37 +622,26 @@ namespace demo2.DND
         {
             Debug.Log($"{gameObject.name} 返回原位 - 当前位置: {transform.position} → 原位: {originalPosition}");
 
-            // 在返回前确保解除攻击动画锁，允许播放Walk/Idle
             if (isForceAttackAnimation)
             {
                 Debug.Log($"[{gameObject.name}] ReturnToOriginalPosition: 解除攻击动画锁以便播放返回动画");
                 isForceAttackAnimation = false;
             }
-
-            // 修复：确保播放走路动画
             PlayWalkAnimation();
-
             float distance = Vector3.Distance(transform.position, originalPosition);
             if (distance < 0.1f)
             {
-                // 如果距离很近，直接完成
-                Debug.Log($"{gameObject.name} 已在原位附近，直接完成返回");
                 PlayIdleAnimation();
                 isAnimating = false;
                 onComplete?.Invoke();
                 return;
             }
-
-            // 确保取消之前的移动Tween
             currentMoveTween?.Kill();
-
-            // 延迟启动移动，给Spine动画切换留一个短暂帧时间，避免移动时仍看到攻击动作
-            float moveDelay = 0.06f; // 小延迟，保证动画切换生效
+            float moveDelay = 0.06f;
             DOVirtual.DelayedCall(moveDelay, () => {
-                currentMoveTween = transform.DOMove(originalPosition, distance / moveSpeed)
-                    .SetEase(moveEase)
+                currentMoveTween = transform.DOMove(originalPosition, distance / animationConfig.moveSpeed)
+                    .SetEase(animationConfig.moveEase)
                     .OnComplete(() => {
-                        Debug.Log($"{gameObject.name} 返回原位完成");
                         PlayIdleAnimation();
                         isAnimating = false;
                         onComplete?.Invoke();
@@ -868,20 +857,20 @@ namespace demo2.DND
             }
 
             Debug.Log($"=== [{gameObject.name}] 当前动画映射配置 ===");
-            Debug.Log($"idle: {animationMapping.idleAnimation}");
-            Debug.Log($"walk: {animationMapping.walkAnimation}");
-            Debug.Log($"attack: {animationMapping.attackAnimation}");
-            Debug.Log($"hit: {animationMapping.hitAnimation}");
+            Debug.Log($"idle: {animationConfig.idleAnimation}");
+            Debug.Log($"walk: {animationConfig.walkAnimation}");
+            Debug.Log($"attack: {animationConfig.attackAnimation}");
+            Debug.Log($"hit: {animationConfig.hitAnimation}");
 
             // 验证攻击动画是否存在
-            var attackAnim = skeletonData.FindAnimation(animationMapping.attackAnimation);
+            var attackAnim = skeletonData.FindAnimation(animationConfig.attackAnimation);
             if (attackAnim != null)
             {
-                Debug.Log($"✓ 攻击动画 '{animationMapping.attackAnimation}' 找到，时长: {attackAnim.Duration}秒");
+                Debug.Log($"✓ 攻击动画 '{animationConfig.attackAnimation}' 找到，时长: {attackAnim.Duration}秒");
             }
             else
             {
-                Debug.LogError($"✗ 攻击动画 '{animationMapping.attackAnimation}' 未找到！");
+                Debug.LogError($"✗ 攻击动画 '{animationConfig.attackAnimation}' 未找到！");
             }
         }
 
@@ -917,11 +906,11 @@ namespace demo2.DND
                 return null;
             }
 
-            Debug.Log($"[{gameObject.name}] 智能查找攻击动画 - 配置的攻击动画名称: '{animationMapping.attackAnimation}'");
+            Debug.Log($"[{gameObject.name}] 智能查找攻击动画 - 配置的攻击动画名称: '{animationConfig.attackAnimation}'");
 
             // 常见的攻击动画名称列表（按优先级排序）
             string[] possibleAttackNames = {
-                animationMapping.attackAnimation, // 优先使用配置的名称
+                animationConfig.attackAnimation, // 优先使用配置的名称
                 "Atk01", "Atk02", "Atk03", "attack", "Attack", "ATTACK",
                 "atk", "ATK", "hit", "Hit", "strike", "Strike"
             };

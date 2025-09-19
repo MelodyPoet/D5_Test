@@ -224,7 +224,7 @@ MonoBehaviour:
   template: {fileID: 11400000, guid: a85a66d0e405a3649984eba84cdb51e1, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
   characterName: "\u827E\u62C9"
-  characterClass: 2
+  characterClass: 1
   characterLevel: 1
   battleSide: 0
   maxHitPoints: 10
@@ -252,23 +252,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterStats: {fileID: 4286918360062315237}
   skeletonAnimation: {fileID: 8656571433496126432}
-  animationMapping:
-    idleAnimation: Wait
-    walkAnimation: Walk
-    runAnimation: run
-    attackAnimation: Atk01
-    hitAnimation: Dmg
-    deathAnimation: 
-    unconsciousAnimation: Down
-    castSpellAnimation: cast
-    defendAnimation: defend
-    dodgeAnimation: dodge
-  eventMapping:
-    attackHitEvent: s.Attack
-    deathCompleteEvent: death_complete
-    unconsciousStartEvent: unconscious_start
-    footstepEvent: footstep
-    stateChangeEvent: state_change
-  moveSpeed: 2
-  attackDistance: 1.5
-  moveEase: 9
+  animationConfig: {fileID: 11400000, guid: 2a80e86cbce9ae54c94e5621f6d6de9f, type: 2}

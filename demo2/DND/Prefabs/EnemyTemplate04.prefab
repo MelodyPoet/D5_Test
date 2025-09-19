@@ -230,23 +230,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterStats: {fileID: 8463529336456925706}
   skeletonAnimation: {fileID: 4929413515449217280}
-  animationMapping:
-    idleAnimation: idle
-    walkAnimation: move
-    runAnimation: run
-    attackAnimation: atk_1
-    hitAnimation: hit
-    deathAnimation: dead
-    unconsciousAnimation: unconscious
-    castSpellAnimation: cast
-    defendAnimation: defend
-    dodgeAnimation: dodge
-  eventMapping:
-    attackHitEvent: atk_E
-    deathCompleteEvent: death_complete
-    unconsciousStartEvent: unconscious_start
-    footstepEvent: footstep
-    stateChangeEvent: state_change
-  moveSpeed: 2
-  attackDistance: 1.5
-  moveEase: 9
+  animationConfig: {fileID: 11400000, guid: 9bc1391b3e9dffd4bac853a5f2f2e826, type: 2}
