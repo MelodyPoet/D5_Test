@@ -568,8 +568,35 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 清理玩家血条UI对象
+        /// 为指定角色创建并初始化血条UI
         /// </summary>
+        private void CreateHealthBarForCharacter(CharacterStats characterStats)
+        {
+            if (healthBarPrefab == null || characterStats == null)
+            {
+                Debug.LogWarning("HealthBar Prefab or CharacterStats is null.");
+                return;
+            }
+
+            Transform container = characterStats.battleSide == BattleSide.Player ? playerHealthBarContainer : enemyHealthBarContainer;
+            if (container == null)
+            {
+                Debug.LogWarning($"HealthBar Container for {characterStats.battleSide} is not set in HorizontalBattleFormationManager.");
+                return;
+            }
+
+            GameObject healthBarGo = Instantiate(healthBarPrefab, container);
+            UI_HealthBar healthBar = healthBarGo.GetComponent<UI_HealthBar>();
+            if (healthBar == null)
+            {
+                Debug.LogError("HealthBar Prefab does not have a UI_HealthBar component.");
+                Destroy(healthBarGo);
+                return;
+            }
+
+            healthBar.Initialize(characterStats);
+        }
+
         private void ClearPlayerHealthBars()
         {
             if (playerHealthBarContainer != null)
@@ -581,9 +608,6 @@ namespace demo2.DND.HorizontalFormation
             }
         }
 
-        /// <summary>
-        /// 清理敌人血条UI对象
-        /// </summary>
         private void ClearEnemyHealthBars()
         {
             if (enemyHealthBarContainer != null)
@@ -592,87 +616,6 @@ namespace demo2.DND.HorizontalFormation
                 {
                     Destroy(child.gameObject);
                 }
-            }
-        }
-
-        /// <summary>
-        /// 为指定角色创建并初始化血条UI
-        /// </summary>
-        private void CreateHealthBarForCharacter(CharacterStats characterStats)
-        {
-            if (healthBarPrefab == null || characterStats == null)
-            {
-                Debug.LogWarning("HealthBar Prefab or CharacterStats is null.");
-                return;
-            }
-
-            // 根据角色阵营选择正确的容器
-            Transform container = (characterStats.battleSide == BattleSide.Player) ?
-                                  playerHealthBarContainer : enemyHealthBarContainer;
-
-            if (container != null)
-            {
-                GameObject healthBarGo = Instantiate(healthBarPrefab, container);
-
-                // 确保血条有正确的RectTransform设置以配合Layout Group
-                RectTransform rectTransform = healthBarGo.GetComponent<RectTransform>();
-                if (rectTransform != null)
-                {
-                    // 重置锚点和位置，让Layout Group完全控制
-                    rectTransform.anchorMin = new Vector2(0, 1);
-                    rectTransform.anchorMax = new Vector2(0, 1);
-                    rectTransform.pivot = new Vector2(0, 1);
-                    rectTransform.anchoredPosition = Vector2.zero;
-
-                    // 设置血条的基础尺寸
-                    rectTransform.sizeDelta = new Vector2(200f, 50f); // 稍微增加高度便于观察
-
-                    // 添加Layout Element组件来控制布局
-                    UnityEngine.UI.LayoutElement layoutElement = healthBarGo.GetComponent<UnityEngine.UI.LayoutElement>();
-                    if (layoutElement == null)
-                    {
-                        layoutElement = healthBarGo.AddComponent<UnityEngine.UI.LayoutElement>();
-                    }
-
-                    // 设置Layout Element属性 - 关键配置
-                    layoutElement.minHeight = 50f;
-                    layoutElement.preferredHeight = 50f;
-                    layoutElement.minWidth = 200f;
-                    layoutElement.preferredWidth = 200f;
-                    layoutElement.flexibleHeight = 0f;
-                    layoutElement.flexibleWidth = 0f;
-                    layoutElement.ignoreLayout = false; // 确保不忽略布局
-
-                    Debug.Log($"创建血条 [{characterStats.characterName}] - 容器: {container.name} - 子物体数量: {container.childCount}");
-                }
-
-                // 强制刷新Layout Group
-                UnityEngine.UI.LayoutGroup layoutGroup = container.GetComponent<UnityEngine.UI.LayoutGroup>();
-                if (layoutGroup != null)
-                {
-                    // 强制重建布局
-                    UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(container as RectTransform);
-                    Debug.Log($"强制刷新Layout Group: {container.name} - 类型: {layoutGroup.GetType().Name}");
-                }
-                else
-                {
-                    Debug.LogWarning($"容器 {container.name} 没有Layout Group组件！");
-                }
-
-                UI_HealthBar healthBar = healthBarGo.GetComponent<UI_HealthBar>();
-                if (healthBar != null)
-                {
-                    // 使用Initialize方法将UI与其拥有者（角色实例）关联
-                    healthBar.Initialize(characterStats);
-                }
-                else
-                {
-                    Debug.LogError("HealthBar Prefab does not have a UI_HealthBar component.");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"HealthBar Container for {characterStats.battleSide} is not set in HorizontalBattleFormationManager.");
             }
         }
 

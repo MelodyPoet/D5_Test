@@ -421,10 +421,6 @@ namespace demo2.DND
             System.Action tempAttackHitCallback = null;
             System.Action tempAnimCompleteCallback = null;
 
-            // 备用计时器引用，用于在Spine事件触发时取消
-            Tween attackHitBackupTimer = null;
-            Tween attackCompleteBackupTimer = null;
-
             // 标记是否已经触发过，防止重复执行
             bool hasAttackHitTriggered = false;
             bool hasAttackCompleteTriggered = false;
@@ -435,15 +431,10 @@ namespace demo2.DND
                 tempAttackHitCallback = () => {
                     try
                     {
-                        if (hasAttackHitTriggered)
-                        {
-                            Debug.Log($"{gameObject.name} 攻击命中已执行，跳过重复触发");
-                            return;
-                        }
+                        if (hasAttackHitTriggered) return;
                         hasAttackHitTriggered = true;
 
                         Debug.Log($"{gameObject.name} 攻击命中事件触发（Spine事件）");
-                        attackHitBackupTimer?.Kill();
                         onAttackHit.Invoke();
                         OnAttackHit -= tempAttackHitCallback;
                         tempAttackHitCallback = null;
@@ -509,7 +500,7 @@ namespace demo2.DND
                 }
 
                 // 设置攻击命中的备用触发器
-                attackHitBackupTimer = DOVirtual.DelayedCall(attackAnimationDuration * 0.5f, () => {
+                DOVirtual.DelayedCall(attackAnimationDuration * 0.5f, () => {
                     try
                     {
                         if (tempAttackHitCallback != null && !hasAttackHitTriggered)
@@ -528,15 +519,10 @@ namespace demo2.DND
                 tempAnimCompleteCallback = () => {
                     try
                     {
-                        if (hasAttackCompleteTriggered)
-                        {
-                            Debug.Log($"{gameObject.name} 攻击完成已执行，跳过重复触发");
-                            return;
-                        }
+                        if (hasAttackCompleteTriggered) return;
                         hasAttackCompleteTriggered = true;
 
                         Debug.Log($"{gameObject.name} 攻击完成事件触发（Spine事件）");
-                        attackCompleteBackupTimer?.Kill();
 
                         // 解除攻击锁，确保后续可以切换到Walk/Idle
                         if (isForceAttackAnimation)
@@ -557,7 +543,7 @@ namespace demo2.DND
                 OnAnimationComplete += tempAnimCompleteCallback;
 
                 // 添加备用完成触发器
-                attackCompleteBackupTimer = DOVirtual.DelayedCall(attackAnimationDuration + 0.1f, () => {
+                DOVirtual.DelayedCall(attackAnimationDuration + 0.1f, () => {
                     try
                     {
                         if (tempAnimCompleteCallback != null && !hasAttackCompleteTriggered)

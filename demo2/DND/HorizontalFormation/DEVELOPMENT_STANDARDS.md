@@ -220,7 +220,12 @@ HorizontalCombatRules 战斗规则:
 - DamageDisplayManager监听事件显示伤害数字
 - 只保留一套基于预制体的逻辑
 - 统一坐标转换方法，只使用标准的RectTransformUtility.ScreenPointToLocalPointInRectangle方法
-    
+ 
+配置为Canvas-PlayerHealthBars
+           -EnemyHealthBars
+这两者仅判断UI生成的区域，UI的实际位置通过代码动态计算,伤害事件通道通过EventChangelManager获取
+-通过HorizontalBattleFormationManager获取当前实际战斗中的预制体,并将伤害事件通道传递给UI_HealthBar组件
+
 重要，需求清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
 
