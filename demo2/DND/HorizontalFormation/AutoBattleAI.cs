@@ -283,6 +283,17 @@ namespace demo2.DND.HorizontalFormation
                 // 播放闪避动画
                 DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
                 targetAdapter?.PlayDodgeAnimation();
+
+                // 显示 MISS 提示（调用 CharacterStats 的接口）
+                try
+                {
+                    target.ShowMiss();
+                    Debug.Log($"AutoBattleAI.ProcessAttackHit: 已调用 ShowMiss() for {target.GetDisplayName()}");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"AutoBattleAI.ProcessAttackHit: 调用 ShowMiss 时异常 - {ex}");
+                }
             }
         }
 

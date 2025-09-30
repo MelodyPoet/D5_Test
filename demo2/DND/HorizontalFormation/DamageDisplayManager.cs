@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using System;
+using System.Reflection;
 using DG.Tweening;
 
 namespace demo2.DND.HorizontalFormation
@@ -70,13 +72,14 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public void ShowDamageNumber(Transform character, int damage, bool isDamage = true)
         {
+            Debug.Log($"DamageDisplayManager.ShowDamageNumber called for {(character!=null?character.name:"null")}, damage={damage}, isDamage={isDamage}");
             if (character == null || damage < 0) return;
 
             GameObject damageObj = CreateDamageUI(character, damageNumberPrefab);
             if (damageObj == null) return;
 
             // 配置伤害文本
-            Text textComponent = damageObj.GetComponentInChildren<Text>();
+            Text textComponent = damageObj.GetComponentInChildren<Text>(true);
             if (textComponent != null)
             {
                 textComponent.text = damage.ToString();
@@ -84,9 +87,33 @@ namespace demo2.DND.HorizontalFormation
             }
             else
             {
-                Debug.LogWarning("伤害数字预制体中没有找到Text组件");
-                Destroy(damageObj);
-                return;
+                // 尝试兼容 TextMeshPro（通过反射避免硬依赖）
+                var tmpType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro");
+                if (tmpType != null)
+                {
+                    var tmpComp = damageObj.GetComponentInChildren(tmpType, true);
+                    if (tmpComp != null)
+                    {
+                        // 设置 text
+                        var textProp = tmpType.GetProperty("text");
+                        textProp?.SetValue(tmpComp, damage.ToString());
+                        // 设置 color
+                        var colorProp = tmpType.GetProperty("color");
+                        colorProp?.SetValue(tmpComp, isDamage ? Color.red : Color.green);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("伤害数字预制体中未找到 Text 或 TMP_Text 组件");
+                        Destroy(damageObj);
+                        return;
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("伤害数字预制体中没有找到Text组件，且项目未引入TextMeshPro");
+                    Destroy(damageObj);
+                    return;
+                }
             }
 
             // 使用DOTween播放动画
@@ -98,6 +125,7 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public void ShowMiss(Transform character)
         {
+            Debug.Log($"DamageDisplayManager.ShowMiss called for {(character!=null?character.name:"null")}");
             if (character == null)
             {
                 Debug.LogError("DamageDisplayManager.ShowMiss: character参数为空");
@@ -124,7 +152,7 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            Text textComponent = missObj.GetComponentInChildren<Text>();
+            Text textComponent = missObj.GetComponentInChildren<Text>(true);
             if (textComponent != null)
             {
                 textComponent.text = "MISS";
@@ -132,9 +160,30 @@ namespace demo2.DND.HorizontalFormation
             }
             else
             {
-                Debug.LogError($"预制体 '{prefabToUse.name}' 中没有找到Text组件，请检查预制体配置");
-                Destroy(missObj);
-                return;
+                var tmpType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro");
+                if (tmpType != null)
+                {
+                    var tmpComp = missObj.GetComponentInChildren(tmpType, true);
+                    if (tmpComp != null)
+                    {
+                        var textProp = tmpType.GetProperty("text");
+                        textProp?.SetValue(tmpComp, "MISS");
+                        var colorProp = tmpType.GetProperty("color");
+                        colorProp?.SetValue(tmpComp, Color.yellow);
+                    }
+                    else
+                    {
+                        Debug.LogError($"预制体 '{prefabToUse.name}' 中没有找到Text或TMP_Text组件，请检查预制体配置");
+                        Destroy(missObj);
+                        return;
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"预制体 '{prefabToUse.name}' 中没有找到Text组件，请检查预制体配置");
+                    Destroy(missObj);
+                    return;
+                }
             }
 
             // 使用DOTween播放动画
@@ -191,19 +240,31 @@ namespace demo2.DND.HorizontalFormation
 
             if (uiCanvas == null)
             {
-                Debug.LogError("CreateDamageUI: uiCanvas为空，请在Inspector中拖入Canvas");
-                return null;
+                // 尝试回退查找场景中的 Canvas
+                var foundCanvas = FindObjectOfType<Canvas>();
+                if (foundCanvas != null)
+                {
+                    uiCanvas = foundCanvas;
+                    Debug.LogWarning("CreateDamageUI: uiCanvas 未设置，已回退找到场景中的 Canvas 并使用。");
+                }
+                else
+                {
+                    Debug.LogError("CreateDamageUI: uiCanvas为空，请在Inspector中拖入Canvas");
+                    return null;
+                }
             }
 
-            if (Camera.main == null)
+            // 确保存在摄像机（可能未设置MainCamera标签）
+            Camera worldCamera = Camera.main ?? FindObjectOfType<Camera>();
+            if (worldCamera == null)
             {
-                Debug.LogError("CreateDamageUI: 主摄像机未找到，请确保场景中有标记为MainCamera的摄像机");
+                Debug.LogError("CreateDamageUI: 未找到任何摄像机，请确保场景中存在摄像机并正确设置标签");
                 return null;
             }
 
             // 计算世界位置
             Vector3 worldPos = character.position + headOffset;
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
+            Vector3 screenPos = worldCamera.WorldToScreenPoint(worldPos);
 
             // 检查屏幕坐标是否有效
             if (screenPos.z < 0)
@@ -225,10 +286,11 @@ namespace demo2.DND.HorizontalFormation
 
             // 坐标转换：Screen Space - Overlay模式
             Vector2 uiPos;
+            Camera canvasCamera = (uiCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : (uiCanvas.worldCamera ?? worldCamera);
             if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 uiCanvas.transform as RectTransform,
                 screenPos,
-                uiCanvas.worldCamera,
+                canvasCamera,
                 out uiPos))
             {
                 rectTransform.anchoredPosition = uiPos;

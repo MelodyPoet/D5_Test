@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using demo2.DND.HorizontalFormation;
 using DG.Tweening;
+using UnityEngine.UI;
 using System;
 
 namespace demo2.DND
@@ -162,6 +163,16 @@ namespace demo2.DND
             // 扣除实际生命值
             currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
             Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+
+            // 显示伤害数字（优先使用 DamageDisplayManager）
+            try
+            {
+                ShowDamageNumber(damage, true);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"ApplyDamageToSelf: ShowDamageNumber 触发异常 - {ex}");
+            }
 
             // 通知UI直接刷新
             HealthBarUIManager.Instance?.RefreshBar(this);
@@ -455,6 +466,16 @@ namespace demo2.DND
             currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
             Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
+            // 显示伤害数字（兼容直接调用 TakeDamage 的路径）
+            try
+            {
+                ShowDamageNumber(damage, true);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"TakeDamage: ShowDamageNumber 触发异常 - {ex}");
+            }
+
             // 刷新血条UI
             HealthBarUIManager.Instance?.RefreshBar(this);
 
@@ -562,11 +583,15 @@ namespace demo2.DND
         /// <param name="isDamage">是否为伤害（true）还是治疗（false）</param>
         private void ShowDamageNumber(int damage, bool isDamage = true) {
             // 使用统一的伤害显示管理器
-            if (DamageDisplayManager.Instance != null) {
+            if (DamageDisplayManager.Instance != null)
+            {
                 DamageDisplayManager.Instance.ShowDamageNumber(transform, damage, isDamage);
-            } else {
-                Debug.LogWarning($"没有找到伤害显示管理器，无法显示伤害数字");
+                return;
             }
+
+            Debug.LogWarning("CharacterStats.ShowDamageNumber: DamageDisplayManager 未找到，使用本地回退显示");
+            // 回退显示（在场景 Canvas 上创建临时文本）
+            LocalShowFloatingText(damage.ToString(), isDamage ? Color.red : Color.green);
         }
 
         /// <summary>
@@ -574,11 +599,14 @@ namespace demo2.DND
         /// </summary>
         public void ShowMiss() {
             // 使用统一的伤害显示管理器
-            if (DamageDisplayManager.Instance != null) {
+            if (DamageDisplayManager.Instance != null)
+            {
                 DamageDisplayManager.Instance.ShowMiss(transform);
-            } else {
-                Debug.LogWarning($"没有找到伤害显示管理器，无法显示MISS");
+                return;
             }
+
+            Debug.LogWarning("CharacterStats.ShowMiss: DamageDisplayManager 未找到，使用本地回退显示 MISS");
+            LocalShowFloatingText("MISS", Color.yellow);
         }
 
         /// <summary>
@@ -586,8 +614,74 @@ namespace demo2.DND
         /// </summary>
         /// <param name="healAmount">治疗量</param>
         private void ShowHealNumber(int healAmount) {
-            ShowDamageNumber(healAmount, false); // false表示治疗
+            // 复用伤害数字显示逻辑，但以绿色显示表示治疗
+            ShowDamageNumber(healAmount, false);
         }
+
+        // 本地回退：在 Canvas 上创建临时 UI 文本，支持 Text 和 TMP_Text（若存在）
+        private void LocalShowFloatingText(string text, Color color)
+        {
+            // 查找或回退到场景中的 Canvas
+            Canvas canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("LocalShowFloatingText: 未找到 Canvas，无法显示伤害数字");
+                return;
+            }
+
+            // 创建 UI 对象
+            GameObject go = new GameObject("FloatingDamageText");
+            go.transform.SetParent(canvas.transform, false);
+
+            // 尝试使用 UnityEngine.UI.Text
+            Text uiText = null;
+            var textGO = new GameObject("Text");
+            textGO.transform.SetParent(go.transform, false);
+            uiText = textGO.AddComponent<Text>();
+            uiText.text = text;
+            uiText.color = color;
+            uiText.alignment = TextAnchor.MiddleCenter;
+            uiText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            uiText.raycastTarget = false;
+
+            RectTransform rt = go.AddComponent<RectTransform>();
+            RectTransform childRt = textGO.GetComponent<RectTransform>();
+            childRt.sizeDelta = new Vector2(200, 50);
+
+            // 计算屏幕坐标并设置 anchoredPosition
+            Camera worldCamera = Camera.main ?? FindObjectOfType<Camera>();
+            if (worldCamera == null)
+            {
+                Debug.LogWarning("LocalShowFloatingText: 未找到摄像机，无法计算屏幕坐标");
+                Destroy(go);
+                return;
+            }
+
+            Vector3 worldPos = transform.position + new Vector3(0, 2f, 0);
+            Vector3 screenPos = worldCamera.WorldToScreenPoint(worldPos);
+            if (screenPos.z < 0)
+            {
+                // 在摄像机后方，直接销毁
+                Destroy(go);
+                return;
+            }
+
+            Camera canvasCamera = (canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : (canvas.worldCamera ?? worldCamera);
+            Vector2 uiPos;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas.transform as RectTransform, screenPos, canvasCamera, out uiPos))
+            {
+                rt.anchoredPosition = uiPos;
+            }
+
+            // 使用 DOTween 做上升和淡出动画
+            Sequence seq = DOTween.Sequence();
+            // 确保 CanvasRenderer 的 Text 支持 DOFade (必要时可获取，但这里不直接使用变量)
+             // 动画：上升 1.2 秒 并在 1.2s 后淡出
+             float duration = 1.2f;
+             seq.Append(childRt.DOAnchorPos(childRt.anchoredPosition + Vector2.up * 60f, duration).SetEase(Ease.OutCubic));
+             seq.Insert(duration * 0.5f, uiText.DOFade(0f, duration * 0.5f));
+             seq.OnComplete(() => { if (go != null) Destroy(go); });
+         }
 
         /// <summary>
         /// 检查角色是否已死亡（敌人专用）或昏迷（玩家队友专用）
