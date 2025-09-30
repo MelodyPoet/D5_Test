@@ -219,7 +219,7 @@ namespace demo2.DND.HorizontalFormation
             }
             else
             {
-                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行远程攻击序列");
+
                 // 远程攻击：原地攻击
                 attackerAdapter.ExecuteRangedAttack(
                     action.target.transform,
@@ -264,7 +264,7 @@ namespace demo2.DND.HorizontalFormation
                 // 应用伤害
                 target.TakeDamage(damage);
 
-                // 触发伤害事件用于UI更新 - 修复参数顺序：第一个参数是受害者，第二个是攻击者
+                // 触发伤害事件用于UI更新 - 第一个参数是受害者，第二个是攻击者
                 var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
                 damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
 
@@ -283,10 +283,6 @@ namespace demo2.DND.HorizontalFormation
                 // 播放闪避动画
                 DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
                 targetAdapter?.PlayDodgeAnimation();
-
-                // 触发未命中事件
-                var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
-                damageChannel?.RaiseEvent(attacker, target, 0, false);
             }
         }
 

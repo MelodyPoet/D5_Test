@@ -97,7 +97,7 @@ namespace demo2.DND.HorizontalFormation
         private static int GetAttackBonus(CharacterStats character)
         {
             // 简化计算：等级/2 + 力量调整值
-            int levelBonus = character.level / 2;
+            int levelBonus = character.Level / 2;
             int strModifier = GetAbilityModifier(character.strength);
             return levelBonus + strModifier;
         }

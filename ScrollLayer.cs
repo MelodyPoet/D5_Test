@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class ScrollLayer : MonoBehaviour {
@@ -7,7 +5,7 @@ public class ScrollLayer : MonoBehaviour {
     [Tooltip("滚动实现方式")]
     public ScrollMode scrollMode = ScrollMode.AutoDetect;
     [Tooltip("强制使用Transform移动（跳过UV检测）")]
-    public bool forceTransformMove = false;
+    public bool forceTransformMove;
 
     [Header("滚动参数")]
     [Tooltip("滚动速度")]
@@ -24,10 +22,17 @@ public class ScrollLayer : MonoBehaviour {
     private Renderer meshRenderer;
     private Material material;
 
+    // 缓存纹理属性ID以避免基于字符串的查找
+    private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+    private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
+
     // 滚动状态
-    private Vector2 uvOffset = Vector2.zero;
-    private bool isScrolling = false;
+    private Vector2 uvOffset;
+    private bool isScrolling;
     private ScrollMode actualScrollMode;
+
+    // 如果脚本为 SpriteRenderer 创建了材质实例，则记录以便在 OnDestroy 中销毁
+    private bool materialInstanceCreated;
 
     public enum ScrollMode {
         AutoDetect,      // 自动检测最佳方式
@@ -55,7 +60,7 @@ public class ScrollLayer : MonoBehaviour {
     void Update() {
         // 添加调试信息（每60帧输出一次）
         if (Time.frameCount % 60 == 0 && isScrolling) {
-            Debug.Log($"ScrollLayer更新: 模式={actualScrollMode}, 速度={scrollSpeed}, UV偏��={uvOffset}");
+            Debug.Log($"ScrollLayer更新: 模式={actualScrollMode}, 速度={scrollSpeed}, UV偏移={uvOffset}");
         }
 
         switch (actualScrollMode) {
@@ -139,9 +144,10 @@ public class ScrollLayer : MonoBehaviour {
             // 为SpriteRenderer创建可修改的材质副本
             material = new Material(spriteRenderer.material);
             spriteRenderer.material = material;
+            materialInstanceCreated = true;
 
             // 重要：检查材质是否支持UV偏移
-            if (!material.HasProperty("_MainTex") && !material.HasProperty("_BaseMap")) {
+            if (!material.HasProperty(MainTexId) && !material.HasProperty(BaseMapId)) {
                 Debug.LogWarning($"材质 {material.name} 不支持UV偏移，自动切换到Transform移动模式");
                 actualScrollMode = ScrollMode.TransformMove;
                 return;
@@ -162,7 +168,11 @@ public class ScrollLayer : MonoBehaviour {
         if (material == null || !isScrolling) return;
 
         uvOffset.x += scrollSpeed * scrollDirection * Time.deltaTime;
-        material.SetTextureOffset("_MainTex", uvOffset);
+        if (material.HasProperty(MainTexId)) {
+            material.SetTextureOffset(MainTexId, uvOffset);
+        } else if (material.HasProperty(BaseMapId)) {
+            material.SetTextureOffset(BaseMapId, uvOffset);
+        }
     }
 
     /// <summary>
@@ -180,12 +190,12 @@ public class ScrollLayer : MonoBehaviour {
 
         // 尝试不同的纹理属性名称
         bool success = false;
-        if (material.HasProperty("_MainTex")) {
-            material.SetTextureOffset("_MainTex", uvOffset);
+        if (material.HasProperty(MainTexId)) {
+            material.SetTextureOffset(MainTexId, uvOffset);
             success = true;
         }
-        else if (material.HasProperty("_BaseMap")) {
-            material.SetTextureOffset("_BaseMap", uvOffset);
+        else if (material.HasProperty(BaseMapId)) {
+            material.SetTextureOffset(BaseMapId, uvOffset);
             success = true;
         }
 
@@ -199,10 +209,17 @@ public class ScrollLayer : MonoBehaviour {
         else if (Time.frameCount % 180 == 0) {
             Debug.Log($"SpriteUV滚动: uvOffset={uvOffset}, 材质={material.name}");
 
-            // 检查UV偏移是否真的在���作（检查材质当前偏移）
-            Vector2 currentOffset = material.GetTextureOffset("_MainTex");
-            if (Mathf.Approximately(currentOffset.x, 0f) && uvOffset.x > 1f) {
-                Debug.LogWarning("检测到UV偏移无效，切换到Transform移动模式");
+            // 检查UV偏移是否真的在起作用（检查材质当前偏移）
+            string checkProp = material.HasProperty(MainTexId) ? "_MainTex" : material.HasProperty(BaseMapId) ? "_BaseMap" : null;
+            if (checkProp != null) {
+                int checkId = checkProp == "_MainTex" ? MainTexId : BaseMapId;
+                Vector2 currentOffset = material.GetTextureOffset(checkId);
+                if (Mathf.Approximately(currentOffset.x, 0f) && uvOffset.x > 1f) {
+                    Debug.LogWarning("检测到UV偏移无效，切换到Transform移动模式");
+                    actualScrollMode = ScrollMode.TransformMove;
+                }
+            } else {
+                Debug.LogWarning("无法检查材质偏移（缺少_MainTex/_BaseMap），切换到Transform移动模式");
                 actualScrollMode = ScrollMode.TransformMove;
             }
         }
@@ -253,15 +270,25 @@ public class ScrollLayer : MonoBehaviour {
     public void ResetScroll() {
         uvOffset = Vector2.zero;
         if (material != null) {
-            if (material.HasProperty("_MainTex")) {
-                material.SetTextureOffset("_MainTex", uvOffset);
+            if (material.HasProperty(MainTexId)) {
+                material.SetTextureOffset(MainTexId, uvOffset);
             }
-            else if (material.HasProperty("_BaseMap")) {
-                material.SetTextureOffset("_BaseMap", uvOffset);
+            else if (material.HasProperty(BaseMapId)) {
+                material.SetTextureOffset(BaseMapId, uvOffset);
             }
         }
 
         // 重置Transform位置
         transform.position = new Vector3(startX, transform.position.y, transform.position.z);
+    }
+
+    private void OnDestroy() {
+        // 如果我们创建了材质实例，需要在销毁时释放它，避免内存泄漏
+        if (materialInstanceCreated && material != null) {
+            // 仅销毁脚本创建的材质实例
+            Destroy(material);
+            material = null;
+            materialInstanceCreated = false;
+        }
     }
 }

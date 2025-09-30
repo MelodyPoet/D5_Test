@@ -1,8 +1,8 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using demo2.DND.HorizontalFormation;
 using DG.Tweening;
+using System;
 
 namespace demo2.DND
 {
@@ -47,24 +47,18 @@ namespace demo2.DND
         public int WisMod => (wisdom - 10) / 2;
         public int ChaMod => (charisma - 10) / 2;
 
-        // 便捷属性访问 - 修正命名规范
-        public int level => characterLevel;
+        // 新增：昏迷/豁免相关私有字段（之前被误删）
+        private int unconsciousSuccessCount;
+        private int unconsciousFailureCount;
+        private float nextSavingThrowTime;
+        private bool isProcessingSavingThrows;
+
+        // 便捷属性访问 - 修正命名规范（移除重复的小写 level）
         public int Level => characterLevel;
 
-        // 昏迷恢复系统的私有变量
-        private int unconsciousSuccessCount = 0;
-        private int unconsciousFailureCount = 0;
-        private float nextSavingThrowTime = 0f;
-        private bool isProcessingSavingThrows = false;
-
-        void Start() {
-            // 如果有模板，从模板初始化
-            if (template != null) {
-                InitializeFromTemplate();
-            }
-
-            // 设置DND_CharacterAdapter事件监听
-            SetupAdapterEvents();
+        private void Awake() {
+            // 从模板初始化角色数据
+            InitializeFromTemplate();
         }
 
         /// <summary>
@@ -136,9 +130,12 @@ namespace demo2.DND
         /// 应用伤害到自身（从原TakeDamage方法重构）
         /// </summary>
         private void ApplyDamageToSelf(int damage, bool isCritical = false) {
+            // 保证 damageType 在整个方法中可见
+            DamageType damageType = DamageType.Bludgeoning; // 默认钝击伤害
+
             if (template != null) {
                 // 检查免疫（这里简化处理，实际应该从攻击中获取伤害类型）
-                DamageType damageType = DamageType.Bludgeoning; // 默认钝击伤害
+                // 使用 template 中的免疫/抗性/弱点信息来调整 damage
 
                 if (template.immunities.Contains(damageType)) {
                     Debug.Log($"{GetDisplayName()} 免疫 {damageType} 伤害!");
@@ -156,32 +153,26 @@ namespace demo2.DND
                 }
             }
 
-            // 先扣除临时生命值
-            if (temporaryHitPoints > 0) {
-                if (temporaryHitPoints >= damage) {
-                    temporaryHitPoints -= damage;
-                    damage = 0;
-                }
-                else {
-                    damage -= temporaryHitPoints;
-                    temporaryHitPoints = 0;
-                }
+            // 处理暴击（如果传入 isCritical，则加倍伤害，或按需更改）
+            if (isCritical) {
+                damage *= 2;
+                Debug.Log($"{GetDisplayName()} 受到暴击! 伤害翻倍: {damage}");
             }
 
             // 扣除实际生命值
             currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
+            Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
-            Debug.Log($"{GetDisplayName()} 受到 {damage} 点伤害{(isCritical ? " (暴击!)" : "")}! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+            // 通知UI直接刷新
+            HealthBarUIManager.Instance?.RefreshBar(this);
 
-            // 播放受击动画（关键修复）
-            PlayHitAnimation();
+            // 新增：触发本地血量变化事件，供直接绑定的UI使用
+            NotifyHealthChanged();
 
-            // 显示伤害数字
-            ShowDamageNumber(damage);
-
-            // 检查是否死亡
+            // 检查是否失去意识
             if (currentHitPoints <= 0) {
-                HandleDeath();
+                AddStatusEffect(StatusEffectType.Unconscious);
+                Debug.Log($"{GetDisplayName()} 失去意识!");
             }
         }
 
@@ -287,17 +278,17 @@ namespace demo2.DND
             if (Time.time < nextSavingThrowTime) return;
 
             int maxAttempts = 3;
-            int savingThrowDC = 10;
+            int savingThrowDc = 10;
 
             // 进行体质豁免检定
-            int constitutionSave = Random.Range(1, 21) + ConMod;
+            int constitutionSave = UnityEngine.Random.Range(1, 21) + ConMod;
 
-            if (constitutionSave >= savingThrowDC) {
+            if (constitutionSave >= savingThrowDc) {
                 unconsciousSuccessCount++;
-                Debug.Log($"{GetDisplayName()} 体质豁免成功 ({constitutionSave} vs DC{savingThrowDC}) - 成功次数: {unconsciousSuccessCount}/{maxAttempts}");
+                Debug.Log($"{GetDisplayName()} 体质豁免成功 ({constitutionSave} vs DC{savingThrowDc}) - 成功次数: {unconsciousSuccessCount}/{maxAttempts}");
             } else {
                 unconsciousFailureCount++;
-                Debug.Log($"{GetDisplayName()} 体质豁免失败 ({constitutionSave} vs DC{savingThrowDC}) - 失败次数: {unconsciousFailureCount}/{maxAttempts}");
+                Debug.Log($"{GetDisplayName()} 体质豁免失败 ({constitutionSave} vs DC{savingThrowDc}) - 失败次数: {unconsciousFailureCount}/{maxAttempts}");
             }
 
             // 检查是否达到结束条件
@@ -462,8 +453,13 @@ namespace demo2.DND
 
             // 扣除实际生命值
             currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
-
             Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+
+            // 刷新血条UI
+            HealthBarUIManager.Instance?.RefreshBar(this);
+
+            // 新增：触发本地血量变化事件
+            NotifyHealthChanged();
 
             // 检查是否失去意识
             if (currentHitPoints <= 0) {
@@ -483,7 +479,10 @@ namespace demo2.DND
             // 显示治疗数字
             ShowHealNumber(amount);
 
-            // 如果恢复意识
+            // 新增：触发本地血量变化事件
+            NotifyHealthChanged();
+
+            // 如果恢复了意识
             if (currentHitPoints > 0 && HasStatusEffect(StatusEffectType.Unconscious)) {
                 RemoveStatusEffect(StatusEffectType.Unconscious);
                 Debug.Log($"{GetDisplayName()} 恢复意识!");
@@ -625,11 +624,11 @@ namespace demo2.DND
         public int SkillCheck(Skill skill) {
             if (template == null) {
                 Debug.LogWarning($"{GetDisplayName()} 没有角色模板，无法进行技能检定");
-                return Random.Range(1, 21);
+                return UnityEngine.Random.Range(1, 21);
             }
 
             int bonus = template.GetSkillBonus(skill);
-            int roll = Random.Range(1, 21);
+            int roll = UnityEngine.Random.Range(1, 21);
             int total = roll + bonus;
 
             Debug.Log($"{GetDisplayName()} 进行 {skill} 检定: 掷骰 {roll} + 加值 {bonus} = {total}");
@@ -642,15 +641,36 @@ namespace demo2.DND
         public int SavingThrow(string ability) {
             if (template == null) {
                 Debug.LogWarning($"{GetDisplayName()} 没有角色模板，无法进行豁免检定");
-                return Random.Range(1, 21);
+                return UnityEngine.Random.Range(1, 21);
             }
 
             int bonus = template.GetSavingThrowBonus(ability);
-            int roll = Random.Range(1, 21);
+            int roll = UnityEngine.Random.Range(1, 21);
             int total = roll + bonus;
 
             Debug.Log($"{GetDisplayName()} 进行 {ability} 豁免检定: 掷骰 {roll} + 加值 {bonus} = {total}");
             return total;
+        }
+
+        /// <summary>
+        /// 新增：当血量发生变化时触发的本地事件（直接订阅CharacterStats更可靠）
+        /// 参数: currentHp, maxHp
+        /// </summary>
+        public event Action<int, int> OnHealthChanged;
+
+        /// <summary>
+        /// 触发血量变更通知
+        /// </summary>
+        private void NotifyHealthChanged()
+        {
+            try
+            {
+                OnHealthChanged?.Invoke(currentHitPoints, maxHitPoints);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"NotifyHealthChanged 触发异常: {ex}");
+            }
         }
     }
 }

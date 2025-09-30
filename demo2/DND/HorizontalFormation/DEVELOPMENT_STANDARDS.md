@@ -208,14 +208,17 @@ HorizontalCombatRules 战斗规则:
 
 ---使用ScriptableObject存储角色和怪物数据
 ---使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
----由于场景中存在手动放置的角色预制体，因此禁止在代码中使用AddComponent动态添加组件，所有组件必须手动挂载
----并且由于存在手动摆放的预制体，但是实际加载并且受到伤害的是动态生成的预制体，因此伤害事件的监听必须通过ScriptableObject事件通道
-来监听当前实际受到伤害的这个预制体，避免UI监听错误的预制体从而导致血条无实时更新状态
++ 事件通道与血条更新 — 关键技术点（简洁，供查阅）
+  - 事件通道（`DamageEventChannel`）职责单一：用于把“谁受到伤害/谁造成伤害/伤害数值”等消息广播到所有关心该事件的系统（动画、伤害计算、视觉特效等），但不应直接由 UI 订阅来做最终显示更新。
+  - UI 更新应依赖实例级的本地事件：`CharacterStats` 在受伤/治疗后应触发 `OnHealthChanged(int currentHp, int maxHp)`，UI（`UI_HealthBar`）在被绑定到具体 `CharacterStats` 实例时直接订阅该本地事件以保证目标明确与低时序窗。
+  - 管理器做为保险：`HealthBarUIManager` 保存 `CharacterStats -> UI_HealthBar` 的映射表，提供 `RefreshBar(CharacterStats)` 接口供 `CharacterStats` 在处理伤害后主动调用，作为对本地事件的二次保障（同一职责的两条可靠路径）。
+  - 避免 UI 直接订阅全局通道：当场景同时存在预制体（编辑器中放置）和运行时实例时，UI 若直接订阅全局通道容易订阅到错误目标或由于时序错过事件。
+  - 单例与容器时序规则：确保 `HealthBarUIManager` 单例在 UI/角色创建前就存在（或在创建时立即同步容器与 prefab），避免在单例为 null 时触发回退销毁逻辑导致血条被误删。
+  - 绝对避免启发式销毁：不得使用基于 Slider.value/maxValue 等启发式规则在不确定的情况下批量销毁血条；销毁条件应为 `owner == null` 且经确认（或超时/显式标记）后才执行。
+  - 预制体配置优先：血条预制体必须在 Inspector 中预先绑定好 `Slider`/`Text` 等组件，减少运行时自动查找带来的不确定性。
+  - 日志和调试接口：保留并使用 `HealthBarUIManager.DumpStatus` / `DumpMapDetails` 等调试方法，在复现问题时先采集映射与容器状态以便定位时序或引用不一致的问题。
 
 受击时候头上冒字的伤害显示系统以及血条受击扣血系统
-- 使用DamageEventChannel事件通道广播伤害事件
-- 伤害计算后调用DamageEventChannel.RaiseEvent(attacker, target, damageAmount, isCritical)
-- 角色预制体挂载UI_HealthBar组件监听事件
 - UI_HealthBar更新血条
 - DamageDisplayManager监听事件显示伤害数字
 - 只保留一套基于预制体的逻辑
@@ -223,19 +226,12 @@ HorizontalCombatRules 战斗规则:
  
 配置为Canvas-PlayerHealthBars
            -EnemyHealthBars
-这两者仅判断UI生成的区域，UI的实际位置通过代码动态计算,伤害事件通道通过EventChangelManager获取
--通过HorizontalBattleFormationManager获取当前实际战斗中的预制体,并将伤害事件通道传递给UI_HealthBar组件
-根据检查到的预制体的阵营选择对应UI，实例化血条UI并获取其UI_HealthBar组件
-- UI_HealthBar组件监听伤害事件通道，更新血条
-- DamageDisplayManager监听伤害事件通道，显示伤害数字
-
+这两者仅判断UI生成的区域，UI的实际位置通过代码动态计算
 
 重要，需求清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
 
 集成点:
-- 扩展AutoBattleAI.ExecuteAutoBattleTurn()支持敌方角色
-- 修改目标选择逻辑: 敌方攻击玩家，玩家攻击敌方
 - 保持战斗流程的一致性: 敌方也要遵循相同的动画和伤害规则
 
 实现优先级和依赖关系

@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace demo2.DND.HorizontalFormation
@@ -31,8 +29,8 @@ namespace demo2.DND.HorizontalFormation
         private float teamGenerationTimer;
         private bool isWaitingForTeamGeneration;
 
-        // 当前活跃的队伍
-        private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
+        // 当前活跃的队伍（如不需要可通过 formationManager 查询）
+        // private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
 
         void Start()
         {
@@ -170,27 +168,56 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         private void StartRandomEncounter()
         {
-            if (isInBattle) return;
-
-            // 检查玩家队伍是否还有存活成员
-            if (!formationManager.HasAliveCharacters(BattleSide.Player))
+            try
             {
-                Debug.LogWarning("⚠️ 没有有效的玩家角色！");
-                return;
+                if (isInBattle) return;
+
+                if (formationManager == null)
+                {
+                    Debug.LogError("StartRandomEncounter: formationManager 为 null，无法进行遭遇");
+                    return;
+                }
+
+                // 检查玩家队伍是否还有存活成员
+                if (!formationManager.HasAliveCharacters(BattleSide.Player))
+                {
+                    Debug.LogWarning("⚠️ 没有有效的玩家角色！");
+                    return;
+                }
+
+                isInBattle = true;
+                Debug.Log("⚔️ 遭遇战斗开始！");
+
+                // 切换到战斗模式
+                formationManager.SetFormationBattleState();
+                StopBackgroundScrolling();
+
+                // 生成敌人
+                formationManager.GenerateEnemyFormation();
+
+                // 关键检查：确认敌人是否成功生成（存在存活敌人）
+                if (!formationManager.HasAliveCharacters(BattleSide.Enemy))
+                {
+                    Debug.LogError("StartRandomEncounter: 敌人生成失败或未包含存活敌人，取消本次遭遇。");
+                    // 回滚战斗状态，允许下一次触发
+                    isInBattle = false;
+                    return;
+                }
+
+                // 使用延迟启动战斗，等待敌人进场
+                Debug.Log("Waiting 2s before starting battle sequence (StartBattleAfterDelay)");
+                Invoke(nameof(StartBattleAfterDelay), 2f);
             }
-
-            isInBattle = true;
-            Debug.Log("⚔️ 遭遇战斗开始！");
-
-            // 切换到战斗模式
-            formationManager.SetFormationBattleState();
-            StopBackgroundScrolling();
-
-            // 生成敌人
-            formationManager.GenerateEnemyFormation();
-
-            // 使用延迟启动战斗，等待敌人进场
-            Invoke(nameof(StartBattleAfterDelay), 2f);
+            catch (System.NullReferenceException nex)
+            {
+                Debug.LogError($"StartRandomEncounter 捕获 NullReferenceException: {nex}\nformationManager={formationManager}\nautoBattleAI={autoBattleAI}");
+                isInBattle = false; // 回滚状态以便下次尝试
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"StartRandomEncounter 捕获异常: {ex}");
+                isInBattle = false;
+            }
         }
 
         /// <summary>
@@ -198,10 +225,25 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         private void StartBattleAfterDelay()
         {
-            if (autoBattleAI != null)
+            try
             {
-                Debug.Log("🎯 敌人进场完成，启动先攻系统...");
-                autoBattleAI.StartBattleSequence();
+                if (autoBattleAI != null)
+                {
+                    Debug.Log("🎯 敌人进场完成，启动先攻系统...");
+                    autoBattleAI.StartBattleSequence();
+                }
+                else
+                {
+                    Debug.LogError("StartBattleAfterDelay: autoBattleAI 为 null，无法启动战斗序列");
+                }
+            }
+            catch (System.NullReferenceException nex)
+            {
+                Debug.LogError($"StartBattleAfterDelay 捕获 NullReferenceException: {nex}");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"StartBattleAfterDelay 捕获异常: {ex}");
             }
         }
 

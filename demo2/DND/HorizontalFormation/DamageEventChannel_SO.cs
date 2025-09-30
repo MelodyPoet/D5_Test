@@ -26,6 +26,7 @@ namespace demo2.DND.HorizontalFormation
         /// <param name="isCritical">是否暴击</param>
         public void RaiseEvent(CharacterStats recipient, CharacterStats dealer, int damageAmount, bool isCritical = false)
         {
+            Debug.Log($"[DamageEventChannel_SO] RaiseEvent: OnEventRaised subscriber count={OnEventRaised?.GetInvocationList().Length ?? 0}");
             OnEventRaised?.Invoke(recipient, dealer, damageAmount, isCritical);
 
             // 输出调试信息
@@ -54,14 +55,6 @@ namespace demo2.DND.HorizontalFormation
         public void Unsubscribe(UnityAction<CharacterStats, CharacterStats, int, bool> callback)
         {
             OnEventRaised -= callback;
-        }
-
-        /// <summary>
-        /// 清理所有订阅
-        /// </summary>
-        private void OnDisable()
-        {
-            OnEventRaised = null;
         }
     }
 }

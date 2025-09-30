@@ -1176,6 +1176,7 @@ MonoBehaviour:
   healthBarPrefab: {fileID: 9092818779322249762, guid: 7d781e3e5d515854eaf460d3a6b86244, type: 3}
   playerHealthBarContainer: {fileID: 2036385660}
   enemyHealthBarContainer: {fileID: 1769203472}
+  globalDamageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
 --- !u!1 &1437200883
 GameObject:
   m_ObjectHideFlags: 0
@@ -1434,6 +1435,53 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!1 &2008873109
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2008873111}
+  - component: {fileID: 2008873110}
+  m_Layer: 0
+  m_Name: HealthBarUIManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2008873110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2008873109}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd474156e2fc4e9daca32b735d56a35b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  healthBarPrefab: {fileID: 9092818779322249762, guid: 7d781e3e5d515854eaf460d3a6b86244, type: 3}
+  playerHealthBarContainer: {fileID: 2036385660}
+  enemyHealthBarContainer: {fileID: 1769203472}
+--- !u!4 &2008873111
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2008873109}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 110.37379, y: 373.53815, z: -0.17117643}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2036385659
 GameObject:
   m_ObjectHideFlags: 0
@@ -1542,3 +1590,4 @@ SceneRoots:
   - {fileID: 746661146}
   - {fileID: 1641010538}
   - {fileID: 651159378}
+  - {fileID: 2008873111}

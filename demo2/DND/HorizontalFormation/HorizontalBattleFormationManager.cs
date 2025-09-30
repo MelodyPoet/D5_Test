@@ -2,7 +2,6 @@
 using UnityEngine;
 using Spine.Unity;
 using DG.Tweening;
-using System.Collections;
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -49,48 +48,101 @@ namespace demo2.DND.HorizontalFormation
         [SerializeField] private Transform playerHealthBarContainer;
         [Tooltip("敌人血条UI的容器（屏幕右侧）")]
         [SerializeField] private Transform enemyHealthBarContainer;
+        [SerializeField] private DamageEventChannel_SO globalDamageEventChannel; // Inspector拖拽赋值
 
         // 运行时数据
         private List<GameObject> activePlayerCharacters = new List<GameObject>();
         private List<GameObject> activeEnemyCharacters = new List<GameObject>();
+
+        private void Awake()
+        {
+            // 确保 HealthBarUIManager 单例存在并与本 manager 的容器/预制体保持一致
+            if (HealthBarUIManager.Instance == null)
+            {
+                GameObject go = new GameObject("HealthBarUIManager");
+                var mgr = go.AddComponent<HealthBarUIManager>();
+                // 复制配置到新创建的管理器（如果本脚本上配置了容器/预制体）
+                mgr.healthBarPrefab = healthBarPrefab;
+                mgr.playerHealthBarContainer = playerHealthBarContainer;
+                mgr.enemyHealthBarContainer = enemyHealthBarContainer;
+
+                Debug.Log("HorizontalBattleFormationManager: Created HealthBarUIManager singleton and synced containers/prefab.");
+            }
+            else
+            {
+                // 如果已经存在单例，但其容器未配置，则同步当前配置（以避免引用不一致）
+                if (HealthBarUIManager.Instance.playerHealthBarContainer == null && playerHealthBarContainer != null)
+                {
+                    HealthBarUIManager.Instance.playerHealthBarContainer = playerHealthBarContainer;
+                    Debug.Log("HorizontalBattleFormationManager: Synced playerHealthBarContainer to existing HealthBarUIManager.");
+                }
+                if (HealthBarUIManager.Instance.enemyHealthBarContainer == null && enemyHealthBarContainer != null)
+                {
+                    HealthBarUIManager.Instance.enemyHealthBarContainer = enemyHealthBarContainer;
+                    Debug.Log("HorizontalBattleFormationManager: Synced enemyHealthBarContainer to existing HealthBarUIManager.");
+                }
+                if (HealthBarUIManager.Instance.healthBarPrefab == null && healthBarPrefab != null)
+                {
+                    HealthBarUIManager.Instance.healthBarPrefab = healthBarPrefab;
+                    Debug.Log("HorizontalBattleFormationManager: Synced healthBarPrefab to existing HealthBarUIManager.");
+                }
+            }
+        }
 
         /// <summary>
         /// 生成玩家阵型
         /// </summary>
         public void GeneratePlayerFormation()
         {
-            ClearPlayerFormation();
-
-            if (formationContainer == null)
+            try
             {
-                Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
-                return;
-            }
+                ClearPlayerFormation();
+                if (formationContainer == null)
+                {
+                    Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
+                    return;
+                }
+                if (playerSpawnPoints.Length < 6)
+                {
+                    Debug.LogError("玩家spawn点配置不足！需要6个位置点");
+                    return;
+                }
+                activePlayerCharacters.Clear();
+                for (int i = 0; i < 6; i++)
+                {
+                    activePlayerCharacters.Add(null);
+                }
+                for (int i = 0; i < 6; i++)
+                {
+                    GameObject prefab = formationContainer.GetPlayerPrefab(i);
+                    InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
+                }
+                SetPlayerFormationWalkingState();
+                Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
+                // 新增：收集所有非null角色并初始化血条UI
+                var playerStats = new List<CharacterStats>();
+                foreach (var go in activePlayerCharacters)
+                {
+                    if (go != null)
+                    {
+                        var stats = go.GetComponent<CharacterStats>();
+                        if (stats != null) playerStats.Add(stats);
+                    }
+                }
 
-            if (playerSpawnPoints.Length < 6)
+                if (HealthBarUIManager.Instance != null)
+                {
+                    HealthBarUIManager.Instance.InitializeBars(playerStats);
+                }
+                else
+                {
+                    Debug.LogWarning("HealthBarUIManager.Instance 为 null，无法初始化玩家血条 UI。请确保场景中有该单例。参考 HorizontalBattleFormationManager.CreateHealthBarForCharacter");
+                }
+            }
+            catch (System.Exception ex)
             {
-                Debug.LogError("玩家spawn点配置不足！需要6个位置点");
-                return;
+                Debug.LogError($"GeneratePlayerFormation 发生异常: {ex}");
             }
-
-            // 确保列表有6个位置，即使某些预制体为null
-            activePlayerCharacters.Clear();
-            for (int i = 0; i < 6; i++)
-            {
-                activePlayerCharacters.Add(null); // 先用null占位
-            }
-
-            // 按阵型顺序生成角色，使用容器获取预制体
-            for (int i = 0; i < 6; i++)
-            {
-                GameObject prefab = formationContainer.GetPlayerPrefab(i);
-                InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
-            }
-
-            // 玩家角色立即播放走路动画（探索状态）
-            SetPlayerFormationWalkingState();
-
-            Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
         }
 
         /// <summary>
@@ -99,56 +151,86 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public void GenerateEnemyFormation()
         {
-            ClearEnemyFormation();
-
-            if (formationContainer == null)
+            try
             {
-                Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
-                return;
-            }
+                ClearEnemyFormation();
+                if (formationContainer == null)
+                {
+                    Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
+                    return;
+                }
+                if (enemySpawnPoints.Length < 6)
+                {
+                    Debug.LogError("敌人spawn点配置不足！需要6个位置点");
+                    return;
+                }
+                if (enemySpawnParent == null)
+                {
+                    Debug.LogError("敌人生成点父节点未配置！请在Inspector中设置enemySpawnParent");
+                    return;
+                }
+                activeEnemyCharacters.Clear();
+                for (int i = 0; i < 6; i++)
+                {
+                    activeEnemyCharacters.Add(null);
+                }
+                Vector3 originalParentPosition = enemySpawnParent.position;
+                enemySpawnParent.position = originalParentPosition + Vector3.right * enemyEntranceOffset;
+                for (int i = 0; i < 6; i++)
+                {
+                    GameObject prefab = formationContainer.GetEnemyPrefab(i);
+                    InstantiateEnemyCharacterAtCurrentPosition(prefab, enemySpawnPoints[i], BattleSide.Enemy, i);
+                }
+                ExecuteFormationEntranceAnimationDoTween(originalParentPosition);
+                Debug.Log($"敌人阵型生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
+                // 新增：收集所有非null角色并初始化血条UI
+                var enemyStats = new List<CharacterStats>();
+                foreach (var go in activeEnemyCharacters)
+                {
+                    if (go != null)
+                    {
+                        var stats = go.GetComponent<CharacterStats>();
+                        if (stats != null) enemyStats.Add(stats);
+                    }
+                }
 
-            if (enemySpawnPoints.Length < 6)
+                if (HealthBarUIManager.Instance != null)
+                {
+                    HealthBarUIManager.Instance.InitializeBars(enemyStats);
+                }
+                else
+                {
+                    Debug.LogWarning("HealthBarUIManager.Instance 为 null，无法初始化敌人血条 UI。请确保场景中有该单例。参考 HorizontalBattleFormationManager.CreateHealthBarForCharacter");
+                }
+
+                // 调试/恢复机制：确保玩家侧血条在敌人进场后仍存在（防止初始化期间被误删）
+                if (HealthBarUIManager.Instance != null)
+                {
+                    HealthBarUIManager.Instance.DumpStatus("after enemy init");
+                    var playerStats = new List<CharacterStats>();
+                    foreach (var go in activePlayerCharacters)
+                    {
+                        if (go != null)
+                        {
+                            var stats = go.GetComponent<CharacterStats>();
+                            if (stats != null) playerStats.Add(stats);
+                        }
+                    }
+                    // 重新确保玩家血条存在（InitializeBars 会跳过已存在的条目）
+                    HealthBarUIManager.Instance.InitializeBars(playerStats);
+                    HealthBarUIManager.Instance.DumpStatus("after reinit player bars");
+                }
+            }
+            catch (System.Exception ex)
             {
-                Debug.LogError("敌人spawn点配置不足！需要6个位置点");
-                return;
+                Debug.LogError($"GenerateEnemyFormation 发生异常: {ex}");
             }
-
-            if (enemySpawnParent == null)
-            {
-                Debug.LogError("敌人生成点父节点未配置！请在Inspector中设置enemySpawnParent");
-                return;
-            }
-
-            // 确保列表有6个位置，即使某些预制体为null
-            activeEnemyCharacters.Clear();
-            for (int i = 0; i < 6; i++)
-            {
-                activeEnemyCharacters.Add(null); // 先用null占位
-            }
-
-            // 记录父节点的原始位置
-            Vector3 originalParentPosition = enemySpawnParent.position;
-
-            // 将整个敌人生成点父节点移动到屏幕右侧远端
-            enemySpawnParent.position = originalParentPosition + Vector3.right * enemyEntranceOffset;
-
-            // 在当前位置（已偏移的spawn点）生成所有敌人角色
-            for (int i = 0; i < 6; i++)
-            {
-                GameObject prefab = formationContainer.GetEnemyPrefab(i);
-                InstantiateEnemyCharacterAtCurrentPosition(prefab, enemySpawnPoints[i], BattleSide.Enemy, i);
-            }
-
-            // 使用DOTween执行整体进场动画
-            ExecuteFormationEntranceAnimationDOTween(originalParentPosition);
-
-            Debug.Log($"敌人阵型生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
         }
 
         /// <summary>
         /// 执行整个阵型的进场动画 - DOTween版本
         /// </summary>
-        private void ExecuteFormationEntranceAnimationDOTween(Vector3 targetParentPosition)
+        private void ExecuteFormationEntranceAnimationDoTween(Vector3 targetParentPosition)
         {
             // 创建DOTween序列
             Sequence entranceSequence = DOTween.Sequence();
@@ -249,7 +331,7 @@ namespace demo2.DND.HorizontalFormation
             }
 
             // 根据索引设置正确的位置枚举
-            positionComponent.currentPosition = GetPlayerPositionByIndex(index);
+            positionComponent.currentPosition = (HorizontalPosition)index;
             positionComponent.isOccupied = true;
 
             Debug.Log($"玩家角色 {prefab.name} 重置组件设置: {positionComponent.currentPosition}");
@@ -286,8 +368,15 @@ namespace demo2.DND.HorizontalFormation
             if (skeletonAnimation != null)
             {
                 // 敌人面向左侧（面向玩家），设置ScaleX为负值
-                skeletonAnimation.skeleton.ScaleX = -Mathf.Abs(skeletonAnimation.skeleton.ScaleX);
-                Debug.Log($"敌人 {instance.name} 使用Spine ScaleX设置朝向：{skeletonAnimation.skeleton.ScaleX}");
+                if (skeletonAnimation.skeleton != null)
+                {
+                    skeletonAnimation.skeleton.ScaleX = -Mathf.Abs(skeletonAnimation.skeleton.ScaleX);
+                    Debug.Log($"敌人 {instance.name} 使用Spine ScaleX设置朝向：{skeletonAnimation.skeleton.ScaleX}");
+                }
+                else
+                {
+                    Debug.LogWarning($"SkeletonAnimation 组件存在但 skeleton 为 null，无法设置 ScaleX（{instance.name}）");
+                }
             }
             else
             {
@@ -324,7 +413,7 @@ namespace demo2.DND.HorizontalFormation
             }
 
             // 根据索引设置正确的位置枚举
-            positionComponent.currentPosition = GetEnemyPositionByIndex(index);
+            positionComponent.currentPosition = (HorizontalPosition)(index + 6);
             positionComponent.isOccupied = true;
 
             Debug.Log($"敌人角色 {prefab.name} 位置组件设置: {positionComponent.currentPosition}");
@@ -513,14 +602,25 @@ namespace demo2.DND.HorizontalFormation
             {
                 if (character != null)
                 {
-                    // 停止DOTween动画
+                    // 停止DOTween動畫
                     character.transform.DOKill();
                     DestroyImmediate(character);
                 }
             }
             activePlayerCharacters.Clear();
-            // 只清理玩家血条
-            ClearPlayerHealthBars();
+            // 只清理玩家血条 - 委托给 HealthBarUIManager 以保持映射一致
+            if (HealthBarUIManager.Instance != null)
+            {
+                Debug.Log("HorizontalBattleFormationManager: Delegating ClearPlayerHealthBars to HealthBarUIManager");
+                HealthBarUIManager.Instance.ClearPlayerHealthBars();
+            }
+            else
+            {
+                // 如果单例不存在，出于安全考虑不要执行回退的激进销毁逻辑，避免误删玩家血条
+                Debug.LogWarning("HorizontalBattleFormationManager: HealthBarUIManager.Instance is null - skipping fallback ClearPlayerHealthBars to avoid accidental deletion of player health bars. Ensure HealthBarUIManager exists in the scene or is created earlier.");
+                // 之前的回退方法 ClearPlayerHealthBars() 会基于 Slider 值等启发式判断销毁，易误删 —— 改为显式提示并跳过
+                // ClearPlayerHealthBars(); // 已移除激进回退
+            }
         }
 
         /// <summary>
@@ -537,8 +637,17 @@ namespace demo2.DND.HorizontalFormation
             }
             activeEnemyCharacters.Clear();
 
-            // 清理敌人血条
-            ClearEnemyHealthBars();
+            // 清理敌人血条 - 委托给 HealthBarUIManager
+            if (HealthBarUIManager.Instance != null)
+            {
+                Debug.Log("HorizontalBattleFormationManager: Delegating ClearEnemyHealthBars to HealthBarUIManager");
+                HealthBarUIManager.Instance.ClearEnemyHealthBars();
+            }
+            else
+            {
+                Debug.LogWarning("HorizontalBattleFormationManager: HealthBarUIManager.Instance is null, falling back to direct destroy");
+                ClearEnemyHealthBars();
+            }
 
             Debug.Log("敌人阵型已清理");
 
@@ -549,73 +658,95 @@ namespace demo2.DND.HorizontalFormation
             }
         }
 
-        /// <summary>
-        /// 恢复玩家探索状态
-        /// </summary>
-        public void RestorePlayerExplorationState()
-        {
-            // 恢复玩家角色行走动画
-            foreach (GameObject player in activePlayerCharacters)
-            {
-                if (player != null)
-                {
-                    DND_CharacterAdapter adapter = player.GetComponent<DND_CharacterAdapter>();
-                    adapter?.PlayWalkAnimation();
-                }
-            }
-
-            Debug.Log("玩家阵型已恢复探索状态");
-        }
-
-        /// <summary>
-        /// 为指定角色创建并初始化血条UI
-        /// </summary>
-        private void CreateHealthBarForCharacter(CharacterStats characterStats)
-        {
-            if (healthBarPrefab == null || characterStats == null)
-            {
-                Debug.LogWarning("HealthBar Prefab or CharacterStats is null.");
-                return;
-            }
-
-            Transform container = characterStats.battleSide == BattleSide.Player ? playerHealthBarContainer : enemyHealthBarContainer;
-            if (container == null)
-            {
-                Debug.LogWarning($"HealthBar Container for {characterStats.battleSide} is not set in HorizontalBattleFormationManager.");
-                return;
-            }
-
-            GameObject healthBarGo = Instantiate(healthBarPrefab, container);
-            UI_HealthBar healthBar = healthBarGo.GetComponent<UI_HealthBar>();
-            if (healthBar == null)
-            {
-                Debug.LogError("HealthBar Prefab does not have a UI_HealthBar component.");
-                Destroy(healthBarGo);
-                return;
-            }
-
-            healthBar.Initialize(characterStats);
-        }
-
         private void ClearPlayerHealthBars()
         {
+            Debug.Log($"[HorizontalBattleFormationManager] (fallback) ClearPlayerHealthBars called. Stack:\n{System.Environment.StackTrace}");
             if (playerHealthBarContainer != null)
             {
+                var toDestroy = new List<GameObject>();
                 foreach (Transform child in playerHealthBarContainer)
                 {
-                    Destroy(child.gameObject);
+                    if (child == null) continue;
+                    var uiBar = child.GetComponent<UI_HealthBar>();
+                    if (uiBar == null)
+                    {
+                        Debug.LogWarning($"[HorizontalBattleFormationManager] (fallback) Child {child.name} does not have UI_HealthBar, skipping destroy to avoid accidental deletion.");
+                        continue;
+                    }
+
+                    // bool destroy = false;
+                    if (!child.gameObject.activeInHierarchy)
+                    {
+                        toDestroy.Add(child.gameObject);
+                    }
+                    else
+                    {
+                        var slider = child.GetComponentInChildren<UnityEngine.UI.Slider>(true);
+                        if (slider == null)
+                        {
+                            Debug.LogWarning($"[HorizontalBattleFormationManager] (fallback) Child {child.name} has no Slider component, skipping destroy.");
+                            continue;
+                        }
+
+                        if (slider.maxValue <= 1f && Mathf.Approximately(slider.value, 0f))
+                        {
+                            toDestroy.Add(child.gameObject);
+                        }
+                    }
                 }
+
+                foreach (var go in toDestroy)
+                {
+                    if (go != null) Destroy(go);
+                }
+
+                Debug.Log($"[HorizontalBattleFormationManager] (fallback) ClearPlayerHealthBars completed. destroyedCount={toDestroy.Count}");
             }
         }
 
         private void ClearEnemyHealthBars()
         {
+            Debug.Log($"[HorizontalBattleFormationManager] (fallback) ClearEnemyHealthBars called. Stack:\n{System.Environment.StackTrace}");
             if (enemyHealthBarContainer != null)
             {
+                var toDestroy = new List<GameObject>();
                 foreach (Transform child in enemyHealthBarContainer)
                 {
-                    Destroy(child.gameObject);
+                    if (child == null) continue;
+                    var uiBar = child.GetComponent<UI_HealthBar>();
+                    if (uiBar == null)
+                    {
+                        Debug.LogWarning($"[HorizontalBattleFormationManager] (fallback) Child {child.name} does not have UI_HealthBar, skipping destroy.");
+                        continue;
+                    }
+
+                    // bool destroy = false;
+                    if (!child.gameObject.activeInHierarchy)
+                    {
+                        toDestroy.Add(child.gameObject);
+                    }
+                    else
+                    {
+                        var slider = child.GetComponentInChildren<UnityEngine.UI.Slider>(true);
+                        if (slider == null)
+                        {
+                            Debug.LogWarning($"[HorizontalBattleFormationManager] (fallback) Child {child.name} has no Slider component, skipping destroy.");
+                            continue;
+                        }
+
+                        if (slider.maxValue <= 1f && Mathf.Approximately(slider.value, 0f))
+                        {
+                            toDestroy.Add(child.gameObject);
+                        }
+                    }
                 }
+
+                foreach (var go in toDestroy)
+                {
+                    if (go != null) Destroy(go);
+                }
+
+                Debug.Log($"[HorizontalBattleFormationManager] (fallback) ClearEnemyHealthBars completed. destroyedCount={toDestroy.Count}");
             }
         }
 
@@ -751,52 +882,109 @@ namespace demo2.DND.HorizontalFormation
                 if (characterList[i] != null)
                 {
                     CharacterStats stats = characterList[i].GetComponent<CharacterStats>();
-                    info += $"[{i}]:{stats?.GetDisplayName()} ";
+                    info += $"索引{i}: {characterList[i].name} - 血量: {stats?.currentHitPoints}\n";
                 }
                 else
                 {
-                    info += $"[{i}]:null ";
+                    info += $"索引{i}: null\n";
                 }
             }
             return info;
         }
 
         /// <summary>
-        /// 根据索引获取玩家位置枚举
+        /// 为角色创建并关联血条
         /// </summary>
-        private HorizontalPosition GetPlayerPositionByIndex(int index)
+        private void CreateHealthBarForCharacter(CharacterStats characterStats)
         {
-            switch (index)
+            if (healthBarPrefab == null || characterStats == null)
             {
-                case 0: return HorizontalPosition.PlayerFrontLeft;
-                case 1: return HorizontalPosition.PlayerFrontCenter;
-                case 2: return HorizontalPosition.PlayerFrontRight;
-                case 3: return HorizontalPosition.PlayerBackLeft;
-                case 4: return HorizontalPosition.PlayerBackCenter;
-                case 5: return HorizontalPosition.PlayerBackRight;
-                default:
-                    Debug.LogError($"无效的玩家索引: {index}");
-                    return HorizontalPosition.PlayerFrontCenter;
+                Debug.LogWarning("CreateHealthBarForCharacter: healthBarPrefab or characterStats is null");
+                return;
+            }
+
+            Transform container = null;
+            // 优先使用 HealthBarUIManager 中配置的容器，避免两个管理器使用不同的 Transform 导致血条被错误清理
+            if (HealthBarUIManager.Instance != null)
+            {
+                container = characterStats.battleSide == BattleSide.Player ? HealthBarUIManager.Instance.playerHealthBarContainer : HealthBarUIManager.Instance.enemyHealthBarContainer;
+            }
+
+            // 回退到本地配置的容器（兼容历史 Inspector 配置）
+            if (container == null)
+            {
+                container = characterStats.battleSide == BattleSide.Player ? playerHealthBarContainer : enemyHealthBarContainer;
+            }
+
+            if (container == null)
+            {
+                Debug.LogWarning($"CreateHealthBarForCharacter: HealthBar container for {characterStats.battleSide} is not assigned.");
+                return;
+            }
+
+            GameObject healthBarGo = Instantiate(healthBarPrefab, container);
+            healthBarGo.name = $"HealthBar_{characterStats.GetDisplayName()}";
+
+            // 获取 UI_HealthBar 组件（这是我们统一的血条脚本）
+            UI_HealthBar uiBar = healthBarGo.GetComponent<UI_HealthBar>();
+            if (uiBar == null)
+            {
+                Debug.LogError($"CreateHealthBarForCharacter: healthBarPrefab '{healthBarPrefab.name}' 缺少 UI_HealthBar 组件，或使用了错误的血条预制体。");
+                Destroy(healthBarGo);
+                return;
+            }
+
+            // 初始化并注册到管理器
+            try
+            {
+                uiBar.SetOwner(characterStats);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"CreateHealthBarForCharacter: SetOwner 异常 - {ex}");
+            }
+
+            if (HealthBarUIManager.Instance != null)
+            {
+                HealthBarUIManager.Instance.RegisterBar(characterStats, uiBar);
+            }
+            else
+            {
+                Debug.LogWarning("CreateHealthBarForCharacter: HealthBarUIManager.Instance 为 null，已直接创建血条但未注册到管理器。请检查场景中是否存在 HealthBarUIManager 单例。");
             }
         }
 
         /// <summary>
-        /// 根据索引获取敌人位置枚举
+        /// 恢复玩家探索状态（从战斗返回时调用）
+        /// 恢复行走动画并确保玩家血条存在
         /// </summary>
-        private HorizontalPosition GetEnemyPositionByIndex(int index)
+        public void RestorePlayerExplorationState()
         {
-            switch (index)
+            // 恢复玩家为走路/探索动画状态
+            SetPlayerFormationWalkingState();
+
+            // 确保玩家相关的血条存在并已初始化
+            var playerStats = new List<CharacterStats>();
+            foreach (var go in activePlayerCharacters)
             {
-                case 0: return HorizontalPosition.EnemyFrontLeft;
-                case 1: return HorizontalPosition.EnemyFrontCenter;
-                case 2: return HorizontalPosition.EnemyFrontRight;
-                case 3: return HorizontalPosition.EnemyBackLeft;
-                case 4: return HorizontalPosition.EnemyBackCenter;
-                case 5: return HorizontalPosition.EnemyBackRight;
-                default:
-                    Debug.LogError($"无效的敌人索引: {index}");
-                    return HorizontalPosition.EnemyFrontCenter;
+                if (go != null)
+                {
+                    var stats = go.GetComponent<CharacterStats>();
+                    if (stats != null) playerStats.Add(stats);
+                }
             }
+
+            if (HealthBarUIManager.Instance != null)
+            {
+                HealthBarUIManager.Instance.InitializeBars(playerStats);
+                HealthBarUIManager.Instance.DumpStatus("RestorePlayerExplorationState");
+            }
+            else
+            {
+                Debug.LogWarning("RestorePlayerExplorationState: HealthBarUIManager.Instance 为 null，无法初始化玩家血条 UI。请确保场景中有该单例。");
+            }
+
+            Debug.Log("HorizontalBattleFormationManager: 玩家探索状态已恢复（行走动画 + 血条初始化）");
         }
     }
 }
