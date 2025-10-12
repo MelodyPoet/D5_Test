@@ -51,8 +51,11 @@ namespace demo2.DND
         // 新增：昏迷/豁免相关私有字段（之前被误删）
         private int unconsciousSuccessCount;
         private int unconsciousFailureCount;
-        private float nextSavingThrowTime;
-        private bool isProcessingSavingThrows;
+        private float nextSavingThrowTime; // 仍保留字段以兼容旧逻辑，但不会用于定时触发
+        private bool isProcessingSavingThrows; // 仍保留以便调用 StartUnconsciousSavingThrows 初始化状态
+
+        // 新增：记录在处于昏迷/倒地状态时累计的额外伤害（溢出到0的负值之和）
+        private int accumulatedDamageWhileUnconscious = 0;
 
         // 便捷属性访问 - 修正命名规范（移除重复的小写 level）
         public int Level => characterLevel;
@@ -60,6 +63,9 @@ namespace demo2.DND
         private void Awake() {
             // 从模板初始化角色数据
             InitializeFromTemplate();
+
+            // 连接动画适配器事件
+            SetupAdapterEvents();
         }
 
         /// <summary>
@@ -130,10 +136,7 @@ namespace demo2.DND
         /// <summary>
         /// 应用伤害到自身（从原TakeDamage方法重构）
         /// </summary>
-        private void ApplyDamageToSelf(int damage, bool isCritical = false) {
-            // 保证 damageType 在整个方法中可见
-            DamageType damageType = DamageType.Bludgeoning; // 默认钝击伤害
-
+        private void ApplyDamageToSelf(int damage, bool isCritical = false, DamageType damageType = DamageType.Bludgeoning) {
             if (template != null) {
                 // 检查免疫（这里简化处理，实际应该从攻击中获取伤害类型）
                 // 使用 template 中的免疫/抗性/弱点信息来调整 damage
@@ -160,30 +163,100 @@ namespace demo2.DND
                 Debug.Log($"{GetDisplayName()} 受到暴击! 伤害翻倍: {damage}");
             }
 
-            // 扣除实际生命值
-            currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
-            Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
-
-            // 显示伤害数字（优先使用 DamageDisplayManager）
-            try
-            {
-                ShowDamageNumber(damage, true);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"ApplyDamageToSelf: ShowDamageNumber 触发异常 - {ex}");
+            // 先扣除临时生命值
+            if (temporaryHitPoints > 0) {
+                if (temporaryHitPoints >= damage) {
+                    temporaryHitPoints -= damage;
+                    damage = 0;
+                }
+                else {
+                    damage -= temporaryHitPoints;
+                    temporaryHitPoints = 0;
+                }
             }
 
-            // 通知UI直接刷新
-            HealthBarUIManager.Instance?.RefreshBar(this);
+            // 如果已经处于昏迷/倒地状态，不再改变HP，而是按规则记录死豁失败（普通攻击+1，重击+2）
+            if (HasStatusEffect(StatusEffectType.Unconscious)) {
+                Debug.Log($"{GetDisplayName()} 在倒地状态受到攻击，记录死豁失败 (isCritical={isCritical})");
+                RegisterUnconsciousHit(isCritical);
 
-            // 新增：触发本地血量变化事件，供直接绑定的UI使用
-            NotifyHealthChanged();
+                // 显示伤害数字与刷新UI（保持视觉反馈）
+                try { ShowDamageNumber(damage, true); } catch { }
+                HealthBarUIManager.Instance?.RefreshBar(this);
+                NotifyHealthChanged();
+                return;
+            }
 
-            // 检查是否失去意识
-            if (currentHitPoints <= 0) {
-                AddStatusEffect(StatusEffectType.Unconscious);
-                Debug.Log($"{GetDisplayName()} 失去意识!");
+             // 记录修改前生命值以便计算溢出（overflow）
+             int prevHp = currentHitPoints;
+
+             // 扣除实际生命值（允许先计算溢出，再将hp夹住为0）
+             int afterHp = currentHitPoints - damage;
+
+             int overflow = 0;
+             if (afterHp < 0) {
+                 overflow = -afterHp; // 溢出为正数
+             }
+
+             currentHitPoints = Mathf.Max(0, afterHp);
+             Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
+
+             // 如果当前处于昏迷/倒地（或刚刚达到昏迷），记录溢出伤害
+             if (overflow > 0) {
+                 accumulatedDamageWhileUnconscious += overflow;
+                 Debug.Log($"{GetDisplayName()} 溢出伤害: {overflow}，累计倒地伤害: {accumulatedDamageWhileUnconscious}");
+             }
+
+             // 显示伤害数字（优先使用 DamageDisplayManager）
+             try
+             {
+                 ShowDamageNumber(damage, true);
+             }
+             catch (System.Exception ex)
+             {
+                 Debug.LogWarning($"ApplyDamageToSelf: ShowDamageNumber 触发异常 - {ex}");
+             }
+
+             // 通知UI直接刷新
+             HealthBarUIManager.Instance?.RefreshBar(this);
+
+             // 新增：触发本地血量变化事件，供直接绑定的UI使用
+             NotifyHealthChanged();
+
+             // 检查是否失去意识或死亡
+             if (currentHitPoints <= 0) {
+                 // 添加昏迷状态（用于玩家与队友的处理）
+                 AddStatusEffect(StatusEffectType.Unconscious);
+                 Debug.Log($"{GetDisplayName()} 失去意识!");
+
+                 // 如果累计溢出伤害大于自身体质值，则直接判定死亡
+                 if (accumulatedDamageWhileUnconscious > constitution) {
+                     Debug.Log($"{GetDisplayName()} 累计倒地伤害({accumulatedDamageWhileUnconscious}) 超过体质({constitution})，判定为死亡");
+                     HandleTrueDeath();
+                 } else {
+                     // 正常倒地/死亡处理（根据阵营）
+                     HandleDeath();
+                 }
+             }
+         }
+
+        /// <summary>
+        /// 在倒地（Unconscious）状态下记录受到攻击导致的死豁失败次数
+        /// 普通攻击计1次失败，暴击计2次失败。达到3次失败触发真正死亡。
+        /// </summary>
+        public void RegisterUnconsciousHit(bool isCritical)
+        {
+            if (!HasStatusEffect(StatusEffectType.Unconscious)) return;
+
+            int add = isCritical ? 2 : 1;
+            unconsciousFailureCount += add;
+            Debug.Log($"{GetDisplayName()} 倒地时受到攻击，记录死豁失败 +{add} -> now failures={unconsciousFailureCount}/3");
+
+            // 检查是否达到真正死亡
+            if (unconsciousFailureCount >= 3)
+            {
+                Debug.Log($"{GetDisplayName()} 倒地死豁失败达到3次，触发真正死亡");
+                HandleTrueDeath();
             }
         }
 
@@ -226,7 +299,7 @@ namespace demo2.DND
             // 播放死亡动画
             PlayDeathAnimation();
 
-            // 启动尸体消失逻辑（使用DOTween替代协程）
+            // 启动尸体消失逻辑（3秒后消失）
             StartCorpseDisappearance();
         }
 
@@ -245,10 +318,10 @@ namespace demo2.DND
         /// 播放昏迷动画
         /// </summary>
         private void PlayUnconsciousAnimation() {
-            // 获取角色动画适配器组件
+            // 使用适配器提供的按状态播放接口（优先使用SO映射名，兜底常见名称）
             DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
             if (characterAdapter != null) {
-                characterAdapter.PlayUnconsciousAnimation();
+                characterAdapter.PlayAnimationForState(DND_CharacterAdapter.CharacterState.Unconscious, true);
             }
         }
 
@@ -256,10 +329,10 @@ namespace demo2.DND
         /// 播放死亡动画
         /// </summary>
         private void PlayDeathAnimation() {
-            // 获取角色动画适配器组件
+            // 使用适配器提供的按状态播放接口
             DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
             if (characterAdapter != null) {
-                characterAdapter.PlayDeathAnimation();
+                characterAdapter.PlayAnimationForState(DND_CharacterAdapter.CharacterState.Death, false);
             }
         }
 
@@ -276,53 +349,62 @@ namespace demo2.DND
         }
 
         void Update() {
-            // 处理昏迷状态的体质豁免
-            if (isProcessingSavingThrows && HasStatusEffect(StatusEffectType.Unconscious)) {
-                ProcessUnconsciousSavingThrows();
-            }
+            // 不再使用基于 Time 的自动豁免触发——豁免现在由 AutoBattleAI 按回合调用 PerformDeathSaveTick()
         }
 
         /// <summary>
         /// 处理昏迷状态的体质豁免判断 - Update版本
         /// </summary>
         private void ProcessUnconsciousSavingThrows() {
-            if (Time.time < nextSavingThrowTime) return;
+            // 保留该方法以兼容旧代码，但不主动触发——使用 PerformDeathSaveTick 在回合中进行一次豁免判定
+         }
 
-            int maxAttempts = 3;
+        /// <summary>
+        /// 在角色回合时调用：执行一次体质豁免（D20 + ConMod vs DC10）。
+        /// 成功计为一次成功，失败计为一次失败。达到3次成功 => 恢复1HP并脱离昏迷；达到3次失败 => 真正死亡。
+        /// 这个方法用于将死豁从基于时间改为严格按回合触发。
+        /// </summary>
+        public void PerformDeathSaveTick()
+        {
+            if (!HasStatusEffect(StatusEffectType.Unconscious)) return;
+
             int savingThrowDc = 10;
-
-            // 进行体质豁免检定
             int constitutionSave = UnityEngine.Random.Range(1, 21) + ConMod;
 
-            if (constitutionSave >= savingThrowDc) {
+            if (constitutionSave >= savingThrowDc)
+            {
                 unconsciousSuccessCount++;
-                Debug.Log($"{GetDisplayName()} 体质豁免成功 ({constitutionSave} vs DC{savingThrowDc}) - 成功次数: {unconsciousSuccessCount}/{maxAttempts}");
-            } else {
+                Debug.Log($"{GetDisplayName()} 回合体质豁免成功 ({constitutionSave} vs DC{savingThrowDc}) - 成功次数: {unconsciousSuccessCount}/3");
+            }
+            else
+            {
                 unconsciousFailureCount++;
-                Debug.Log($"{GetDisplayName()} 体质豁免失败 ({constitutionSave} vs DC{savingThrowDc}) - 失败次数: {unconsciousFailureCount}/{maxAttempts}");
+                Debug.Log($"{GetDisplayName()} 回合体质豁免失败 ({constitutionSave} vs DC{savingThrowDc}) - 失败次数: {unconsciousFailureCount}/3");
             }
 
             // 检查是否达到结束条件
-            if (unconsciousSuccessCount >= maxAttempts) {
-                // 3次成功：恢复1点血量并脱离昏迷
-                isProcessingSavingThrows = false;
+            if (unconsciousSuccessCount >= 3)
+            {
+                // 恢复
                 currentHitPoints = 1;
                 RemoveStatusEffect(StatusEffectType.Unconscious);
-                Debug.Log($"{GetDisplayName()} 体质豁免成功，恢复意识并获得1点血量!");
+                accumulatedDamageWhileUnconscious = 0;
+                unconsciousFailureCount = 0;
+                unconsciousSuccessCount = 0;
 
-                // 切换回待机动画
+                Debug.Log($"{GetDisplayName()} 回合豁免: 三次成功，恢复意识并获得1点血量!");
                 DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
-                if (characterAdapter != null) {
+                if (characterAdapter != null)
+                {
                     characterAdapter.PlayIdleAnimation();
                 }
-            } else if (unconsciousFailureCount >= maxAttempts) {
-                // 3次失败：真正死亡
-                isProcessingSavingThrows = false;
-                Debug.Log($"{GetDisplayName()} 体质豁免失败，真正死亡!");
+                return;
+            }
+
+            if (unconsciousFailureCount >= 3)
+            {
+                Debug.Log($"{GetDisplayName()} 回合豁免: 三次失败，触发真正死亡");
                 HandleTrueDeath();
-            } else {
-                // 继续下一次豁免
-                nextSavingThrowTime = Time.time + 6f;
             }
         }
 
@@ -335,7 +417,7 @@ namespace demo2.DND
             // 播放死亡动画
             PlayDeathAnimation();
 
-            // 启动尸体消失逻辑 - 使用DOTween替代协程
+            // 启动尸体消失逻辑 - 3秒后消失
             StartCorpseDisappearance();
         }
 
@@ -343,19 +425,14 @@ namespace demo2.DND
         /// 启动尸体消失逻辑 - DOTween版本
         /// </summary>
         private void StartCorpseDisappearance() {
-            // 使用DOTween序列替代协程
+            // 统一为: 播放死亡动画后 3 秒销毁
             Sequence corpseSequence = DOTween.Sequence();
 
-            // 等待死亡动画播放完成
+            // 等待 3 秒
             corpseSequence.AppendInterval(3f);
 
-            // 开始淡出效果
-            corpseSequence.AppendCallback(() => StartFadeOutCorpse());
-
-            // 等待淡出完成后销毁
-            corpseSequence.AppendInterval(2f);
-
-            corpseSequence.OnComplete(() => {
+            // 回调移除并销毁
+            corpseSequence.AppendCallback(() => {
                 RemoveFromFormation();
                 Debug.Log($"{GetDisplayName()} 尸体已消失");
                 Destroy(gameObject);
@@ -429,64 +506,19 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 受到伤害
+        /// 受到伤害（公开方法）
         /// </summary>
         public void TakeDamage(int damage, DamageType damageType = DamageType.Bludgeoning) {
-            if (template != null) {
-                // 检查免疫
-                if (template.immunities.Contains(damageType)) {
-                    Debug.Log($"{GetDisplayName()} 免疫 {damageType} 伤害!");
-                    return;
-                }
+            // 将受伤逻辑统一到 ApplyDamageToSelf，默认非暴击
+            ApplyDamageToSelf(damage, false, damageType);
+        }
 
-                // 检查抗性和弱点
-                if (template.resistances.Contains(damageType)) {
-                    damage = Mathf.Max(1, damage / 2);
-                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性!");
-                }
-                else if (template.vulnerabilities.Contains(damageType)) {
-                    damage *= 2;
-                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有弱点!");
-                }
-            }
-
-            // 先扣除临时生命值
-            if (temporaryHitPoints > 0) {
-                if (temporaryHitPoints >= damage) {
-                    temporaryHitPoints -= damage;
-                    damage = 0;
-                }
-                else {
-                    damage -= temporaryHitPoints;
-                    temporaryHitPoints = 0;
-                }
-            }
-
-            // 扣除实际生命值
-            currentHitPoints = Mathf.Max(0, currentHitPoints - damage);
-            Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
-
-            // 显示伤害数字（兼容直接调用 TakeDamage 的路径）
-            try
-            {
-                ShowDamageNumber(damage, true);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"TakeDamage: ShowDamageNumber 触发异常 - {ex}");
-            }
-
-            // 刷新血条UI
-            HealthBarUIManager.Instance?.RefreshBar(this);
-
-            // 新增：触发本地血量变化事件
-            NotifyHealthChanged();
-
-            // 检查是否失去意识
-            if (currentHitPoints <= 0) {
-                AddStatusEffect(StatusEffectType.Unconscious);
-                Debug.Log($"{GetDisplayName()} 失去意识!");
-            }
+        /// <summary>
+        /// 重载：允许传入是否为暴击
+        /// </summary>
+        public void TakeDamage(int damage, DamageType damageType, bool isCritical)
+        {
+            ApplyDamageToSelf(damage, isCritical, damageType);
         }
 
         /// <summary>
@@ -542,6 +574,14 @@ namespace demo2.DND
             // 如果移除了闪避状态，更新AC
             if (type == StatusEffectType.Dodging) {
                 UpdateArmorClass();
+            }
+
+            // 如果移除昏迷，重置相关倒地数据与豁免流程
+            if (type == StatusEffectType.Unconscious) {
+                accumulatedDamageWhileUnconscious = 0;
+                isProcessingSavingThrows = false;
+                unconsciousFailureCount = 0;
+                unconsciousSuccessCount = 0;
             }
 
             // 注意：移除昏迷状态的恢复逻辑应该在别处处理，避免递归

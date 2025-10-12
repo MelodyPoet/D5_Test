@@ -52,7 +52,10 @@ namespace demo2.DND.HorizontalFormation
         /// <summary>
         /// 解决攻击检定
         /// </summary>
-        public static AttackResult ResolveAttack(CharacterStats attacker, CharacterStats target)
+        /// <param name="attacker">发起攻击的角色</param>
+        /// <param name="target">被攻击的目标角色</param>
+        /// <param name="advantageFlag">1 = advantage, 0 = normal, -1 = disadvantage</param>
+        public static AttackResult ResolveAttack(CharacterStats attacker, CharacterStats target, int advantageFlag = 0)
         {
             AttackResult result = new AttackResult();
 
@@ -63,13 +66,35 @@ namespace demo2.DND.HorizontalFormation
                 return result;
             }
 
-            // 攻击检定：1d20 + 攻击加值
-            int attackRoll = Random.Range(1, 21);
+            // 攻击检定：1d20 (+ advantage/disadvantage) + 攻击加值
+            int roll1 = Random.Range(1, 21);
+            int roll2 = Random.Range(1, 21);
+            int attackRoll = roll1;
+            if (advantageFlag > 0)
+            {
+                attackRoll = Mathf.Max(roll1, roll2);
+            }
+            else if (advantageFlag < 0)
+            {
+                attackRoll = Mathf.Min(roll1, roll2);
+            }
             int attackBonus = GetAttackBonus(attacker);
             int totalAttack = attackRoll + attackBonus;
 
-            // 检查暴击（天然20）
-            result.isCritical = (attackRoll == 20);
+            // 检查暴击（天然20）——在优势时任一骰为20即为暴击；在劣势时只有被选中的骰为20才算暴击（即两次20时肯定为暴击）
+            if (advantageFlag > 0)
+            {
+                result.isCritical = (roll1 == 20 || roll2 == 20);
+            }
+            else if (advantageFlag < 0)
+            {
+                // 劣势：只有当两个骰子都是20时，所选的（较小的）也会是20
+                result.isCritical = (roll1 == 20 && roll2 == 20);
+            }
+            else
+            {
+                result.isCritical = (attackRoll == 20);
+            }
 
             // 命中检定
             result.isHit = totalAttack >= target.armorClass || result.isCritical;
@@ -134,7 +159,9 @@ namespace demo2.DND.HorizontalFormation
         public static bool CanAttackTarget(CharacterStats attacker, CharacterStats target)
         {
             if (attacker == null || target == null) return false;
-            if (attacker.currentHitPoints <= 0 || target.currentHitPoints <= 0) return false;
+            // 允许对处于昏迷（Unconscious）的角色进行攻击，即使其 currentHitPoints <= 0
+            if (attacker.currentHitPoints <= 0) return false;
+            if (target.currentHitPoints <= 0 && !target.HasStatusEffect(StatusEffectType.Unconscious)) return false;
             if (attacker.battleSide == target.battleSide) return false; // 不能攻击同伙
 
             return true;

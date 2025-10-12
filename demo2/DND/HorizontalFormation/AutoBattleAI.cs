@@ -52,14 +52,15 @@ namespace demo2.DND.HorizontalFormation
 
             foreach (CharacterStats character in allCharacters)
             {
-                if (character.currentHitPoints > 0)
+                // 包含生命值>0的活跃角色，以及处于昏迷（Unconscious）的倒地角色
+                if (character.currentHitPoints > 0 || character.HasStatusEffect(StatusEffectType.Unconscious))
                 {
                     allCombatants.Add(character);
                     Debug.Log($"🎯 添加参战角色: {character.GetDisplayName()} - 阵营: {character.battleSide} - 血量: {character.currentHitPoints}");
                 }
                 else
                 {
-                    Debug.Log($"🎯 跳过死亡角色: {character.GetDisplayName()} - 血量: {character.currentHitPoints}");
+                    Debug.Log($"🎯 跳过不可参战角色: {character.GetDisplayName()} - 血量: {character.currentHitPoints}");
                 }
             }
 
@@ -137,7 +138,14 @@ namespace demo2.DND.HorizontalFormation
             if (isProcessingTurn) return;
 
             InitiativeEntry currentEntry = GetCurrentInitiativeEntry();
-            if (currentEntry == null || !currentEntry.CanAct())
+            if (currentEntry == null)
+            {
+                AdvanceToNextTurn();
+                return;
+            }
+
+            // 如果当前条目无法行动且不是处于倒地（Unconscious）状态，则跳过
+            if (!currentEntry.CanAct() && !(currentEntry.character != null && currentEntry.character.HasStatusEffect(StatusEffectType.Unconscious)))
             {
                 AdvanceToNextTurn();
                 return;
@@ -145,6 +153,17 @@ namespace demo2.DND.HorizontalFormation
 
             isProcessingTurn = true;
             CharacterStats character = currentEntry.character;
+
+            // 如果当前角色处于昏迷（倒地），则本回合不做AI决策，改为执行一次死豁（按回合触发），然后结束其回合
+            if (character != null && character.HasStatusEffect(StatusEffectType.Unconscious))
+            {
+                if (showAIThoughts) Debug.Log($"=== {character.GetDisplayName()} 倒地状态 - 执行死豁 (按回合) ===");
+                character.PerformDeathSaveTick();
+                currentEntry.MarkAsActed();
+                AdvanceToNextTurn();
+                isProcessingTurn = false;
+                return;
+            }
 
             if (showAIThoughts)
             {
@@ -208,7 +227,7 @@ namespace demo2.DND.HorizontalFormation
                     onAttackHit: () => {
                         // SpineEvent触发攻击命中
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击命中回调触发");
-                        ProcessAttackHit(attacker, action.target);
+                        ProcessAttackHit(attacker, action.target, true);
                     },
                     onComplete: () => {
                         // 攻击动画完成
@@ -226,7 +245,7 @@ namespace demo2.DND.HorizontalFormation
                     onAttackHit: () => {
                         // SpineEvent触发攻击命中
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击命中回调触发");
-                        ProcessAttackHit(attacker, action.target);
+                        ProcessAttackHit(attacker, action.target, false);
                     },
                     onComplete: () => {
                         // 攻击动画完成
@@ -242,12 +261,20 @@ namespace demo2.DND.HorizontalFormation
         /// <summary>
         /// 处理攻击命中 - 由SpineEvent触发
         /// </summary>
-        private void ProcessAttackHit(CharacterStats attacker, CharacterStats target)
+        private void ProcessAttackHit(CharacterStats attacker, CharacterStats target, bool isMeleeAttack)
         {
             if (attacker == null || target == null) return;
 
-            // 执行攻击检定和伤害计算
-            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target);
+            // 如果目标处于昏迷（倒地），近战攻击获得优势，远程攻击则为劣势
+            int advantageFlag = 0;
+            if (target.HasStatusEffect(StatusEffectType.Unconscious))
+            {
+                advantageFlag = isMeleeAttack ? 1 : -1;
+                Debug.Log($"[DEBUG] 目标处于昏迷：设置攻击掷骰优势标志 = {advantageFlag} (1=优势, -1=劣势)");
+            }
+
+            // 执行攻击检定和伤害计算（传入优势/劣势标志）
+            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag);
 
             if (attackResult.isHit)
             {
@@ -261,16 +288,33 @@ namespace demo2.DND.HorizontalFormation
                     Debug.Log($"{attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 命中! 造成 {damage} 点伤害{critText}");
                 }
 
-                // 应用伤害
-                target.TakeDamage(damage);
+                // 如果目标处于昏迷，则按规则处理死豁失败计数（伤害不再让角色掉到负HP）
+                if (target.HasStatusEffect(StatusEffectType.Unconscious))
+                {
+                    // 普通伤害计一次失败，暴击计两次
+                    target.RegisterUnconsciousHit(isCritical);
 
-                // 触发伤害事件用于UI更新 - 第一个参数是受害者，第二个是攻击者
-                var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
-                damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
+                    // 仍然触发显示与事件（UI 需要显示伤害或 MISS）
+                    var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
+                    damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
 
-                // 播放受击动画
-                DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-                targetAdapter?.PlayHitAnimation();
+                    // 播放受击动画（尽管倒地）以保持视觉反馈
+                    DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                    targetAdapter?.PlayHitAnimation();
+                }
+                else
+                {
+                    // 正常应用伤害
+                    target.TakeDamage(damage, DamageType.Bludgeoning, isCritical);
+
+                    // 触发伤害事件用于UI更新 - 第一个参数是受害者，第二个是攻击者
+                    var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
+                    damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
+
+                    // 播放受击动画
+                    DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                    targetAdapter?.PlayHitAnimation();
+                }
             }
             else
             {
@@ -473,7 +517,7 @@ namespace demo2.DND.HorizontalFormation
             {
                 CharacterStats character = entry.character;
                 if (character != null &&
-                    character.currentHitPoints > 0 &&
+                    (character.currentHitPoints > 0 || character.HasStatusEffect(StatusEffectType.Unconscious)) &&
                     character.battleSide == enemySide)
                 {
                     // 检查攻击距离限制

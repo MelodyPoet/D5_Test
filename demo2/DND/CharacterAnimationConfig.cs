@@ -21,10 +21,10 @@ namespace demo2.DND
         public string dodgeAnimation = "dodge";
         public string unconsciousAnimation = "unconscious";
 
-        // Spine事件名配置
+        // Spine事件名配置（可选）
+        // 注：死亡/昏迷等关键状态请通过动画名称映射来驱动（deathAnimation / unconsciousAnimation），
+        //      因为血量<=0 是确定的时间点，不需要依赖 Spine 事件触发。保留下面的事件字段用于攻击命中/脚步/状态改变等场景。
         public string attackHitEvent = "attack_hit";
-        public string deathCompleteEvent = "death_complete";
-        public string unconsciousStartEvent = "unconscious_start";
         public string footstepEvent = "footstep";
         public string stateChangeEvent = "state_change";
 

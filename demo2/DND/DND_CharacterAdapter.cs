@@ -147,35 +147,25 @@ namespace demo2.DND
                 return;
             }
 
-            // 使用SO配置的事件名进行精确匹配
+            // 使用SO配置的事件名进行精确匹配（仅当SO中配置了对应事件名时才处理，这样动画播放可以由代码直接驱动）
             if (animationConfig != null)
             {
-                if (eventName == animationConfig.attackHitEvent)
+                if (!string.IsNullOrEmpty(animationConfig.attackHitEvent) && eventName == animationConfig.attackHitEvent)
                 {
                     Debug.Log($"[{gameObject.name}] 攻击命中事件触发（映射匹配）: {eventName}");
                     OnAttackHit?.Invoke();
                 }
-                else if (eventName == animationConfig.deathCompleteEvent)
-                {
-                    Debug.Log($"[{gameObject.name}] 死亡完成事件触发: {eventName}");
-                    OnAnimationComplete?.Invoke();
-                }
-                else if (eventName == animationConfig.unconsciousStartEvent)
-                {
-                    Debug.Log($"[{gameObject.name}] 昏迷开始事件触发: {eventName}");
-                    OnStateChanged?.Invoke("unconscious");
-                }
-                else if (eventName == animationConfig.stateChangeEvent)
+                else if (!string.IsNullOrEmpty(animationConfig.stateChangeEvent) && eventName == animationConfig.stateChangeEvent)
                 {
                     OnStateChanged?.Invoke(e.String ?? "");
                 }
-                else if (eventName == animationConfig.footstepEvent)
+                else if (!string.IsNullOrEmpty(animationConfig.footstepEvent) && eventName == animationConfig.footstepEvent)
                 {
                     OnStateChanged?.Invoke("footstep");
                 }
                 else
                 {
-                    Debug.Log($"[{gameObject.name}] 未映射的Spine事件: {eventName}");
+                    Debug.Log($"[{gameObject.name}] 未映射或未配置的Spine事件: {eventName}");
                 }
             }
             else
@@ -298,12 +288,32 @@ namespace demo2.DND
 
         public void PlayDeathAnimation()
         {
-            PlayAnimation(animationConfig.deathAnimation, false);
+            // 尝试使用配置的死亡动画名称，若不存在则尝试常见备选项
+            string preferred = animationConfig != null ? animationConfig.deathAnimation : "death";
+            string chosen = FindBestAnimationName(preferred, new string[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02" });
+            if (!string.IsNullOrEmpty(chosen))
+            {
+                PlayAnimation(chosen, false);
+            }
+            else
+            {
+                Debug.LogError($"[{gameObject.name}] 未找到可用的死亡动画 (尝试: {preferred} + 备选)");
+            }
         }
 
         public void PlayUnconsciousAnimation()
         {
-            PlayAnimation(animationConfig.unconsciousAnimation, true);
+            // 昏迷动画一般为循环状态，优先使用配置并兜底常见名称
+            string preferred = animationConfig != null ? animationConfig.unconsciousAnimation : "unconscious";
+            string chosen = FindBestAnimationName(preferred, new string[] { "unconscious", "Unconscious", "knockdown", "down", "fallen" });
+            if (!string.IsNullOrEmpty(chosen))
+            {
+                PlayAnimation(chosen, true);
+            }
+            else
+            {
+                Debug.LogError($"[{gameObject.name}] 未找到可用的昏迷动画 (尝试: {preferred} + 备选)");
+            }
         }
 
         public void ForcePlayAttackAnimation()
@@ -922,10 +932,96 @@ namespace demo2.DND
                 }
             }
 
-            Debug.LogError($"[{gameObject.name}] 未找到任何可用的攻击动画！");
+            Debug.LogError($"[{gameObject.name}] 未找到任何攻击动画");
+            return null;
+        }
+
+        /// <summary>
+        /// 通用：查找首个存在于SkeletonData中的动画名，优先返回 preferred，否则按 fallbacks 依次尝试
+        /// </summary>
+        private string FindBestAnimationName(string preferred, string[] fallbacks)
+        {
+            if (skeletonAnimation == null || skeletonAnimation.Skeleton == null || skeletonAnimation.Skeleton.Data == null)
+            {
+                Debug.LogWarning($"[{gameObject.name}] FindBestAnimationName: skeletonAnimation 或 skeletonData 为空");
+                return null;
+            }
+
+            var skeletonData = skeletonAnimation.Skeleton.Data;
+
+            if (!string.IsNullOrEmpty(preferred))
+            {
+                var a = skeletonData.FindAnimation(preferred);
+                if (a != null) return preferred;
+            }
+
+            if (fallbacks != null)
+            {
+                foreach (var name in fallbacks)
+                {
+                    if (string.IsNullOrEmpty(name)) continue;
+                    var anim = skeletonData.FindAnimation(name);
+                    if (anim != null) return name;
+                }
+            }
+
             return null;
         }
 
         #endregion
+
+        /// <summary>
+        /// 返回某个逻辑状态对应的动画名称（优先使用SO配置，否则在常用备选名中查找）。
+        /// </summary>
+        public string GetAnimationNameForState(CharacterState state)
+        {
+            if (animationConfig == null || skeletonAnimation == null || skeletonAnimation.Skeleton?.Data == null) return null;
+
+            string preferred = null;
+            string[] fallbacks = null;
+
+            switch (state)
+            {
+                case CharacterState.Death:
+                    preferred = animationConfig.deathAnimation;
+                    fallbacks = new string[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02" };
+                    break;
+                case CharacterState.Unconscious:
+                    preferred = animationConfig.unconsciousAnimation;
+                    fallbacks = new string[] { "unconscious", "Unconscious", "knockdown", "down", "fallen" };
+                    break;
+                case CharacterState.Attack:
+                    preferred = animationConfig.attackAnimation;
+                    fallbacks = new string[] { "attack", "Attack", "atk", "Atk01" };
+                    break;
+                case CharacterState.Hit:
+                    preferred = animationConfig.hitAnimation;
+                    fallbacks = new string[] { "hit", "Hit" };
+                    break;
+                case CharacterState.Idle:
+                default:
+                    preferred = animationConfig.idleAnimation;
+                    fallbacks = new string[] { "idle", "Idle" };
+                    break;
+            }
+
+            return FindBestAnimationName(preferred, fallbacks);
+        }
+
+        /// <summary>
+        /// 根据逻辑状态播放对应动画（使用SO的映射名或备选名）。
+        /// </summary>
+        public void PlayAnimationForState(CharacterState state, bool loop = false)
+        {
+            string anim = GetAnimationNameForState(state);
+            if (!string.IsNullOrEmpty(anim))
+            {
+                PlayAnimation(anim, loop);
+            }
+            else
+            {
+                Debug.LogWarning($"[{gameObject.name}] 未找到状态 {state} 对应的动画");
+            }
+        }
     }
 }
