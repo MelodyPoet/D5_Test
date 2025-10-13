@@ -31,6 +31,13 @@ namespace demo2.DND.HorizontalFormation
         private bool isProcessingTurn;
         private float turnTimer;
 
+        // 在类内定义最小的战斗行动类型（仅包含目标）
+        [System.Serializable]
+        private class BattleAction
+        {
+            public CharacterStats target;
+        }
+
         /// <summary>
         /// 开始战斗序列 - 执行先攻检定并开始回合制战斗
         /// </summary>
@@ -298,9 +305,9 @@ namespace demo2.DND.HorizontalFormation
                     var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
                     damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
 
-                    // 播放受击动画（尽管倒地）以保持视觉反馈
-                    DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-                    targetAdapter?.PlayHitAnimation();
+                    // 重要：倒地状态不再播放受击动画，避免覆盖昏迷循环
+                    //DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                    //targetAdapter?.PlayHitAnimation();
                 }
                 else
                 {
@@ -311,9 +318,12 @@ namespace demo2.DND.HorizontalFormation
                     var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
                     damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
 
-                    // 播放受击动画
-                    DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
-                    targetAdapter?.PlayHitAnimation();
+                    // 仅当目标仍存活且未进入倒地，才播放受击动画，避免覆盖死亡/昏迷动画
+                    if (target.currentHitPoints > 0 && !target.HasStatusEffect(StatusEffectType.Unconscious))
+                    {
+                        DND_CharacterAdapter targetAdapter = target.GetComponent<DND_CharacterAdapter>();
+                        targetAdapter?.PlayHitAnimation();
+                    }
                 }
             }
             else
@@ -423,25 +433,14 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         private bool IsBattleOver()
         {
-            bool hasPlayerAlive = false;
-            bool hasEnemyAlive = false;
+            // 修复：只有当一方在先攻列表中完全不存在时，战斗才结束
+            bool playerSideExists = initiativeOrder.Any(e => e.initialSide == BattleSide.Player);
+            bool enemySideExists = initiativeOrder.Any(e => e.initialSide == BattleSide.Enemy);
 
-            foreach (InitiativeEntry entry in initiativeOrder)
-            {
-                if (entry.character != null && entry.character.currentHitPoints > 0)
-                {
-                    if (entry.character.battleSide == BattleSide.Player)
-                    {
-                        hasPlayerAlive = true;
-                    }
-                    else if (entry.character.battleSide == BattleSide.Enemy)
-                    {
-                        hasEnemyAlive = true;
-                    }
-                }
-            }
+            Debug.Log($"[IsBattleOver] 阵营存在检查 - 玩家: {playerSideExists}, 敌人: {enemySideExists}");
 
-            return !hasPlayerAlive || !hasEnemyAlive;
+            // 如果一方已经不存在于列表中，则战斗结束
+            return !playerSideExists || !enemySideExists;
         }
 
         /// <summary>
@@ -467,148 +466,92 @@ namespace demo2.DND.HorizontalFormation
 
             // 通知IdleGameManager战斗结束
             IdleGameManager idleManager = FindObjectOfType<IdleGameManager>();
-            idleManager?.OnBattleCompleted(playerVictory);
+            if (idleManager != null)
+            {
+                idleManager.OnBattleCompleted(playerVictory);
+            }
+            else
+            {
+                Debug.LogWarning("未找到 IdleGameManager，无法通知战斗结束。");
+            }
         }
 
         /// <summary>
-        /// AI决策逻辑
+        /// 新增：从先攻列表中移除一个角色
         /// </summary>
-        private BattleAction DecideBestAction(CharacterStats character)
+        public void RemoveCharacterFromInitiative(CharacterStats characterToRemove)
         {
-            if (character == null) return null;
-
-            // 获取可攻击的目标列表
-            List<CharacterStats> availableTargets = GetAvailableTargets(character);
-
-            if (availableTargets.Count == 0)
+            if (characterToRemove == null)
             {
-                if (showAIThoughts)
-                {
-                    Debug.Log($"{character.GetDisplayName()} 没有可攻击的目标");
-                }
-                return null;
+                Debug.LogWarning("RemoveCharacterFromInitiative 调用时传入了空角色");
+                return;
             }
 
-            // 选择最优目标
-            CharacterStats bestTarget = SelectBestTarget(character, availableTargets);
+            // 移除所有与该角色相关的条目
+            int removedCount = initiativeOrder.RemoveAll(e => e == null || e.character == null || e.character == characterToRemove);
+            Debug.Log($"[Initiative] 已从先攻列表移除 {removedCount} 条与 {characterToRemove.GetDisplayName()} 相关的条目");
 
-            if (bestTarget != null)
+            // 调整 currentTurnIndex，避免越界
+            if (currentTurnIndex >= initiativeOrder.Count)
             {
-                return new BattleAction
-                {
-                    actionType = BattleActionType.Attack,
-                    target = bestTarget,
-                    description = $"攻击 {bestTarget.GetDisplayName()}"
-                };
+                currentTurnIndex = Mathf.Clamp(currentTurnIndex, 0, Mathf.Max(initiativeOrder.Count - 1, 0));
             }
 
-            return null;
+            // 如果列表为空或战斗双方之一已不存在，则结束战斗
+            if (initiativeOrder.Count == 0 || IsBattleOver())
+            {
+                EndBattle();
+                return;
+            }
         }
 
         /// <summary>
-        /// 获取可攻击目标列表
+        /// 为当前角色决定一个最优行动（简化版：选择最近的敌方目标进行攻击）。
         /// </summary>
-        private List<CharacterStats> GetAvailableTargets(CharacterStats attacker)
+        private BattleAction DecideBestAction(CharacterStats actor)
         {
-            List<CharacterStats> targets = new List<CharacterStats>();
-            BattleSide enemySide = attacker.battleSide == BattleSide.Player ? BattleSide.Enemy : BattleSide.Player;
-
-            foreach (InitiativeEntry entry in initiativeOrder)
-            {
-                CharacterStats character = entry.character;
-                if (character != null &&
-                    (character.currentHitPoints > 0 || character.HasStatusEffect(StatusEffectType.Unconscious)) &&
-                    character.battleSide == enemySide)
-                {
-                    // 检查攻击距离限制
-                    if (CanAttackTarget(attacker, character))
-                    {
-                        targets.Add(character);
-                    }
-                }
-            }
-
-            return targets;
+            if (actor == null) return null;
+            var target = FindBestTarget(actor);
+            if (target == null) return null;
+            return new BattleAction { target = target };
         }
 
         /// <summary>
-        /// 检查是否可以攻击目标
+        /// 选择一个最佳攻击目标：
+        /// - 优先选择敌方阵营且存活的目标（HP>0）；
+        /// - 若没有存活目标，选择处于昏迷的敌方目标；
+        /// - 在候选中选择距离最近的一个。
         /// </summary>
-        private bool CanAttackTarget(CharacterStats attacker, CharacterStats target)
+        private CharacterStats FindBestTarget(CharacterStats actor)
         {
-            bool attackerInFront = IsCharacterInFrontRow(attacker);
-            bool targetInFront = IsCharacterInFrontRow(target);
+            var all = FindObjectsOfType<CharacterStats>();
+            if (all == null || all.Length == 0) return null;
 
-            // 近战角色只能攻击敌方前排，除非敌方前排全灭
-            if (attackerInFront)
+            // 敌方候选（活着的）
+            var livingOpponents = all
+                .Where(c => c != null && c.battleSide != actor.battleSide && c.currentHitPoints > 0)
+                .ToList();
+
+            // 敌方候选（昏迷的）
+            var downedOpponents = all
+                .Where(c => c != null && c.battleSide != actor.battleSide && c.currentHitPoints <= 0 && c.HasStatusEffect(StatusEffectType.Unconscious))
+                .ToList();
+
+            List<CharacterStats> pool = livingOpponents.Count > 0 ? livingOpponents : downedOpponents;
+            if (pool == null || pool.Count == 0) return null;
+
+            CharacterStats best = null;
+            float bestDist = float.MaxValue;
+            foreach (var c in pool)
             {
-                if (targetInFront) return true;
-
-                // 检查敌方前排是否全灭
-                bool enemyFrontRowExists = HasEnemyInFrontRow(target.battleSide);
-                return !enemyFrontRowExists;
-            }
-
-            // 远程角色可以攻击任何目标
-            return true;
-        }
-
-        /// <summary>
-        /// 检查指定阵营是否还有前排角色存活
-        /// </summary>
-        private bool HasEnemyInFrontRow(BattleSide side)
-        {
-            foreach (InitiativeEntry entry in initiativeOrder)
-            {
-                if (entry.character != null &&
-                    entry.character.currentHitPoints > 0 &&
-                    entry.character.battleSide == side &&
-                    IsCharacterInFrontRow(entry.character))
+                float d = Vector3.Distance(actor.transform.position, c.transform.position);
+                if (d < bestDist)
                 {
-                    return true;
+                    bestDist = d;
+                    best = c;
                 }
             }
-            return false;
-        }
-
-        /// <summary>
-        /// 选择最优攻击目标
-        /// </summary>
-        private CharacterStats SelectBestTarget(CharacterStats attacker, List<CharacterStats> targets)
-        {
-            if (targets.Count == 0) return null;
-            if (targets.Count == 1) return targets[0];
-
-            // 优先攻击血量最少的敌人
-            CharacterStats bestTarget = targets[0];
-            foreach (CharacterStats target in targets)
-            {
-                if (target.currentHitPoints < bestTarget.currentHitPoints)
-                {
-                    bestTarget = target;
-                }
-            }
-
-            return bestTarget;
-        }
-
-        /// <summary>
-        /// 战斗行动数据结构
-        /// </summary>
-        public class BattleAction
-        {
-            public BattleActionType actionType;
-            public CharacterStats target;
-            public string description;
-        }
-
-        public enum BattleActionType
-        {
-            Attack,
-            Defend,
-            Cast,
-            Move,
-            Wait
+            return best;
         }
     }
 }

@@ -34,6 +34,19 @@ namespace demo2.DND
         public System.Action<string> OnStateChanged;
 
         private bool isForceAttackAnimation = false;
+        // 防止重复订阅Spine事件
+        private bool spineEventsHooked = false;
+
+        // 终止状态（死亡或昏迷）判断
+        private bool IsTerminalState()
+        {
+            if (characterStats == null) return false;
+            // HP<=0 或带有昏迷状态都视为终止状态
+            bool hpDown = characterStats.IsDownOrDead();
+            bool unconscious = false;
+            try { unconscious = characterStats.HasStatusEffect(StatusEffectType.Unconscious); } catch { }
+            return hpDown || unconscious;
+        }
 
         public enum CharacterState
         {
@@ -64,8 +77,13 @@ namespace demo2.DND
         {
             if (skeletonAnimation != null)
             {
-                skeletonAnimation.AnimationState.Event += OnSpineEvent;
-                skeletonAnimation.AnimationState.Complete += OnSpineAnimationComplete;
+                // 避免重复订阅
+                if (!spineEventsHooked)
+                {
+                    skeletonAnimation.AnimationState.Event += OnSpineEvent;
+                    skeletonAnimation.AnimationState.Complete += OnSpineAnimationComplete;
+                    spineEventsHooked = true;
+                }
             }
         }
 
@@ -73,8 +91,12 @@ namespace demo2.DND
         {
             if (skeletonAnimation != null)
             {
-                skeletonAnimation.AnimationState.Event -= OnSpineEvent;
-                skeletonAnimation.AnimationState.Complete -= OnSpineAnimationComplete;
+                if (spineEventsHooked)
+                {
+                    skeletonAnimation.AnimationState.Event -= OnSpineEvent;
+                    skeletonAnimation.AnimationState.Complete -= OnSpineAnimationComplete;
+                    spineEventsHooked = false;
+                }
             }
             if (currentMoveTween != null && currentMoveTween.IsActive())
             {
@@ -89,11 +111,18 @@ namespace demo2.DND
                 characterStats = GetComponent<CharacterStats>();
 
             if (skeletonAnimation == null)
+            {
                 skeletonAnimation = GetComponent<SkeletonAnimation>();
+                // 兼容：如果Spine组件在子物体上
+                if (skeletonAnimation == null)
+                {
+                    skeletonAnimation = GetComponentInChildren<SkeletonAnimation>(true);
+                }
+            }
 
             if (characterStats == null || skeletonAnimation == null)
             {
-                Debug.LogError($"DND_CharacterAdapter: 缺少必需组件！角色: {gameObject.name}");
+                Debug.LogError($"DND_CharacterAdapter: 缺少必需组件！角色: {gameObject.name} (characterStats={characterStats!=null}, skeletonAnimation={skeletonAnimation!=null})");
             }
         }
 
@@ -101,8 +130,13 @@ namespace demo2.DND
         {
             if (skeletonAnimation == null) return;
 
-            skeletonAnimation.AnimationState.Event += OnSpineEvent;
-            skeletonAnimation.AnimationState.Complete += OnSpineAnimationComplete;
+            // 避免在Awake/OnEnable重复订阅
+            if (!spineEventsHooked)
+            {
+                skeletonAnimation.AnimationState.Event += OnSpineEvent;
+                skeletonAnimation.AnimationState.Complete += OnSpineAnimationComplete;
+                spineEventsHooked = true;
+            }
         }
 
         void OnSpineEvent(TrackEntry trackEntry, Spine.Event e)
@@ -181,6 +215,13 @@ namespace demo2.DND
 
             OnAnimationComplete?.Invoke();
 
+            // 修复：如果角色已经死亡或昏迷，则不应自动切换回Idle
+            if (characterStats != null && characterStats.IsDownOrDead())
+            {
+                Debug.Log($"[{gameObject.name}] 角色已死亡或昏迷，动画完成事件 '{completedAnimationName}' 后不自动切换状态。");
+                return;
+            }
+
             string expectedAttackAnimName = animationConfig != null ? animationConfig.attackAnimation : "attack";
 
             if (completedAnimationName == expectedAttackAnimName ||
@@ -213,37 +254,60 @@ namespace demo2.DND
         // 基础动画：在攻击锁定期间会被阻止切换
         public void PlayIdleAnimation()
         {
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] [终止] 死亡/昏迷期间禁止切换到Idle");
+                return;
+            }
             if (isForceAttackAnimation)
             {
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Idle");
                 return;
             }
-            PlayAnimation(animationConfig.idleAnimation, true);
+            var idleName = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.idleAnimation)) ? animationConfig.idleAnimation : "idle";
+            PlayAnimation(idleName, true);
         }
 
         public void PlayWalkAnimation()
         {
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] [终止] 死亡/昏迷期间禁止切换到Walk");
+                return;
+            }
             if (isForceAttackAnimation)
             {
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Walk");
                 return;
             }
-            PlayAnimation(animationConfig.walkAnimation, true);
+            var walkName = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.walkAnimation)) ? animationConfig.walkAnimation : "walk";
+            PlayAnimation(walkName, true);
         }
 
         public void PlayRunAnimation()
         {
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] [终止] 死亡/昏迷期间禁止切换到Run");
+                return;
+            }
             if (isForceAttackAnimation)
             {
                 Debug.Log($"[{gameObject.name}] [锁] 攻击动画期间禁止切换到Run");
                 return;
             }
-            PlayAnimation(animationConfig.runAnimation, true);
+            var runName = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.runAnimation)) ? animationConfig.runAnimation : "run";
+            PlayAnimation(runName, true);
         }
 
         // 战斗动画
         public void PlayAttackAnimation()
         {
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] [终止] 死亡/昏迷期间禁止播放攻击动画");
+                return;
+            }
             Debug.Log($"[{gameObject.name}] ========== PlayAttackAnimation 开始 ==========");
             Debug.Log($"[{gameObject.name}] 当前isAnimating状态: {isAnimating}");
             Debug.Log($"[{gameObject.name}] skeletonAnimation是否为空: {skeletonAnimation == null}");
@@ -283,16 +347,38 @@ namespace demo2.DND
 
         public void PlayHitAnimation()
         {
-            PlayAnimation(animationConfig.hitAnimation, false);
+            // 如果角色已死亡或处于昏迷，不播放受击动画，避免覆盖死亡/昏迷表现
+            if (characterStats != null && (characterStats.IsDownOrDead() || characterStats.HasStatusEffect(StatusEffectType.Unconscious)))
+            {
+                Debug.Log($"[{gameObject.name}] 跳过受击动画（角色已死亡或昏迷）");
+                return;
+            }
+            var hitName = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.hitAnimation)) ? animationConfig.hitAnimation : "hit";
+            PlayAnimation(hitName, false);
         }
 
         public void PlayDeathAnimation()
         {
-            // 尝试使用配置的死亡动画名称，若不存在则尝试常见备选项
+            // 尝试使用配置的死亡动画名称，若不存在则尝试常见备选项（包含 Lose 等常见命名）
             string preferred = animationConfig != null ? animationConfig.deathAnimation : "death";
-            string chosen = FindBestAnimationName(preferred, new string[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02" });
+            string chosen = FindBestAnimationName(preferred, new[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02", "Lose", "lose", "KO", "ko" });
             if (!string.IsNullOrEmpty(chosen))
             {
+                try
+                {
+                    // 关键：清空所有轨道，避免被其它轨道覆盖；重置到初始姿态
+                    skeletonAnimation.AnimationState.ClearTracks();
+                    skeletonAnimation.Skeleton.SetToSetupPose();
+                }
+                catch { }
+
+                // 终止所有位移Tween，解除攻击锁
+                if (currentMoveTween != null && currentMoveTween.IsActive()) { currentMoveTween.Kill(); currentMoveTween = null; }
+                isForceAttackAnimation = false;
+                isAnimating = false;
+
+                CurrentState = CharacterState.Death;
+                Debug.Log($"[{gameObject.name}] 正在播放死亡动画: '{chosen}', loop: False");
                 PlayAnimation(chosen, false);
             }
             else
@@ -305,9 +391,23 @@ namespace demo2.DND
         {
             // 昏迷动画一般为循环状态，优先使用配置并兜底常见名称
             string preferred = animationConfig != null ? animationConfig.unconsciousAnimation : "unconscious";
-            string chosen = FindBestAnimationName(preferred, new string[] { "unconscious", "Unconscious", "knockdown", "down", "fallen" });
+            string chosen = FindBestAnimationName(preferred, new[] { "unconscious", "Unconscious", "knockdown", "down", "fallen", "LoseLoop", "down_loop" });
             if (!string.IsNullOrEmpty(chosen))
             {
+                try
+                {
+                    skeletonAnimation.AnimationState.ClearTracks();
+                    skeletonAnimation.Skeleton.SetToSetupPose();
+                }
+                catch { }
+
+                // 终止所有位移Tween，解除攻击锁
+                if (currentMoveTween != null && currentMoveTween.IsActive()) { currentMoveTween.Kill(); currentMoveTween = null; }
+                isForceAttackAnimation = false;
+                isAnimating = false;
+
+                CurrentState = CharacterState.Unconscious;
+                Debug.Log($"[{gameObject.name}] 正在播放昏迷动画: '{chosen}', loop: True");
                 PlayAnimation(chosen, true);
             }
             else
@@ -319,8 +419,14 @@ namespace demo2.DND
         public void ForcePlayAttackAnimation()
         {
             // 强制播放，仍设置锁以防止覆盖
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] [终止] 死亡/昏迷期间禁止强制攻击");
+                return;
+            }
             isForceAttackAnimation = true;
-            PlayAnimation(animationConfig.attackAnimation, false);
+            var atk = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.attackAnimation)) ? animationConfig.attackAnimation : "attack";
+            PlayAnimation(atk, false);
         }
 
         #endregion
@@ -330,18 +436,24 @@ namespace demo2.DND
         public void PlayCastSpellAnimation()
         {
             if (isAnimating) return;
+            if (IsTerminalState()) return;
 
-            PlayAnimation(animationConfig.skillAnimation, false);
+            var skill = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.skillAnimation)) ? animationConfig.skillAnimation : "skill";
+            PlayAnimation(skill, false);
         }
 
         public void PlayDefendAnimation()
         {
-            PlayAnimation(animationConfig.defendAnimation, false);
+            if (IsTerminalState()) return;
+            var defend = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.defendAnimation)) ? animationConfig.defendAnimation : "defend";
+            PlayAnimation(defend, false);
         }
 
         public void PlayDodgeAnimation()
         {
-            PlayAnimation(animationConfig.dodgeAnimation, false);
+            if (IsTerminalState()) return;
+            var dodge = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.dodgeAnimation)) ? animationConfig.dodgeAnimation : "dodge";
+            PlayAnimation(dodge, false);
         }
 
         #endregion
@@ -357,6 +469,12 @@ namespace demo2.DND
             if (target == null)
             {
                 Debug.LogError($"[{gameObject.name}] ExecuteMeleeAttack: target为空！");
+                return;
+            }
+
+            if (IsTerminalState())
+            {
+                Debug.LogWarning($"[{gameObject.name}] 角色处于死亡/昏迷，跳过近战攻击");
                 return;
             }
 
@@ -392,6 +510,12 @@ namespace demo2.DND
                 .OnComplete(() => {
                     try
                     {
+                        if (IsTerminalState())
+                        {
+                            Debug.Log($"[{gameObject.name}] 移动完成但角色已终止（死亡/昏迷），不再执行攻击");
+                            isAnimating = false;
+                            return;
+                        }
                         Debug.Log($"[{gameObject.name}] 阶段2：到达攻击位置，执行攻击");
                         ExecuteAttackAtPosition(target, onAttackHit, () => {
                             Debug.Log($"[{gameObject.name}] 阶段3：攻击完成，返回原位");
@@ -401,11 +525,19 @@ namespace demo2.DND
                                 currentMoveTween.Kill();
                                 currentMoveTween = null;
                             }
+                            if (IsTerminalState())
+                            {
+                                isAnimating = false;
+                                return;
+                            }
                             currentMoveTween = transform.DOMove(originalPosition, moveDuration)
                                 .SetEase(animationConfig.moveEase)
                                 .OnComplete(() => {
                                     isAnimating = false;
-                                    PlayIdleAnimation();
+                                    if (!IsTerminalState())
+                                    {
+                                        PlayIdleAnimation();
+                                    }
                                     onComplete?.Invoke();
                                 });
                         });
@@ -414,7 +546,7 @@ namespace demo2.DND
                     {
                         Debug.LogError($"[{gameObject.name}] ExecuteMeleeAttack异常: {ex.Message}");
                         isAnimating = false;
-                        PlayIdleAnimation();
+                        if (!IsTerminalState()) PlayIdleAnimation();
                         onComplete?.Invoke();
                     }
                 });
@@ -467,6 +599,13 @@ namespace demo2.DND
             }
             catch { }
 
+            if (IsTerminalState())
+            {
+                Debug.Log($"[{gameObject.name}] 已处于终止状态，跳过攻击动画");
+                onComplete?.Invoke();
+                return;
+            }
+
             PlayAttackAnimation();
 
             // 获取实际播放的攻击动画名称和时长
@@ -513,6 +652,7 @@ namespace demo2.DND
                 DOVirtual.DelayedCall(attackAnimationDuration * 0.5f, () => {
                     try
                     {
+                        if (IsTerminalState()) { /* 若已死亡/昏迷则无需命中 */ }
                         if (tempAttackHitCallback != null && !hasAttackHitTriggered)
                         {
                             Debug.Log($"{gameObject.name} 备用攻击命中触发（Spine事件未响应）");
@@ -587,6 +727,12 @@ namespace demo2.DND
                 return;
             }
 
+            if (IsTerminalState())
+            {
+                Debug.LogWarning($"[RANGED] {gameObject.name} 已死亡/昏迷，跳过远程攻击");
+                return;
+            }
+
             if (isAnimating)
             {
                 Debug.LogWarning($"[RANGED] {gameObject.name} 角色正在执行动画，跳过远程攻击");
@@ -623,11 +769,19 @@ namespace demo2.DND
                 Debug.Log($"[{gameObject.name}] ReturnToOriginalPosition: 解除攻击动画锁以便播放返回动画");
                 isForceAttackAnimation = false;
             }
+            if (IsTerminalState())
+            {
+                isAnimating = false;
+                return;
+            }
             PlayWalkAnimation();
             float distance = Vector3.Distance(transform.position, originalPosition);
             if (distance < 0.1f)
             {
-                PlayIdleAnimation();
+                if (!IsTerminalState())
+                {
+                    PlayIdleAnimation();
+                }
                 isAnimating = false;
                 onComplete?.Invoke();
                 return;
@@ -635,10 +789,14 @@ namespace demo2.DND
             currentMoveTween?.Kill();
             float moveDelay = 0.06f;
             DOVirtual.DelayedCall(moveDelay, () => {
+                if (IsTerminalState()) { isAnimating = false; return; }
                 currentMoveTween = transform.DOMove(originalPosition, distance / animationConfig.moveSpeed)
                     .SetEase(animationConfig.moveEase)
                     .OnComplete(() => {
-                        PlayIdleAnimation();
+                        if (!IsTerminalState())
+                        {
+                            PlayIdleAnimation();
+                        }
                         isAnimating = false;
                         onComplete?.Invoke();
                     });
@@ -726,20 +884,18 @@ namespace demo2.DND
                     else
                     {
                         Debug.LogError($"[{gameObject.name}] ✗ 验证失败，当前没有播放动画");
+                    }
 
-                    // 强制立即将AnimationState应用到Skeleton并更新世界变换，确保画面及时刷新
+                    // 关键：无论验证是否成功，强制立即应用状态以刷新画面
                     try
                     {
                         skeletonAnimation.AnimationState.Apply(skeletonAnimation.Skeleton);
                         skeletonAnimation.Skeleton.UpdateWorldTransform();
-                        // 如果SkeletonAnimation提供Update接口，调用以便立即刷新（兼容不同版本）
                         try { skeletonAnimation.Update(0f); } catch { }
                     }
                     catch (System.Exception ex)
                     {
                         Debug.LogWarning($"[{gameObject.name}] 强制刷新Spine显示失败: {ex.Message}");
-                    }
-
                     }
                 }
             }
@@ -817,8 +973,12 @@ namespace demo2.DND
             // 清理Spine事件
             if (skeletonAnimation != null)
             {
-                skeletonAnimation.AnimationState.Event -= OnSpineEvent;
-                skeletonAnimation.AnimationState.Complete -= OnSpineAnimationComplete;
+                if (spineEventsHooked)
+                {
+                    skeletonAnimation.AnimationState.Event -= OnSpineEvent;
+                    skeletonAnimation.AnimationState.Complete -= OnSpineAnimationComplete;
+                    spineEventsHooked = false;
+                }
             }
         }
 
@@ -853,20 +1013,20 @@ namespace demo2.DND
             }
 
             Debug.Log($"=== [{gameObject.name}] 当前动画映射配置 ===");
-            Debug.Log($"idle: {animationConfig.idleAnimation}");
-            Debug.Log($"walk: {animationConfig.walkAnimation}");
-            Debug.Log($"attack: {animationConfig.attackAnimation}");
-            Debug.Log($"hit: {animationConfig.hitAnimation}");
+            Debug.Log($"idle: {animationConfig?.idleAnimation}");
+            Debug.Log($"walk: {animationConfig?.walkAnimation}");
+            Debug.Log($"attack: {animationConfig?.attackAnimation}");
+            Debug.Log($"hit: {animationConfig?.hitAnimation}");
 
             // 验证攻击动画是否存在
-            var attackAnim = skeletonData.FindAnimation(animationConfig.attackAnimation);
+            var attackAnim = skeletonData.FindAnimation(animationConfig != null ? animationConfig.attackAnimation : "attack");
             if (attackAnim != null)
             {
-                Debug.Log($"✓ 攻击动画 '{animationConfig.attackAnimation}' 找到，时长: {attackAnim.Duration}秒");
+                Debug.Log($"✓ 攻击动画 '{(animationConfig != null ? animationConfig.attackAnimation : "attack")}' 找到，时长: {attackAnim.Duration}秒");
             }
             else
             {
-                Debug.LogError($"✗ 攻击动画 '{animationConfig.attackAnimation}' 未找到！");
+                Debug.LogError($"✗ 攻击动画 '{(animationConfig != null ? animationConfig.attackAnimation : "attack")}' 未找到！");
             }
         }
 
@@ -902,11 +1062,11 @@ namespace demo2.DND
                 return null;
             }
 
-            Debug.Log($"[{gameObject.name}] 智能查找攻击动画 - 配置的攻击动画名称: '{animationConfig.attackAnimation}'");
+            Debug.Log($"[{gameObject.name}] 智能查找攻击动画 - 配置的攻击动画名称: '{animationConfig?.attackAnimation}'");
 
             // 常见的攻击动画名称列表（按优先级排序）
             string[] possibleAttackNames = {
-                animationConfig.attackAnimation, // 优先使用配置的名称
+                animationConfig != null ? animationConfig.attackAnimation : null, // 优先使用配置的名称
                 "Atk01", "Atk02", "Atk03", "attack", "Attack", "ATTACK",
                 "atk", "ATK", "hit", "Hit", "strike", "Strike"
             };
@@ -949,12 +1109,14 @@ namespace demo2.DND
 
             var skeletonData = skeletonAnimation.Skeleton.Data;
 
+            // 1) 首选：精确匹配 preferred
             if (!string.IsNullOrEmpty(preferred))
             {
                 var a = skeletonData.FindAnimation(preferred);
                 if (a != null) return preferred;
             }
 
+            // 2) 其次：精确匹配 fallbacks
             if (fallbacks != null)
             {
                 foreach (var name in fallbacks)
@@ -964,6 +1126,45 @@ namespace demo2.DND
                     if (anim != null) return name;
                 }
             }
+
+            // 3) 兜底：大小写不敏感的模糊匹配（包含包含关系），优先 preferred，再尝试 fallbacks
+            try
+            {
+                System.Func<string, string> toLower = s => (s ?? string.Empty).ToLowerInvariant();
+
+                if (!string.IsNullOrEmpty(preferred))
+                {
+                    string prefLower = toLower(preferred);
+                    for (int i = 0; i < skeletonData.Animations.Count; i++)
+                    {
+                        var item = skeletonData.Animations.Items[i];
+                        if (item == null || string.IsNullOrEmpty(item.Name)) continue;
+                        if (toLower(item.Name).Contains(prefLower))
+                        {
+                            return item.Name; // 返回原始大小写名
+                        }
+                    }
+                }
+
+                if (fallbacks != null)
+                {
+                    foreach (var fb in fallbacks)
+                    {
+                        if (string.IsNullOrEmpty(fb)) continue;
+                        string fbLower = toLower(fb);
+                        for (int i = 0; i < skeletonData.Animations.Count; i++)
+                        {
+                            var item = skeletonData.Animations.Items[i];
+                            if (item == null || string.IsNullOrEmpty(item.Name)) continue;
+                            if (toLower(item.Name).Contains(fbLower))
+                            {
+                                return item.Name;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
 
             return null;
         }
@@ -984,11 +1185,11 @@ namespace demo2.DND
             {
                 case CharacterState.Death:
                     preferred = animationConfig.deathAnimation;
-                    fallbacks = new string[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02" };
+                    fallbacks = new string[] { "death", "Death", "die", "Die", "dead", "Dead", "death_01", "death_02", "Lose", "lose", "KO", "ko" };
                     break;
                 case CharacterState.Unconscious:
                     preferred = animationConfig.unconsciousAnimation;
-                    fallbacks = new string[] { "unconscious", "Unconscious", "knockdown", "down", "fallen" };
+                    fallbacks = new string[] { "unconscious", "Unconscious", "knockdown", "down", "fallen", "LoseLoop", "down_loop" };
                     break;
                 case CharacterState.Attack:
                     preferred = animationConfig.attackAnimation;

@@ -632,7 +632,18 @@ namespace demo2.DND.HorizontalFormation
             {
                 if (enemy != null)
                 {
-                    Destroy(enemy);
+                    var stats = enemy.GetComponent<CharacterStats>();
+                    // 如果敌人还有血（异常场景），直接销毁；否则交由角色自身的3秒尸体消失逻辑处理
+                    if (stats == null || stats.currentHitPoints > 0)
+                    {
+                        Destroy(enemy);
+                    }
+                    else
+                    {
+                        // 让死亡动画+3秒消失自行完成，这里不立即销毁
+                        // 可选：取消父子关系以避免后续父节点动画或清理影响
+                        try { enemy.transform.SetParent(null, true); } catch { }
+                    }
                 }
             }
             activeEnemyCharacters.Clear();

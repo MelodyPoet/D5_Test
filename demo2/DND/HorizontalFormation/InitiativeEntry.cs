@@ -10,6 +10,7 @@ namespace demo2.DND.HorizontalFormation
     public class InitiativeEntry {
         [Header("先攻数据")]
         public CharacterStats character;     // 角色数据
+        public BattleSide initialSide;       // 新增：角色的初始阵营
         public int initiativeValue;          // 先攻值 (1d20 + 敏捷调整值)
         public int initiativeRoll;           // 先攻检定骰子结果 (兼容旧代码)
 
@@ -23,6 +24,7 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public InitiativeEntry() {
             character = null;
+            initialSide = BattleSide.Player; // 默认值
             initiativeValue = 0;
             initiativeRoll = 0;
             ResetTurnState();
@@ -33,6 +35,7 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public InitiativeEntry(CharacterStats character, int initiative) {
             this.character = character;
+            this.initialSide = character.battleSide; // 从角色数据中记录初始阵营
             this.initiativeValue = initiative;
             this.initiativeRoll = initiative; // 兼容性
             ResetTurnState();

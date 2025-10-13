@@ -257,7 +257,14 @@ namespace demo2.DND.HorizontalFormation
             if (playerVictory)
             {
                 GiveBattleVictoryRewards();
-                formationManager.ClearEnemyFormation();
+
+                // 延迟清理敌人阵型，确保死亡动画（3s）可以完整播放
+                float corpseDelay = 3.1f;
+                Debug.Log($"[IdleGameManager] 延迟 {corpseDelay}s 清理敌人阵型以确保死亡动画播放完成");
+                Invoke(nameof(DelayedClearEnemyFormation), corpseDelay);
+
+                // 重置下一次遭遇计时，避免立刻触发新遭遇导致看起来像“立即刷新一个新怪”
+                nextEncounterTime = Time.time + encounterInterval;
 
                 // 恢复探索状态
                 Invoke(nameof(RestoreExplorationState), 1f);
@@ -265,6 +272,14 @@ namespace demo2.DND.HorizontalFormation
             else
             {
                 HandleBattleDefeat();
+            }
+        }
+
+        private void DelayedClearEnemyFormation()
+        {
+            if (formationManager != null)
+            {
+                formationManager.ClearEnemyFormation();
             }
         }
 
