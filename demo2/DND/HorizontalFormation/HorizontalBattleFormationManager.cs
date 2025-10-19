@@ -53,6 +53,13 @@ namespace demo2.DND.HorizontalFormation
         // 运行时数据
         private List<GameObject> activePlayerCharacters = new List<GameObject>();
         private List<GameObject> activeEnemyCharacters = new List<GameObject>();
+        private int _currentWaveIndex = 0;
+
+        public int GetEnemyWaveCount()
+        {
+            if (formationContainer == null) return 0;
+            return formationContainer.GetEnemyWaveCount();
+        }
 
         private void Awake()
         {
@@ -149,7 +156,7 @@ namespace demo2.DND.HorizontalFormation
         /// 生成敌人阵型（带整体进场动画）
         /// 使用DOTween事件驱动，摒弃协程
         /// </summary>
-        public void GenerateEnemyFormation()
+        public void GenerateEnemyFormation(int waveIndex)
         {
             try
             {
@@ -159,6 +166,15 @@ namespace demo2.DND.HorizontalFormation
                     Debug.LogError("阵型容器未配置！请在HorizontalBattleFormationManager中设置FormationContainer");
                     return;
                 }
+
+                if (waveIndex >= formationContainer.GetEnemyWaveCount())
+                {
+                    Debug.LogWarning($"请求的波次索引 {waveIndex} 超出总波次数 {formationContainer.GetEnemyWaveCount()}。战斗结束或无更多波次。");
+                    // 在这里可以触发战斗胜利或结束所有波次的逻辑
+                    return;
+                }
+                _currentWaveIndex = waveIndex;
+
                 if (enemySpawnPoints.Length < 6)
                 {
                     Debug.LogError("敌人spawn点配置不足！需要6个位置点");
@@ -174,15 +190,18 @@ namespace demo2.DND.HorizontalFormation
                 {
                     activeEnemyCharacters.Add(null);
                 }
+
+                GameObject[] enemyPrefabs = formationContainer.GetEnemyFormation(_currentWaveIndex);
+
                 Vector3 originalParentPosition = enemySpawnParent.position;
                 enemySpawnParent.position = originalParentPosition + Vector3.right * enemyEntranceOffset;
                 for (int i = 0; i < 6; i++)
                 {
-                    GameObject prefab = formationContainer.GetEnemyPrefab(i);
+                    GameObject prefab = enemyPrefabs[i];
                     InstantiateEnemyCharacterAtCurrentPosition(prefab, enemySpawnPoints[i], BattleSide.Enemy, i);
                 }
                 ExecuteFormationEntranceAnimationDoTween(originalParentPosition);
-                Debug.Log($"敌人阵型生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
+                Debug.Log($"敌人阵型(波次: {_currentWaveIndex})生成完成，整体进场动画开始，列表状态: {GetFormationDebugInfo(activeEnemyCharacters)}");
                 // 新增：收集所有非null角色并初始化血条UI
                 var enemyStats = new List<CharacterStats>();
                 foreach (var go in activeEnemyCharacters)
@@ -200,31 +219,19 @@ namespace demo2.DND.HorizontalFormation
                 }
                 else
                 {
-                    Debug.LogWarning("HealthBarUIManager.Instance 为 null，无法初始化敌人血条 UI。请确保场景中有该单例。参考 HorizontalBattleFormationManager.CreateHealthBarForCharacter");
-                }
-
-                // 调试/恢复机制：确保玩家侧血条在敌人进场后仍存在（防止初始化期间被误删）
-                if (HealthBarUIManager.Instance != null)
-                {
-                    HealthBarUIManager.Instance.DumpStatus("after enemy init");
-                    var playerStats = new List<CharacterStats>();
-                    foreach (var go in activePlayerCharacters)
-                    {
-                        if (go != null)
-                        {
-                            var stats = go.GetComponent<CharacterStats>();
-                            if (stats != null) playerStats.Add(stats);
-                        }
-                    }
-                    // 重新确保玩家血条存在（InitializeBars 会跳过已存在的条目）
-                    HealthBarUIManager.Instance.InitializeBars(playerStats);
-                    HealthBarUIManager.Instance.DumpStatus("after reinit player bars");
+                    Debug.LogWarning("HealthBarUIManager.Instance 为 null，无法初始化敌人血条 UI。");
                 }
             }
             catch (System.Exception ex)
             {
                 Debug.LogError($"GenerateEnemyFormation 发生异常: {ex}");
             }
+        }
+
+        [System.Obsolete("此方法已过时，请使用 GenerateEnemyFormation(int waveIndex) 替代")]
+        public void GenerateEnemyFormation()
+        {
+            GenerateEnemyFormation(0);
         }
 
         /// <summary>

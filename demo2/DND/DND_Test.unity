@@ -481,7 +481,7 @@ Transform:
   m_GameObject: {fileID: 399482981}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 8.7238, y: 2.27, z: 0}
+  m_LocalPosition: {x: 0, y: 1.63, z: 0.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -499,12 +499,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 510e80d5b8300f34d9a169fc78076d1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scrollMode: 0
-  forceTransformMove: 1
-  scrollSpeed: 2
-  scrollDirection: -1
-  startCameraX: 0
-  moveSpeed: 0.1
+  scrollSpeed: 0.05
+  scrollDirection: 1
 --- !u!1 &428075187
 GameObject:
   m_ObjectHideFlags: 0
@@ -840,7 +836,7 @@ Transform:
   m_GameObject: {fileID: 740263985}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 10.2569, y: -0.84, z: 0}
+  m_LocalPosition: {x: 0, y: -0.84, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -858,12 +854,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 510e80d5b8300f34d9a169fc78076d1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scrollMode: 0
-  forceTransformMove: 1
-  scrollSpeed: 2
-  scrollDirection: -1
-  startCameraX: 0
-  moveSpeed: 0.5
+  scrollSpeed: 0.2
+  scrollDirection: 1
 --- !u!1 &746661144
 GameObject:
   m_ObjectHideFlags: 0
@@ -1467,6 +1459,7 @@ MonoBehaviour:
   healthBarPrefab: {fileID: 9092818779322249762, guid: 7d781e3e5d515854eaf460d3a6b86244, type: 3}
   playerHealthBarContainer: {fileID: 2036385660}
   enemyHealthBarContainer: {fileID: 1769203472}
+  allowPlayerBarClear: 0
 --- !u!4 &2008873111
 Transform:
   m_ObjectHideFlags: 0

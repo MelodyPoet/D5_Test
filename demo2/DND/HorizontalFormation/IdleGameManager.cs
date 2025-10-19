@@ -28,6 +28,7 @@ namespace demo2.DND.HorizontalFormation
         private float nextEncounterTime;
         private float teamGenerationTimer;
         private bool isWaitingForTeamGeneration;
+        private static int currentEnemyWave;
 
         // 当前活跃的队伍（如不需要可通过 formationManager 查询）
         // private List<CharacterStats> currentPlayerTeam = new List<CharacterStats>();
@@ -193,7 +194,7 @@ namespace demo2.DND.HorizontalFormation
                 StopBackgroundScrolling();
 
                 // 生成敌人
-                formationManager.GenerateEnemyFormation();
+                formationManager.GenerateEnemyFormation(currentEnemyWave);
 
                 // 关键检查：确认敌人是否成功生成（存在存活敌人）
                 if (!formationManager.HasAliveCharacters(BattleSide.Enemy))
@@ -263,7 +264,15 @@ namespace demo2.DND.HorizontalFormation
                 Debug.Log($"[IdleGameManager] 延迟 {corpseDelay}s 清理敌人阵型以确保死亡动画播放完成");
                 Invoke(nameof(DelayedClearEnemyFormation), corpseDelay);
 
-                // 重置下一次遭遇计时，避免立刻触发新遭遇导致看起来像“立即刷新一个新怪”
+                // 战斗胜利，准备返回探索模式
+                currentEnemyWave++;
+                if (currentEnemyWave >= formationManager.GetEnemyWaveCount())
+                {
+                    Debug.Log("所有敌人波次已循环一遍，重置波次计数器。");
+                    currentEnemyWave = 0; // 所有波次打完后，从头开始循环
+                }
+
+                // 重置下一次遭遇计时
                 nextEncounterTime = Time.time + encounterInterval;
 
                 // 恢复探索状态
@@ -272,6 +281,7 @@ namespace demo2.DND.HorizontalFormation
             else
             {
                 HandleBattleDefeat();
+                currentEnemyWave = 0; // 战斗失败，重置波次
             }
         }
 
@@ -310,7 +320,7 @@ namespace demo2.DND.HorizontalFormation
                 {
                     if (layer != null)
                     {
-                        layer.SetScrollSpeed(2f);
+                        layer.StartScrollingWithInspectorValue();
                     }
                 }
             }
@@ -341,7 +351,7 @@ namespace demo2.DND.HorizontalFormation
             {
                 if (layer != null)
                 {
-                    layer.SetScrollSpeed(2f);
+                    layer.StartScrollingWithInspectorValue();
                 }
             }
         }
@@ -401,6 +411,7 @@ namespace demo2.DND.HorizontalFormation
             Debug.Log("💀 玩家队伍全灭，游戏结束！");
             idleModeEnabled = false;
             isInBattle = false;
+            currentEnemyWave = 0; // 玩家失败时重置静态波次计数器
         }
 
         /// <summary>

@@ -2,6 +2,13 @@
 
 namespace demo2.DND.HorizontalFormation
 {
+    [System.Serializable]
+    public class EnemyWaveConfig
+    {
+        [Tooltip("该波次敌人阵型6个位置的角色预制体，按索引顺序配置")]
+        public GameObject[] enemyFormationPrefabs = new GameObject[6];
+    }
+
     /// <summary>
     /// 阵型容器 - 简化预制体配置管理
     /// 使用数组方式统一管理阵型预制体，避免配置复杂度
@@ -21,9 +28,9 @@ namespace demo2.DND.HorizontalFormation
         [Tooltip("玩家阵型6个位置的角色预制体，按索引顺序配置")]
         [SerializeField] private GameObject[] playerFormationPrefabs = new GameObject[6];
 
-        [Header("敌人阵型预制体")]
-        [Tooltip("敌人阵型6个位置的角色预制体，按索引顺序配置")]
-        [SerializeField] private GameObject[] enemyFormationPrefabs = new GameObject[6];
+        [Header("敌人波次配置")]
+        [Tooltip("配置每个波次的敌人阵型")]
+        [SerializeField] private EnemyWaveConfig[] enemyWaves;
 
         /// <summary>
         /// 获取玩家指定位置的预制体
@@ -41,18 +48,26 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 获取敌人指定位置的预制体
+        /// 获取指定波次的敌人阵型所有预制体
         /// </summary>
-        /// <param name="positionIndex">位置索引 (0-5)</param>
-        /// <returns>对应位置的预制体，如果索引无效或位置为空则返回null</returns>
-        public GameObject GetEnemyPrefab(int positionIndex)
+        /// <param name="waveIndex">波次索引</param>
+        /// <returns>敌人阵型预制体数组</returns>
+        public GameObject[] GetEnemyFormation(int waveIndex)
         {
-            if (positionIndex < 0 || positionIndex >= enemyFormationPrefabs.Length)
+            if (enemyWaves == null || waveIndex < 0 || waveIndex >= enemyWaves.Length)
             {
-                Debug.LogWarning($"敌人阵型位置索引超出范围: {positionIndex}");
-                return null;
+                Debug.LogWarning($"敌人波次索引无效或未配置: {waveIndex}");
+                return new GameObject[6]; // 返回一个空阵型避免后续逻辑报错
             }
-            return enemyFormationPrefabs[positionIndex];
+            return enemyWaves[waveIndex].enemyFormationPrefabs;
+        }
+
+        /// <summary>
+        /// 获取总的敌人波次数
+        /// </summary>
+        public int GetEnemyWaveCount()
+        {
+            return enemyWaves?.Length ?? 0;
         }
 
         /// <summary>
@@ -62,15 +77,6 @@ namespace demo2.DND.HorizontalFormation
         public GameObject[] GetPlayerFormation()
         {
             return playerFormationPrefabs;
-        }
-
-        /// <summary>
-        /// 获取敌人阵型所有预制体
-        /// </summary>
-        /// <returns>敌人阵型预制体数组</returns>
-        public GameObject[] GetEnemyFormation()
-        {
-            return enemyFormationPrefabs;
         }
 
         /// <summary>
@@ -93,33 +99,10 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         /// <param name="positionIndex">位置索引 (0-5)</param>
         /// <param name="prefab">要设置的预制体</param>
+        [System.Obsolete("敌人阵型已由EnemyWave配置，此方法不再适用")]
         public void SetEnemyPrefab(int positionIndex, GameObject prefab)
         {
-            if (positionIndex < 0 || positionIndex >= enemyFormationPrefabs.Length)
-            {
-                Debug.LogWarning($"敌人阵型位置索引超出范围: {positionIndex}");
-                return;
-            }
-            enemyFormationPrefabs[positionIndex] = prefab;
-        }
-
-        /// <summary>
-        /// 获取位置描述信息
-        /// </summary>
-        /// <param name="positionIndex">位置索引</param>
-        /// <returns>位置描述字符串</returns>
-        public string GetPositionDescription(int positionIndex)
-        {
-            switch (positionIndex)
-            {
-                case 0: return "前排左翼";
-                case 1: return "前排中锋";
-                case 2: return "前排右翼";
-                case 3: return "后排左翼";
-                case 4: return "后排中路";
-                case 5: return "后排右翼";
-                default: return "无效位置";
-            }
+            Debug.LogWarning("SetEnemyPrefab 已过时，请直接配置 EnemyWave ScriptableObject。");
         }
     }
 }
