@@ -232,8 +232,27 @@ HorizontalCombatRules 战斗规则:
 DND_CharacterAdapter脚本终结状态缺少”护航“与”清理"，导致死亡/昏迷动画被后续Idle/Walk/Run/Attack或位移回调覆盖;
 2.未清轨/未杀Tween让终结动画首帧不稳定。加上CharacterStats偶发找不到适配器，这些问题综合导致血量归0后未播放死亡动画或昏迷动画;
 
-重要，需求清单，请严格对齐，不要开发不在清单里的功能
+近战攻击链路:
+AI决策:AutoBattleAI.ProcessCurrentTurn->DecideBestAction->ExecuteBattleActionEvent
+流程：DND_CharacterAdapter.ExecuteMeleeAttack(target)
+阶段1 移动：PlayWalkAnimation->transform.DOMove(attackPos)
+阶段2 攻击:到达后ExecuteAttackAtPosition()
+    首先ClearTrack(0)清理轨道，防止攻击动画被覆盖
+    然后PlayAttackAnimation->PlayAnimation(attack,loop=false)
+    事件/兜底:监听Spine Event触发OnAttackHit;并加DOVirtual.DelayedCall备用计时器防止事件未触发
+阶段3 返回:攻击完成后DOMove(originalPosition)->OnComplete时若未死亡/未昏迷再PlayIdleAnimation
+
+远程攻击链路:不移动，直接ExecuteAttackAtPosition+攻击事件逻辑
+
+受击/Miss/脚步
+命中后：若目标没倒地，target.PlayHitAnimation(短动画)
+未命中:target.PlayDodgeAnimation+target.ShowMiss()
+脚步/状态事件:通过Spine Event回调OnSpineEvent->OnStateChanged广播，CharacterStats收到后可做音效等
+
+*重要，需求*清单，请严格对齐，不要开发不在清单里的功能
 当前开发任务: 敌方攻击行为 + DND5E先攻系统
+
+
 
 集成点:
 - 保持战斗流程的一致性: 敌方也要遵循相同的动画和伤害规则
