@@ -210,6 +210,7 @@ MonoBehaviour:
   temporaryHitPoints: 0
   armorClass: 10
   statusEffects: 
+  hasPlayedDeath: 0
   strength: 10
   dexterity: 10
   constitution: 10
@@ -230,11 +231,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterStats: {fileID: 8719517995773826923}
   skeletonAnimation: {fileID: 8879447424575441470}
-  animationMapping:
-    idleAnimation: idle
-    walkAnimation: move
-    moveToIdleAnimation: m_to_i
-    attackAnimation: atk_1
-    hitAnimation: hit
-    deathAnimation: dead
-    castAnimation: cast
+  animationConfig: {fileID: 11400000, guid: a50d5ab6d6cea634ba7fa324950ccc67, type: 2}
