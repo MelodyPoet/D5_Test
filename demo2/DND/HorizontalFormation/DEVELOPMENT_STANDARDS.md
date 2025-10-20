@@ -191,7 +191,9 @@ CharacterStats 属性系统:
 - 血量机制: MaxHP/CurrentHP + 死亡检测 (HP<=0)
 
 HorizontalCombatRules 战斗规则:
-- 攻击检定: 1d20 + 属性调整值 + 熟练加值 vs AC
+- （力量武器）根据当前装备的近战力量武器时攻击检定: 1d20 + 力量调整值 + 熟练加值 vs AC
+- （敏捷武器）根据当前装备的远程武器或者近战灵巧武器时攻击检定: 1d20 + 敏捷调整值 + 熟练加值 vs AC
+- (远程法术攻击包括默认的戏法普通攻击)法术攻击检定: 1d20 + 职业主属性调整值 + 熟练加值 vs AC
 - 伤害计算: 武器伤害骰 + 属性调整值（部分后续扩展职业特殊说明）
 - 暴击机制: 攻击检定=20时触发暴击，伤害骰翻倍
 - 距离判断: 近战/远程攻击距离限制
@@ -249,15 +251,10 @@ AI决策:AutoBattleAI.ProcessCurrentTurn->DecideBestAction->ExecuteBattleActionE
 未命中:target.PlayDodgeAnimation+target.ShowMiss()
 脚步/状态事件:通过Spine Event回调OnSpineEvent->OnStateChanged广播，CharacterStats收到后可做音效等
 
-*重要，需求*清单，请严格对齐，不要开发不在清单里的功能
-当前开发任务: 敌方攻击行为 + DND5E先攻系统
-
-
-
 集成点:
 - 保持战斗流程的一致性: 敌方也要遵循相同的动画和伤害规则
 
-实现优先级和依赖关系
+当前已经实现优先级和依赖关系
 
 Step 1: 先攻系统基础框架
 ├── 在HorizontalCombatRules中添加先攻检定方法
