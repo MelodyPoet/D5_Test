@@ -16,6 +16,9 @@ MonoBehaviour:
   characterClass: 1
   level: 1
   defaultSide: 0
+  defaultAttackType: 1
+  primarySpellAbility: intelligence
+  defaultCantrip: {fileID: 11400000, guid: ac8c9e3053157dd46a94384288131c6d, type: 2}
   strength: 8
   dexterity: 14
   constitution: 12
@@ -32,3 +35,8 @@ MonoBehaviour:
   proficientSaves:
   - intelligence
   - wisdom
+  proficientSpellAttacks: 1
+  proficientMelee: 1
+  proficientRanged: 0
+  proficientWeaponClasses: []
+  proficientWeaponTypes: []

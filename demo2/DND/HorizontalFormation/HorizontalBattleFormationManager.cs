@@ -978,6 +978,28 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public void RestorePlayerExplorationState()
         {
+            // 新增：战斗结束返回探索时，玩家与队友若处于倒地/昏迷，自动脱离昏迷并恢复1点生命
+            int revivedCount = 0;
+            foreach (var go in activePlayerCharacters)
+            {
+                if (go == null) continue;
+                var stats = go.GetComponent<CharacterStats>();
+                if (stats == null) continue;
+
+                bool isUnconscious = stats.HasStatusEffect(StatusEffectType.Unconscious);
+                bool isZeroOrBelow = stats.currentHitPoints <= 0;
+                if (isUnconscious || isZeroOrBelow)
+                {
+                    // HealDamage(1) 会在HP>0时自动移除Unconscious状态（见 CharacterStats.HealDamage 实现）
+                    stats.HealDamage(1);
+                    revivedCount++;
+                }
+            }
+            if (revivedCount > 0)
+            {
+                Debug.Log($"RestorePlayerExplorationState: 已复苏 {revivedCount} 名玩家方倒地/昏迷角色（恢复1点生命并脱离昏迷）");
+            }
+
             // 恢复玩家为走路/探索动画状态
             SetPlayerFormationWalkingState();
 

@@ -204,8 +204,9 @@ HorizontalCombatRules 战斗规则:
 - 战斗奖励: 经验值和金币（后续扩展）
 - 战斗日志: 记录每次攻击和伤害结果（后续扩展）
 - 怪物死亡：怪物血量扣到0以下，播放死亡动画并且执行消失流程
-- 角色死亡：角色血量扣到0以下，播放昏迷动画并且执行昏迷流程，昏迷状态下无法行动，执行3回合的普通d20骰死豁免判断，3点失败则死亡，
+- 玩家和队友死亡：角色血量扣到0以下，播放昏迷动画并且执行昏迷流程，昏迷状态下无法行动，执行3回合的普通d20骰死豁免判断，3点失败则死亡，
 3点成功则恢复1点血量并且脱离昏迷状态，恢复行动能力,DC=10，队友可以用治疗法术直接恢复该角色；此时怪物也有可能攻击该角色，此时受到伤害计一次死豁免失败,重击计两次死豁免失败，三次失败则死亡
+- 玩家和队友倒地期间，如战斗结束进入探索模式，则该角色自动脱离昏迷状态，恢复1点血量并且恢复行动能力（探索期间不存在玩家方昏迷状态）
 
 ---使用ScriptableObject存储角色和怪物数据
 ---使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
@@ -400,12 +401,17 @@ XXX_Old.cs           - 旧版本文件
 核心原则: 严格手动挂载、强关联、单一路径、中文
 
 - 强制手动挂载 - 所有组件引用必须手动设置，禁止自动查找
+- 强制手动挂载 - 所有组件引用必须手动设置，禁止自动查找
 - 强关联关系 - IdleGameManager 必须引用 FormationManager 和 AutoBattleAI
 - 单一配置路径 - 每个配置只有一种标准实现方式
 - 质量第一 - 确保每个脚本都编译无误且功能完整
 - 中文交流 - 所有对话、注释、文档均使用中文
 
 此规范文档记录核心开发标准，指导所有后续开发工作。
+
+所有角色生命值计算公式：
+- 角色最大生命值（MaxHP）=第一级是职业的生命骰（如战士1d10，法师1d6）+角色的体质调整值*1（最低1点生命值）  
+- 每升一级时，角色的最大生命值增加：职业生命骰的平均值（向上取整）+角色的体质调整值（最低1点生命值）
 
 装备与命中规则（装备驱动 — 设计要点）
 - 单一来源：命中/伤害只能由“装备/法术源”驱动，禁止硬编码能力选择。
@@ -416,10 +422,11 @@ XXX_Old.cs           - 旧版本文件
 - 攻击类别与属性选择：
   - 近战武器：默认使用力量；若武器含 Finesse（灵巧），可使用敏捷（或按模板 allowMeleeFinesse 开关，默认关闭）。
   - 远程武器：使用敏捷。
-  - 法术攻击（含默认戏法）：只要角色有法术，命中就使用职业主属性，注意此处特指需要指定目标判断命中的法术，预留后期设计
-  不需要指定目标（AOE等)命中的不使用此规则。
+  - 法术攻击（含默认戏法）：只要角色有法术，命中就使用职业主属性（primarySpellAbility），且伤害仅取法术伤害骰（不叠加主属性）。
+  - 默认普通攻击策略：基于 CharacterTemplate.defaultAttackType 决定。Physical → 走装备/物理；Spell → 使用 defaultCantrip（若无则按兜底策略）。
 - 熟练与加值：
-  - 命中 = 1d20（含优/劣势）+ 能力调整值 + 熟练加值（若熟练）。
+  - 物理命中 = 1d20（含优/劣势）+ 当前武器类型对应的属性调整值（如无武器则参考下面的拳头判定） + 熟练加值（若熟练）。
+  - 法术命中 = 1d20（含优/劣势）+ 当前template设置的职业主施法属性调整值 + 熟练加值（若熟练）。
   - 物理伤害 = 武器给的伤害骰 + 能力调整值 ；暴击仅翻倍骰，不翻倍修正。
   - 法术伤害 = 法术给的伤害骰 ；暴击仅翻倍骰，不翻倍修正。
   - 熟练判定来自模板：proficientWeaponClasses / proficientWeaponTypes 或职业施法熟练。
@@ -429,8 +436,9 @@ XXX_Old.cs           - 旧版本文件
   - 默认不需要弹药，但预留后面设计某些怪物需要特定弹药才能穿透其抗性，（Ammunition/Thrown）的武器在弹药不足时自动回退：优先默认戏法（SpellAttack）
 - 距离规则：使用源的 RangeMin/RangeMax 判定可攻击距离；近战短距离，远程/法术按配置。
 - 兼容与回退：
-  - 若未挂装备系统或无可用源（视作用双拳攻击）：物理攻击所有角色无论前、后排命中取力量和敏捷调整值中大的一方，伤害按1d6+力量；施法攻击（前提是施法职业且拥有对应法术）
+  - 若未挂装备系统或无可用源（视作用双拳攻击）：物理攻击所有角色无论前、后排命中取力量和敏捷调整值中大的一方，伤害按1d6+力量调整值；施法攻击（前提是施法职业且拥有对应法术）
   无限制（空手也可以使用攻击型戏法，使用职业主属性）。
+  - 拳头攻击视作未装备武器的近战武器，命中判定为力量/敏捷调整值二者取大。伤害判定为1d6+力量调整值。
 - 数据与枚举约束：
   - 新增枚举统一追加到 GameEnums.cs：AbilityScore / AttackCategory / EquipmentSlot / WeaponClass / WeaponType /
   WeaponTag / AmmoType；伤害骰用 DiceSpec（个数/面数/修正）。
@@ -439,3 +447,39 @@ XXX_Old.cs           - 旧版本文件
 - 严格禁止：
   - 不得引入第二套命中/伤害流程；所有路径必须收敛到 HorizontalCombatRules.ResolveAttack(attacker, target, ICombatSource, 
   advantageFlag)。
+
+装备与背包系统 — 脚本与UI集成设计
+目标与范围
+- 以装备/法术源为唯一数据来源，驱动命中/伤害与规则判定；不改变现有 AI 位移、动画与事件通道链路。
+- 支持运行时动态：装备更换/升级、背包增删；严格手动挂载，最小改动接入。
+- 按键交互：装备和背包UI通过按键来打开/关闭且刷新角色当前数值。槽位装备/卸下、背包物品使用/丢弃/分割、拖拽排序与对比。进入战斗锁定装备。
+
+运行时脚本组件（挂在角色上）
+- CharacterInventory（背包）
+  - 字段：items: List<ItemInstance>，capacity
+  - 事件：OnInventoryChanged
+  - API：AddItem(ItemInstance)/RemoveItem/CanAdd/FindFirst/Sort/Filter
+- CharacterEquipment（装备栏）
+  - 字段：equipped: Dictionary<EquipmentSlot, ItemInstance>
+  - 事件：OnEquipmentChanged(EquipmentSlot slot, ItemInstance newItem, ItemInstance oldItem)
+  - API：Equip(slot, inst)/Unequip(slot)/Get(slot)/CanEquip(slot, item)/TrySwap(slot, item)
+  - 规则：TwoHanded 占用主+副手；与盾冲突需处理；远程弹药默认不消耗，仅预留校验开关
+- ItemInstance（运行时物品实例）
+  - 字段：baseSO: ItemBase_SO，enhancementLevel，currentStack（弹药/消耗品），rolledAffixes（可选）
+  - 只读：DisplayName/Icon（透传 SO）
+
+与模板/角色数据的集成（更新：接入熟练判定）
+- CharacterTemplate（SO，仅新增字段，不改旧逻辑）
+  - 战斗熟练配置（当前最小实现，可在 Inspector 勾选）：
+    - proficientMelee（近战熟练）/ proficientRanged（远程熟练）/ proficientSpellAttacks（法术攻击熟练）
+    - 预留列表：proficientWeaponClasses / proficientWeaponTypes（后续接入装备系统后细分到类别/类型）
+  - 提供统一方法：GetProficiencyBonus() / IsProficientForAttack(isSpell, isMelee)
+- HorizontalCombatRules
+  - 命中已接入熟练判定：当 IsProficientForAttack 为 true 时，叠加 CharacterTemplate.proficiencyBonus；否则不加
+  - 物理命中仍按兜底规则选择属性（STR/DEX 取大）；法术命中按 primarySpellAbility
+
+装备与命中规则（补充说明）
+- 熟练与加值（已落地到实现）：
+  - 物理命中 = 1d20（含优/劣势）+ 对应属性调整值 + 熟练加值（若熟练，来自上述 SO 开关/后续武器熟练列表）
+  - 法术命中 = 1d20（含优/劣势）+ primarySpellAbility 调整值 + 熟练加值（若熟练，来自 SO 开关）
+- 兼容与回退：未接入装备系统前，是否“近战/远程”由现有行为路径传入（isMeleeAttack），并通过 SO 开关决定是否计入熟练加值

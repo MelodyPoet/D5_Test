@@ -278,6 +278,23 @@ namespace demo2.DND.HorizontalFormation
             }
         }
 
+        /// <summary>
+        /// 移除并销毁指定角色的血条（安全检查后执行）。
+        /// </summary>
+        public void RemoveBarFor(CharacterStats character)
+        {
+            if (character == null) return;
+            if (healthBarMap.TryGetValue(character, out var bar))
+            {
+                if (bar != null && bar.gameObject != null)
+                {
+                    Destroy(bar.gameObject);
+                }
+                healthBarMap.Remove(character);
+                DumpStatus($"RemoveBarFor({character.GetDisplayName()})");
+            }
+        }
+
         // 显式清理玩家血条容器（当你想完全重建时调用）
         public void ClearPlayerHealthBars()
         {
@@ -356,14 +373,49 @@ namespace demo2.DND.HorizontalFormation
             var toRemoveKeys = new List<CharacterStats>();
             var toDestroy = new List<GameObject>();
 
-            foreach (var kv in healthBarMap)
+            // 复制当前映射快照，避免遍历中修改
+            var snapshot = new List<KeyValuePair<CharacterStats, UI_HealthBar>>(healthBarMap);
+            foreach (var kv in snapshot)
             {
-                if (kv.Key != null && kv.Key.battleSide == BattleSide.Enemy)
+                CharacterStats owner = kv.Key;
+                UI_HealthBar bar = kv.Value;
+
+                bool isEnemyEntry = false;
+
+                // 情况1：owner 仍存在，且为敌方
+                if (owner != null)
                 {
-                    if (kv.Value != null)
+                    if (owner.battleSide == BattleSide.Enemy)
                     {
-                        toDestroy.Add(kv.Value.gameObject);
+                        isEnemyEntry = true;
                     }
+                }
+                else
+                {
+                    // 情况2：owner 已被销毁（Unity下等同于null），尝试通过bar的父容器判断是否为敌方血条
+                    if (bar != null && enemyHealthBarContainer != null)
+                    {
+                        try
+                        {
+                            if (bar.transform != null && bar.transform.parent != null)
+                            {
+                                if (bar.transform.IsChildOf(enemyHealthBarContainer))
+                                {
+                                    isEnemyEntry = true;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                if (isEnemyEntry)
+                {
+                    if (bar != null)
+                    {
+                        toDestroy.Add(bar.gameObject);
+                    }
+                    // 使用原始owner引用（即使已被销毁，引用仍可用于从字典移除）
                     toRemoveKeys.Add(kv.Key);
                 }
             }
@@ -373,11 +425,12 @@ namespace demo2.DND.HorizontalFormation
                 if (go != null) Destroy(go);
             }
 
-            foreach (var k in toRemoveKeys) healthBarMap.Remove(k);
+            foreach (var k in toRemoveKeys)
+            {
+                healthBarMap.Remove(k);
+            }
 
             DumpStatus("ClearEnemyHealthBars - after");
-
-            // 调试输出映射详细信息
             DumpMapDetails("ClearEnemyHealthBars");
         }
 

@@ -8,6 +8,7 @@ namespace demo2.DND.HorizontalFormation
         [Header("UI Components")]
         [SerializeField] private Slider healthSlider;
         [SerializeField] private Text nameText;
+        [SerializeField] private Text hpNumberText; // 新增：显示“当前/最大”的数字
 
         private CharacterStats owner;
 
@@ -72,6 +73,24 @@ namespace demo2.DND.HorizontalFormation
                     Debug.Log($"[UI_HealthBar] 自动绑定 nameText: {nameText.name} for {gameObject.name}");
                 else
                     Debug.LogWarning($"[UI_HealthBar] nameText 未在 {gameObject.name} 找到，请在 prefab Inspector 中绑定 Text。");
+            }
+
+            if (hpNumberText == null)
+            {
+                // 精确查找名为 HPNumber 的 Text 子物体
+                var texts = GetComponentsInChildren<Text>(true);
+                foreach (var t in texts)
+                {
+                    if (t != null && t.name == "HPNumber")
+                    {
+                        hpNumberText = t;
+                        break;
+                    }
+                }
+                if (hpNumberText != null)
+                    Debug.Log($"[UI_HealthBar] 自动绑定 hpNumberText: {hpNumberText.name} for {gameObject.name}");
+                else
+                    Debug.LogWarning($"[UI_HealthBar] hpNumberText(HPNumber) 未在 {gameObject.name} 找到，如需显示数字请在 prefab 中添加名为 HPNumber 的 Text 子物体并绑定。");
             }
         }
 
@@ -147,26 +166,33 @@ namespace demo2.DND.HorizontalFormation
 
         private void OnOwnerHealthChanged(int currentHp, int maxHp)
         {
-            if (healthSlider == null)
+            if (healthSlider == null || hpNumberText == null)
             {
                 TryAutoBindComponents();
             }
 
+            int maxVal = Mathf.Max(1, maxHp);
+            int clampedCurrent = Mathf.Clamp(currentHp, 0, maxVal);
+
             if (healthSlider != null)
             {
-                int maxVal = Mathf.Max(1, maxHp);
                 if (!Mathf.Approximately(healthSlider.maxValue, maxVal))
                 {
                     healthSlider.maxValue = maxVal;
                 }
 
-                healthSlider.value = Mathf.Clamp(currentHp, 0, maxVal);
+                healthSlider.value = clampedCurrent;
 
-                Debug.Log($"[UI_HealthBar] OnOwnerHealthChanged: {owner?.characterName} {currentHp}/{maxHp} -> slider={healthSlider.value} (max={healthSlider.maxValue})");
+                Debug.Log($"[UI_HealthBar] OnOwnerHealthChanged: {owner?.characterName} {clampedCurrent}/{maxVal} -> slider={healthSlider.value} (max={healthSlider.maxValue})");
             }
             else
             {
                 Debug.LogWarning($"[UI_HealthBar] 在 OnOwnerHealthChanged 时未找到 healthSlider: {gameObject.name}");
+            }
+
+            if (hpNumberText != null)
+            {
+                hpNumberText.text = $"{clampedCurrent}/{maxVal}";
             }
         }
 
@@ -178,24 +204,29 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
+            int maxHp = Mathf.Max(1, owner.maxHitPoints);
+            int clampedHp = Mathf.Clamp(owner.currentHitPoints, 0, maxHp);
+
             if (healthSlider != null)
             {
-                // 确保 maxHitPoints 合法并同步到 Slider
-                int maxHp = Mathf.Max(1, owner.maxHitPoints);
                 if (!Mathf.Approximately(healthSlider.maxValue, maxHp))
                 {
                     healthSlider.maxValue = maxHp;
                 }
 
-                // 直接使用 currentHitPoints 作为 slider 的 value，避免与 prefab 的 maxValue 不一致导致的显示异常
-                float clampedHp = Mathf.Clamp(owner.currentHitPoints, 0, maxHp);
+                // 直接使用夹取后的 currentHitPoints 作为 slider 的 value
                 healthSlider.value = clampedHp;
 
-                Debug.Log($"[UI_HealthBar] UpdateHealthDisplay: {owner.characterName} {owner.currentHitPoints}/{owner.maxHitPoints} healthSlider.value={healthSlider.value} (max={healthSlider.maxValue})");
+                Debug.Log($"[UI_HealthBar] UpdateHealthDisplay: {owner.characterName} {clampedHp}/{maxHp} healthSlider.value={healthSlider.value} (max={healthSlider.maxValue})");
             }
             else
             {
                 Debug.LogWarning($"血条 {gameObject.name} 的healthSlider为null");
+            }
+
+            if (hpNumberText != null)
+            {
+                hpNumberText.text = $"{clampedHp}/{maxHp}";
             }
         }
     }

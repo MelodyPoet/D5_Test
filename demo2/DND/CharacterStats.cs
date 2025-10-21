@@ -109,28 +109,12 @@ namespace demo2.DND
             // AudioManager.Instance?.PlaySound("footstep");
         }
 
-        private void OnEnable() {
-            // 订阅伤害事件
-            if (damageEventChannel != null) {
-                damageEventChannel.OnEventRaised += HandleDamageEvent;
-            }
-        }
-
-        private void OnDisable() {
-            // 取消订阅伤害事件
-            if (damageEventChannel != null) {
-                damageEventChannel.OnEventRaised -= HandleDamageEvent;
-            }
-        }
-
         /// <summary>
-        /// 处理伤害事件 - 只有当自己是受伤目标时才处理
+        /// 处理伤害事件（已停用订阅）— 保留方法以兼容，但不再通过事件改变HP，避免重复结算
         /// </summary>
         private void HandleDamageEvent(CharacterStats recipient, CharacterStats dealer, int damage, bool isCritical) {
-            if (recipient != this) return; // 确保是自己受伤的事件
-
-            // 处理伤害逻辑（原TakeDamage方法的核心逻辑）
-            ApplyDamageToSelf(damage, isCritical);
+            // 事件通道用于UI/日志，角色伤害以直接调用 TakeDamage 为准；此处不再应用数值
+            if (recipient != this) return;
         }
 
         /// <summary>
@@ -138,15 +122,11 @@ namespace demo2.DND
         /// </summary>
         private void ApplyDamageToSelf(int damage, bool isCritical = false, DamageType damageType = DamageType.Bludgeoning) {
             if (template != null) {
-                // 检查免疫（这里简化处理，实际应该从攻击中获取伤害类型）
-                // 使用 template 中的免疫/抗性/弱点信息来调整 damage
-
+                // 检查免疫/抗性/弱点
                 if (template.immunities.Contains(damageType)) {
                     Debug.Log($"{GetDisplayName()} 免疫 {damageType} 伤害!");
                     return;
                 }
-
-                // 检查抗性和弱点
                 if (template.resistances.Contains(damageType)) {
                     damage = Mathf.Max(1, damage / 2);
                     Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性!");
@@ -157,11 +137,11 @@ namespace demo2.DND
                 }
             }
 
-            // 处理暴击（如果传入 isCritical，则加倍伤害，或按需更改）
-            if (isCritical) {
-                damage *= 2;
-                Debug.Log($"{GetDisplayName()} 受到暴击! 伤害翻倍: {damage}");
-            }
+            // 移除：暴击加倍在规则层已计算（并仅翻倍骰），此处不再重复处理
+            // if (isCritical) {
+            //     damage *= 2;
+            //     Debug.Log($"{GetDisplayName()} 受到暴击! 伤害翻倍: {damage}");
+            // }
 
             // 先扣除临时生命值
             if (temporaryHitPoints > 0) {
@@ -245,11 +225,13 @@ namespace demo2.DND
             int add = isCritical ? 2 : 1;
             unconsciousFailureCount += add;
             Debug.Log($"{GetDisplayName()} 倒地时受到攻击，记录死豁失败 +{add} -> now failures={unconsciousFailureCount}/3");
+            try { GameLog.LogAction(GetDisplayName(), $"倒地期间被攻击，死豁失败 +{add}（{unconsciousFailureCount}/3）"); } catch { }
 
             // 检查是否达到真正死亡
             if (unconsciousFailureCount >= 3)
             {
                 Debug.Log($"{GetDisplayName()} 倒地死豁失败达到3次，触发真正死亡");
+                try { GameLog.LogAction(GetDisplayName(), "倒地死豁失败达到3次，真正死亡"); } catch { }
                 HandleTrueDeath();
             }
         }
@@ -274,6 +256,7 @@ namespace demo2.DND
             // 添加昏迷状态
             AddStatusEffect(StatusEffectType.Unconscious);
             Debug.Log($"{GetDisplayName()} 失去意识，进入昏迷状态!");
+            try { GameLog.LogAction(GetDisplayName(), "失去意识，进入昏迷状态"); } catch { }
 
             // 播放昏迷动画（使用SO映射名/兜底名，直接驱动动画，不依赖Spine事件）
             PlayUnconsciousAnimation();
@@ -288,6 +271,7 @@ namespace demo2.DND
         private void HandleEnemyDeath() {
             // 敌人直接死亡，不再添加昏迷状态
             Debug.Log($"{GetDisplayName()} 死亡!");
+            try { GameLog.LogAction(GetDisplayName(), "死亡"); } catch { }
 
             // 播放死亡动画
             PlayDeathAnimation();
@@ -366,11 +350,13 @@ namespace demo2.DND
             {
                 unconsciousSuccessCount++;
                 Debug.Log($"{GetDisplayName()} 回合体质豁免成功 ({constitutionSave} vs DC{savingThrowDc}) - 成功次数: {unconsciousSuccessCount}/3");
+                try { GameLog.LogAction(GetDisplayName(), $"体质死豁成功（{unconsciousSuccessCount}/3）"); } catch { }
             }
             else
             {
                 unconsciousFailureCount++;
                 Debug.Log($"{GetDisplayName()} 回合体质豁免失败 ({constitutionSave} vs DC{savingThrowDc}) - 失败次数: {unconsciousFailureCount}/3");
+                try { GameLog.LogAction(GetDisplayName(), $"体质死豁失败（{unconsciousFailureCount}/3）"); } catch { }
             }
 
             // 检查是否达到结束条件
@@ -383,6 +369,7 @@ namespace demo2.DND
                 unconsciousSuccessCount = 0;
 
                 Debug.Log($"{GetDisplayName()} 回合豁免: 三次成功，恢复意识并获得1点血量!");
+                try { GameLog.LogAction(GetDisplayName(), "死豁三次成功，恢复意识并获得1点生命"); } catch { }
                 DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
                 if (characterAdapter != null)
                 {
@@ -394,6 +381,7 @@ namespace demo2.DND
             if (unconsciousFailureCount >= 3)
             {
                 Debug.Log($"{GetDisplayName()} 回合豁免: 三次失败，触发真正死亡");
+                try { GameLog.LogAction(GetDisplayName(), "死豁三次失败，真正死亡"); } catch { }
                 HandleTrueDeath();
             }
         }
@@ -403,6 +391,7 @@ namespace demo2.DND
         /// </summary>
         private void HandleTrueDeath() {
             Debug.Log($"{GetDisplayName()} 真正死亡!");
+            try { GameLog.LogAction(GetDisplayName(), "真正死亡"); } catch { }
 
             // 播放死亡动画
             PlayDeathAnimation();
@@ -423,12 +412,19 @@ namespace demo2.DND
 
             // 回调移除并销毁
             corpseSequence.AppendCallback(() => {
-                // 从战斗AI的先攻列表中移除自己
+                // 从战斗AI的先攻列表中移除自身
                 var autoBattleAI = FindObjectOfType<HorizontalFormation.AutoBattleAI>();
                 if (autoBattleAI != null)
                 {
                     autoBattleAI.RemoveCharacterFromInitiative(this);
                 }
+
+                // 从血条管理器移除对应UI（防止残留到下一波）
+                try
+                {
+                    HealthBarUIManager.Instance?.RemoveBarFor(this);
+                }
+                catch { }
 
                 RemoveFromFormation();
                 Debug.Log($"{GetDisplayName()} 尸体已消失");
@@ -487,12 +483,52 @@ namespace demo2.DND
             wisdom = template.wisdom;
             charisma = template.charisma;
 
-            // 计算战斗属性
-            maxHitPoints = template.CalculateHitPoints();
+            // 计算战斗属性（显式按当前角色等级计算HP）
+            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel);
             currentHitPoints = maxHitPoints;
             armorClass = template.baseArmorClass;
 
             Debug.Log($"{characterName} 从模板初始化完成 - 等级{characterLevel} - 血量{maxHitPoints} - AC{armorClass}");
+        }
+
+        /// <summary>
+        /// 设置角色等级，并选择是否将生命值补满；会按DND5e规则重算最大生命值。
+        /// </summary>
+        public void SetLevel(int newLevel, bool healToFull = true)
+        {
+            characterLevel = Mathf.Max(1, newLevel);
+            RecalculateMaxHitPointsFromLevel(healToFull);
+        }
+
+        /// <summary>
+        /// 按当前 Level 重算最大生命值；healToFull=true 则把当前HP同步为满血；否则保持当前HP不变并夹在新Max内。
+        /// </summary>
+        public void RecalculateMaxHitPointsFromLevel(bool healToFull = true)
+        {
+            if (template == null)
+            {
+                Debug.LogWarning($"{GetDisplayName()} 没有模板，无法按等级重算最大生命值");
+                return;
+            }
+
+            int oldMax = maxHitPoints;
+            int newMax = template.CalculateHitPointsAtLevel(Level);
+            maxHitPoints = newMax;
+
+            if (healToFull)
+            {
+                currentHitPoints = maxHitPoints;
+            }
+            else
+            {
+                // 保持当前HP，但不超过新Max
+                currentHitPoints = Mathf.Min(currentHitPoints, maxHitPoints);
+            }
+
+            Debug.Log($"{GetDisplayName()} 重算最大生命值: {oldMax} -> {newMax}（healToFull={healToFull}），当前HP={currentHitPoints}");
+            // 同步血条UI
+            HealthBarUIManager.Instance?.RefreshBar(this);
+            NotifyHealthChanged();
         }
 
         /// <summary>
@@ -525,6 +561,7 @@ namespace demo2.DND
             currentHitPoints = Mathf.Min(maxHitPoints, currentHitPoints + amount);
 
             Debug.Log($"{GetDisplayName()} 恢复 {amount} 点生命值! 当前生命值: {currentHitPoints}/{maxHitPoints}");
+            try { GameLog.LogAction(GetDisplayName(), $"恢复 {amount} 点生命值"); } catch { }
 
             // 显示治疗数字
             ShowHealNumber(amount);
@@ -536,6 +573,7 @@ namespace demo2.DND
             if (currentHitPoints > 0 && HasStatusEffect(StatusEffectType.Unconscious)) {
                 RemoveStatusEffect(StatusEffectType.Unconscious);
                 Debug.Log($"{GetDisplayName()} 恢复意识!");
+                try { GameLog.LogAction(GetDisplayName(), "恢复意识"); } catch { }
             }
         }
 
@@ -757,7 +795,7 @@ namespace demo2.DND
                 return UnityEngine.Random.Range(1, 21);
             }
 
-            int bonus = template.GetSkillBonus(skill);
+            int bonus = template.GetSkillBonus(skill, Level);
             int roll = UnityEngine.Random.Range(1, 21);
             int total = roll + bonus;
 
@@ -774,7 +812,7 @@ namespace demo2.DND
                 return UnityEngine.Random.Range(1, 21);
             }
 
-            int bonus = template.GetSavingThrowBonus(ability);
+            int bonus = template.GetSavingThrowBonus(ability, Level);
             int roll = UnityEngine.Random.Range(1, 21);
             int total = roll + bonus;
 

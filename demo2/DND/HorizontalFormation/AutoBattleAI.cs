@@ -134,6 +134,8 @@ namespace demo2.DND.HorizontalFormation
             if (currentEntry != null)
             {
                 Debug.Log($"轮到 {currentEntry.character.GetDisplayName()} 行动 (先攻顺序 {currentTurnIndex + 1})");
+                // 实时日志：回合开始
+                try { GameLog.LogAction(currentEntry.character.GetDisplayName(), "的回合开始"); } catch { }
             }
         }
 
@@ -211,11 +213,34 @@ namespace demo2.DND.HorizontalFormation
             Debug.Log($"[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
             Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}");
 
+            // 实时日志：宣言行动
+            try
+            {
+                bool isSpell = attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell;
+                if (isSpell)
+                {
+                    string spellName = (attacker.template.defaultCantrip != null && !string.IsNullOrEmpty(attacker.template.defaultCantrip.spellName))
+                        ? attacker.template.defaultCantrip.spellName
+                        : "法术";
+                    GameLog.LogAction(attacker.GetDisplayName(), $"施放 {spellName} 对 {action.target.GetDisplayName()}");
+                }
+                else
+                {
+                    string atkTypePreview = IsCharacterInFrontRow(attacker) ? "近战攻击" : "远程攻击";
+                    GameLog.LogAction(attacker.GetDisplayName(), $"对 {action.target.GetDisplayName()} 发动{atkTypePreview}");
+                }
+            }
+            catch { }
+
             // 获取攻击者的动画适配器
             DND_CharacterAdapter attackerAdapter = attacker.GetComponent<DND_CharacterAdapter>();
             if (attackerAdapter == null)
             {
-                Debug.LogError($"角色 {attacker.GetDisplayName()} 缺少 DND_CharacterAdapter 组件！");
+                Debug.LogError($"角色 {attacker.GetDisplayName()} 缺少 DND_CharacterAdapter 组件！将跳过动画，直接进行结算。");
+                try { GameLog.LogAction("系统", $"{attacker.GetDisplayName()} 缺少动画适配器，直接进行命中与伤害结算"); } catch { }
+                // 直接进行一次结算（基于位置假定近战/远程）
+                bool assumeMelee = IsCharacterInFrontRow(attacker);
+                ProcessAttackHit(attacker, action.target, assumeMelee);
                 onComplete?.Invoke();
                 return;
             }
@@ -228,17 +253,24 @@ namespace demo2.DND.HorizontalFormation
             if (isMeleeAttack)
             {
                 Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行近战攻击序列");
-                // 近战攻击：移动+攻击+返回
+                bool hitInvoked = false;
                 attackerAdapter.ExecuteMeleeAttack(
                     action.target.transform,
                     onAttackHit: () => {
-                        // SpineEvent触发攻击命中
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击命中回调触发");
-                        ProcessAttackHit(attacker, action.target, true);
+                        if (!hitInvoked)
+                        {
+                            hitInvoked = true;
+                            ProcessAttackHit(attacker, action.target, true);
+                        }
                     },
                     onComplete: () => {
-                        // 攻击动画完成
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击完成回调触发");
+                        // 兜底：如果命中事件未触发，仍然执行一次命中/未命中结算，保证日志与数值
+                        if (!hitInvoked)
+                        {
+                            ProcessAttackHit(attacker, action.target, true);
+                        }
                         onComplete?.Invoke();
                     }
                 );
@@ -247,16 +279,24 @@ namespace demo2.DND.HorizontalFormation
             {
 
                 // 远程攻击：原地攻击
+                bool hitInvoked = false;
                 attackerAdapter.ExecuteRangedAttack(
                     action.target.transform,
                     onAttackHit: () => {
-                        // SpineEvent触发攻击命中
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击命中回调触发");
-                        ProcessAttackHit(attacker, action.target, false);
+                        if (!hitInvoked)
+                        {
+                            hitInvoked = true;
+                            ProcessAttackHit(attacker, action.target, false);
+                        }
                     },
                     onComplete: () => {
-                        // 攻击动画完成
                         Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击完成回调触发");
+                        // 兜底：如果命中事件未触发，仍然执行一次命中/未命中结算，保证日志与数值
+                        if (!hitInvoked)
+                        {
+                            ProcessAttackHit(attacker, action.target, false);
+                        }
                         onComplete?.Invoke();
                     }
                 );
@@ -280,8 +320,8 @@ namespace demo2.DND.HorizontalFormation
                 Debug.Log($"[DEBUG] 目标处于昏迷：设置攻击掷骰优势标志 = {advantageFlag} (1=优势, -1=劣势)");
             }
 
-            // 执行攻击检定和伤害计算（传入优势/劣势标志）
-            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag);
+            // 执行攻击检定和伤害计算（传入优势/劣势标志 + 是否近战）
+            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag, isMeleeAttack);
 
             if (attackResult.isHit)
             {
@@ -463,6 +503,9 @@ namespace demo2.DND.HorizontalFormation
             {
                 Debug.Log("玩家失败！");
             }
+
+            // 实时日志：战斗结束
+            try { GameLog.LogAction("系统", playerVictory ? "战斗结束：玩家胜利" : "战斗结束：玩家失败"); } catch { }
 
             // 通知IdleGameManager战斗结束
             IdleGameManager idleManager = FindObjectOfType<IdleGameManager>();

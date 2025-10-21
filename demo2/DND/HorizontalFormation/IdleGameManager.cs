@@ -150,6 +150,8 @@ namespace demo2.DND.HorizontalFormation
             StartBackgroundScrolling();
 
             Debug.Log("🚀 探索模式已启动！");
+            // 实时日志：进入探索模式
+            try { GameLog.LogAction("系统", "进入探索模式"); } catch { }
         }
 
         /// <summary>
@@ -188,6 +190,15 @@ namespace demo2.DND.HorizontalFormation
 
                 isInBattle = true;
                 Debug.Log("⚔️ 遭遇战斗开始！");
+
+                // 实时日志：波次开始（探索进度）
+                try
+                {
+                    int total = formationManager.GetEnemyWaveCount();
+                    GameLog.LogExplorationProgress(currentEnemyWave + 1, total, false);
+                    GameLog.LogAction("系统", $"遭遇战开始：第 {currentEnemyWave + 1}/{total} 波");
+                }
+                catch { }
 
                 // 切换到战斗模式
                 formationManager.SetFormationBattleState();
@@ -257,6 +268,14 @@ namespace demo2.DND.HorizontalFormation
 
             if (playerVictory)
             {
+                // 实时日志：当前波次完成
+                try
+                {
+                    int total = formationManager != null ? formationManager.GetEnemyWaveCount() : 0;
+                    GameLog.LogExplorationProgress(currentEnemyWave + 1, total, true);
+                }
+                catch { }
+
                 GiveBattleVictoryRewards();
 
                 // 延迟清理敌人阵型，确保死亡动画（3s）可以完整播放
@@ -384,7 +403,7 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         private void UpdateExploreProgress()
         {
-            // 探索进度更新逻辑
+            // 探索进度更新逻辑（避免高频日志，关键节点在遭遇/胜利时记录）
         }
 
         /// <summary>
