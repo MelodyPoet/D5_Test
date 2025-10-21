@@ -197,7 +197,7 @@ HorizontalCombatRules 战斗规则:
 - 伤害计算: 武器伤害骰 + 属性调整值（部分后续扩展职业特殊说明）
 - 暴击机制: 攻击检定=20时触发暴击，伤害骰翻倍
 - 距离判断: 近战/远程攻击距离限制
-- 先攻检定: 1d20 + Dexterity调整值 + 熟练加值，决定回合顺序
+- 先攻检定: 1d20 + Dexterity调整值，决定回合顺序
 - 回合制流程: 按先攻顺序依次行动，每回合6秒
 - 状态效果: 简单的中毒、眩晕等状态效果框架（后续扩展）
 - 战斗结束条件: 一方全灭或逃跑
@@ -406,3 +406,34 @@ XXX_Old.cs           - 旧版本文件
 - 中文交流 - 所有对话、注释、文档均使用中文
 
 此规范文档记录核心开发标准，指导所有后续开发工作。
+
+装备与命中规则（装备驱动 — 设计要点）
+- 单一来源：命中/伤害只能由“装备/法术源”驱动，禁止硬编码能力选择。
+- 运行时组件：角色挂载 CharacterInventory（背包）+ CharacterEquipment（装备栏），
+严格手动挂载；仅作为数据来源。
+- 统一接口：所有攻击都通过 ICombatSource（武器/法术两种实现）提供命中与伤害参数；HorizontalCombatRules 
+只接收 ICombatSource，保持单一路径。
+- 攻击类别与属性选择：
+  - 近战武器：默认使用力量；若武器含 Finesse（灵巧），可使用敏捷（或按模板 allowMeleeFinesse 开关，默认关闭）。
+  - 远程武器：使用敏捷。
+  - 法术攻击（含默认戏法）：使用模板 primarySpellAbility（职业主属性），注意此处特指需要指定目标判断命中的法术，预留后期设计
+  不需要指定目标（AOE等)命中的不使用此规则。
+- 熟练与加值：
+  - 命中 = 1d20（含优/劣势）+ 能力调整值 + 熟练加值（若熟练）+ 源修正。
+  - 伤害 = 源伤害骰 + 能力调整值 + 源修正；暴击仅翻倍骰，不翻倍修正。
+  - 熟练判定来自模板：proficientWeaponClasses / proficientWeaponTypes 或职业施法熟练。
+- 阵位与动画不变：
+  - 前排 = 近战位移攻击；后排 = 远程/施法原地攻击。AI/动画链路保持不变，仅更换 ICombatSource。
+- 远程弹药与兜底：
+  - 默认不需要弹药，但预留后面设计某些怪物需要特定弹药才能穿透其抗性，（Ammunition/Thrown）的武器在弹药不足时自动回退：优先默认戏法（SpellAttack）
+- 距离规则：使用源的 RangeMin/RangeMax 判定可攻击距离；近战短距离，远程/法术按配置。
+- 兼容与回退：
+  - 若未挂装备系统或无可用源：无论前、后排按 1d6 + 力量；可施法职业无限制（空手也可以使用攻击型戏法，使用职业主属性）。
+- 数据与枚举约束：
+  - 新增枚举统一追加到 GameEnums.cs：AbilityScore / AttackCategory / EquipmentSlot / WeaponClass / WeaponType /
+  WeaponTag / AmmoType；伤害骰用 DiceSpec（个数/面数/修正）。
+  - 物品数据统一使用 ScriptableObject：ItemBase_SO / WeaponItem_SO / ArmorItem_SO / AccessoryItem_SO / AmmoItem_SO；
+  禁止使用 Json 等其他持久化方式。
+- 严格禁止：
+  - 不得引入第二套命中/伤害流程；所有路径必须收敛到 HorizontalCombatRules.ResolveAttack(attacker, target, ICombatSource, 
+  advantageFlag)。
