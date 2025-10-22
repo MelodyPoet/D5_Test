@@ -37,11 +37,28 @@ namespace demo2.DND
         // 防止重复订阅Spine事件
         private bool spineEventsHooked = false;
 
+        // 新增：到达攻击位置时，立即清轨并将默认混合设为0，避免残留walk帧
+        private void CutImmediatelyForAttack()
+        {
+            if (skeletonAnimation == null || skeletonAnimation.AnimationState == null) return;
+            try
+            {
+                // 清除所有轨道并回到setup姿态，消除上一动画残留
+                skeletonAnimation.AnimationState.ClearTracks();
+                skeletonAnimation.Skeleton.SetToSetupPose();
+                // 立即应用一次，确保本帧就生效
+                skeletonAnimation.AnimationState.Apply(skeletonAnimation.Skeleton);
+                skeletonAnimation.Skeleton.UpdateWorldTransform();
+                try { skeletonAnimation.Update(0f); } catch { }
+            }
+            catch { }
+        }
+
         // 终止状态（死亡或昏迷）判断
         private bool IsTerminalState()
         {
             if (characterStats == null) return false;
-            // HP<=0 或带有昏迷状态都视为终止状态
+            // HP<=0 或带有昕迷状态都视为终止状态
             bool hpDown = characterStats.IsDownOrDead();
             bool unconscious = false;
             try { unconscious = characterStats.HasStatusEffect(StatusEffectType.Unconscious); } catch { }
@@ -71,6 +88,34 @@ namespace demo2.DND
             SetupSpineEvents();
             originalPosition = transform.position;
             // 不再需要赋值moveSpeed和attackDistance，全部通过animationConfig访问
+
+            // 关键：将 walk/run -> attack 的过渡混合时长设为0，避免残留过渡帧
+            TrySetupZeroMixForAttack();
+        }
+
+        private void TrySetupZeroMixForAttack()
+        {
+            if (skeletonAnimation == null || skeletonAnimation.AnimationState == null) return;
+            var stateData = skeletonAnimation.AnimationState.Data;
+            if (stateData == null) return;
+
+            // 全局禁用默认混合，避免资源侧DefaultMix导致的长过渡
+            try { stateData.DefaultMix = 0f; } catch { }
+
+            string walk = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.walkAnimation)) ? animationConfig.walkAnimation : "walk";
+            string run  = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.runAnimation))  ? animationConfig.runAnimation  : "run";
+
+            // 覆盖所有可能的攻击动画名，确保 walk/run -> attack* 的混合为0
+            string[] possibleAttackNames = {
+                animationConfig != null ? animationConfig.attackAnimation : null,
+                "Atk01", "Atk02", "Atk03", "attack", "Attack", "ATTACK", "atk", "ATK", "hit", "Hit", "strike", "Strike"
+            };
+            foreach (var atk in possibleAttackNames)
+            {
+                if (string.IsNullOrEmpty(atk)) continue;
+                try { stateData.SetMix(walk, atk, 0f); } catch { }
+                try { stateData.SetMix(run,  atk, 0f); } catch { }
+            }
         }
 
         void OnEnable()
@@ -505,50 +550,89 @@ namespace demo2.DND
                 currentMoveTween = null;
             }
 
-            currentMoveTween = transform.DOMove(attackPosition, moveDuration)
-                .SetEase(animationConfig.moveEase)
-                .OnComplete(() => {
-                    try
+            // 提前收尾的阈值（单位：世界坐标距离），避免ease尾段造成2-3秒的原地walk
+            const float arriveSnapThreshold = 0.1f;
+            bool arrivalTriggered = false;
+
+            // 抽取抵达后处理，供 OnUpdate 与 OnComplete 共用
+            System.Action proceedAfterArrive = () =>
+            {
+                if (arrivalTriggered) return;
+                arrivalTriggered = true;
+                try
+                {
+                    if (IsTerminalState())
                     {
+                        Debug.Log($"[{gameObject.name}] 移动完成但角色已终止（死亡/昏迷），不再执行攻击");
+                        isAnimating = false;
+                        return;
+                    }
+                    // 先上锁，防止外部误触发walk覆盖
+                    isForceAttackAnimation = true;
+                    // 关键：抵达时无缝剪切，避免残留walk的混合帧
+                    CutImmediatelyForAttack();
+
+                    Debug.Log($"[{gameObject.name}] 阶段2：到达攻击位置，执行攻击");
+                    ExecuteAttackAtPosition(target, onAttackHit, () =>
+                    {
+                        Debug.Log($"[{gameObject.name}] 阶段3：攻击完成，返回原位");
+                        // 返回原位
+                        if (currentMoveTween != null && currentMoveTween.IsActive())
+                        {
+                            currentMoveTween.Kill();
+                            currentMoveTween = null;
+                        }
                         if (IsTerminalState())
                         {
-                            Debug.Log($"[{gameObject.name}] 移动完成但角色已终止（死亡/昏迷），不再执行攻击");
                             isAnimating = false;
                             return;
                         }
-                        Debug.Log($"[{gameObject.name}] 阶段2：到达攻击位置，执行攻击");
-                        ExecuteAttackAtPosition(target, onAttackHit, () => {
-                            Debug.Log($"[{gameObject.name}] 阶段3：攻击完成，返回原位");
-                            // 返回原位
-                            if (currentMoveTween != null && currentMoveTween.IsActive())
-                            {
-                                currentMoveTween.Kill();
-                                currentMoveTween = null;
-                            }
-                            if (IsTerminalState())
+                        currentMoveTween = transform.DOMove(originalPosition, moveDuration)
+                            .SetEase(animationConfig.moveEase)
+                            .OnComplete(() =>
                             {
                                 isAnimating = false;
-                                return;
-                            }
-                            currentMoveTween = transform.DOMove(originalPosition, moveDuration)
-                                .SetEase(animationConfig.moveEase)
-                                .OnComplete(() => {
-                                    isAnimating = false;
-                                    if (!IsTerminalState())
-                                    {
-                                        PlayIdleAnimation();
-                                    }
-                                    onComplete?.Invoke();
-                                });
-                        });
-                    }
-                    catch (System.Exception ex)
+                                if (!IsTerminalState())
+                                {
+                                    PlayIdleAnimation();
+                                }
+                                onComplete?.Invoke();
+                            });
+                    });
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[{gameObject.name}] ExecuteMeleeAttack异常: {ex.Message}");
+                    isAnimating = false;
+                    if (!IsTerminalState()) PlayIdleAnimation();
+                    onComplete?.Invoke();
+                }
+            };
+
+            currentMoveTween = transform.DOMove(attackPosition, moveDuration)
+                .SetEase(animationConfig.moveEase)
+                .OnUpdate(() =>
+                {
+                    if (arrivalTriggered) return;
+                    // 若已非常接近目标位置，则提前终止Tween并立刻开始攻击
+                    if (Vector3.Distance(transform.position, attackPosition) <= arriveSnapThreshold)
                     {
-                        Debug.LogError($"[{gameObject.name}] ExecuteMeleeAttack异常: {ex.Message}");
-                        isAnimating = false;
-                        if (!IsTerminalState()) PlayIdleAnimation();
-                        onComplete?.Invoke();
+                        // 对齐到精准目标点
+                        transform.position = attackPosition;
+                        // 终止Tween，避免重复OnComplete
+                        if (currentMoveTween != null && currentMoveTween.IsActive())
+                        {
+                            currentMoveTween.Kill();
+                            currentMoveTween = null;
+                        }
+                        proceedAfterArrive();
                     }
+                })
+                .OnComplete(() =>
+                {
+                    if (arrivalTriggered) return; // 已在OnUpdate提前触发
+                    // 正常完成时执行抵达处理
+                    proceedAfterArrive();
                 });
         }
 
@@ -558,6 +642,11 @@ namespace demo2.DND
         private void ExecuteAttackAtPosition(Transform target, System.Action onAttackHit = null, System.Action onComplete = null)
         {
             Debug.Log($"[{gameObject.name}] ========== ExecuteAttackAtPosition 开始 ==========");
+
+            // 开场即上锁，避免期间任何walk/idle覆盖
+            isForceAttackAnimation = true;
+            // 先强制清除上一动画残留（尤其是walk），确保开攻首帧就是攻击姿态
+            CutImmediatelyForAttack();
 
             // 创建临时回调，避免事件重复注册
             System.Action tempAttackHitCallback = null;
@@ -616,7 +705,7 @@ namespace demo2.DND
             Debug.Log($"[{gameObject.name}] 攻击动画时长: {attackAnimationDuration}秒 (动画: {actualAttackAnimName})");
 
             // 为了保证攻击动画能在画面上显示，先等一小段时间（让Spine刷新并渲染第一帧），再设置备用计时器和完成回调
-            float visualDelay = 0.12f; // 增加延迟，确保动画帧已渲染
+            float visualDelay = 0.03f; // 极小延迟，仅用于注册备份回调，不影响攻击立即开始
             DOVirtual.DelayedCall(visualDelay, () => {
                 Debug.Log($"[{gameObject.name}] 延迟 {visualDelay}s 后开始注册攻击备份计时器和完成回调");
 
@@ -665,7 +754,7 @@ namespace demo2.DND
                     }
                 });
 
-                // 设置攻击完成回调（备用触发也已在下面设置）
+                // 设置攻击完成调（备用触发也已在下面设置）
                 tempAnimCompleteCallback = () => {
                     try
                     {
@@ -875,6 +964,17 @@ namespace demo2.DND
                 }
                 else
                 {
+                    // 关键：非循环动画（攻击/受击等）取消混合，确保立即切入首帧
+                    if (!loop)
+                    {
+                        try
+                        {
+                            trackEntry.MixDuration = 0f;
+                            trackEntry.MixTime = 0f;
+                        }
+                        catch { }
+                    }
+
                     Debug.Log($"[{gameObject.name}] ✓ 成功设置动画: '{animationName}', 时长: {trackEntry.Animation.Duration}秒, 循环: {loop}");
                     var currentTrack = skeletonAnimation.AnimationState.GetCurrent(0);
                     if (currentTrack != null)
@@ -1141,7 +1241,7 @@ namespace demo2.DND
                         if (item == null || string.IsNullOrEmpty(item.Name)) continue;
                         if (toLower(item.Name).Contains(prefLower))
                         {
-                            return item.Name; // 返回原始大小写名
+                            return item.Name; // 返回原始大小��名
                         }
                     }
                 }
