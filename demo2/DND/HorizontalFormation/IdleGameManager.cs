@@ -101,9 +101,25 @@ namespace demo2.DND.HorizontalFormation
                 Debug.Log("🎯 开始生成初始队伍...");
                 GenerateInitialTeams();
 
-                // 设置等待队伍生成完成
-                isWaitingForTeamGeneration = true;
-                teamGenerationTimer = Time.time + 0.5f; // 等待0.5秒
+                // 立即启动探索模式（背景滚动和角色动画同步），不需要等待
+                // 移除0.5秒延迟，直接检查队伍是否生成成功
+                var aliveCharacters = formationManager.GetAllAliveCharacters(BattleSide.Player);
+                if (aliveCharacters.Count > 0)
+                {
+                    Debug.Log($"✅ 队伍生成成功！存活角色数量: {aliveCharacters.Count}");
+                    foreach (var character in aliveCharacters)
+                    {
+                        Debug.Log($"   - {character.GetDisplayName()} (HP: {character.currentHitPoints}/{character.maxHitPoints})");
+                    }
+                    StartExploreMode();
+                }
+                else
+                {
+                    Debug.LogWarning("⚠️ 队伍初始化需要时间，设置0.1秒延迟重试");
+                    // 如果角色还未完全初始化，只等待0.1秒（1帧左右）
+                    isWaitingForTeamGeneration = true;
+                    teamGenerationTimer = Time.time + 0.1f;
+                }
             }
             else
             {
@@ -147,9 +163,12 @@ namespace demo2.DND.HorizontalFormation
         private void StartExploreMode()
         {
             idleModeEnabled = true;
-            StartBackgroundScrolling();
 
-            Debug.Log("🚀 探索模式已启动！");
+            // 关键修复：背景滚动和角色走路动画同时启动，避免"原地走"
+            StartBackgroundScrolling();
+            formationManager.SetPlayerFormationWalkingState();
+
+            Debug.Log("🚀 探索模式已启动！背景滚动和角色动画已同步启动");
             // 实时日志：进入探索模式
             try { GameLog.LogAction("系统", "进入探索模式"); } catch { }
         }

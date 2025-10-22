@@ -237,10 +237,8 @@ public class UILogPanel : MonoBehaviour
     {
         if (!PassFilter(entry.Channel)) return;
 
-        _sb.Length = 0;
-        _sb.Append('[').Append(entry.Channel.ToString()).Append("] ");
-        _sb.Append(entry.Message);
-        string line = _sb.ToString();
+        // 仅显示消息本体，不显示频道前缀
+        string line = entry.Message;
         _allLines.Add(line);
 
         // 如果当前没有搜索词，或此行匹配搜索，则追加到可见列表
@@ -360,10 +358,8 @@ public class UILogPanel : MonoBehaviour
         {
             var e = buf[i];
             if (!PassFilter(e.Channel)) continue;
-            _sb.Length = 0;
-            _sb.Append('[').Append(e.Channel.ToString()).Append("] ");
-            _sb.Append(e.Message);
-            string line = _sb.ToString();
+            // 仅显示消息本体
+            string line = e.Message;
             _allLines.Add(line);
             if (PassSearch(line))
             {

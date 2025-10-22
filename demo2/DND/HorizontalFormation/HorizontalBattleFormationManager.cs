@@ -137,6 +137,9 @@ namespace demo2.DND.HorizontalFormation
                     }
                 }
 
+                // 移除立即播放走路动画，改为由外部在背景滚动启动时同时调用
+                // SetPlayerFormationWalkingState();
+
                 if (HealthBarUIManager.Instance != null)
                 {
                     HealthBarUIManager.Instance.InitializeBars(playerStats);
@@ -440,9 +443,9 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 设置玩家队伍为走路状态
+        /// 设置玩家队伍为走路状态（公开方法，供IdleGameManager在背景滚动时同步调用）
         /// </summary>
-        private void SetPlayerFormationWalkingState()
+        public void SetPlayerFormationWalkingState()
         {
             foreach (GameObject character in activePlayerCharacters)
             {

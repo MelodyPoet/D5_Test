@@ -73,7 +73,8 @@ public static class GameLog
         }
         // 广播
         OnEntryAdded?.Invoke(entry);
-        Debug.unityLogger?.Log(channel.ToString(), message);
+        // 控制台仅输出纯消息，不带频道名/标签
+        Debug.Log(message);
     }
 
     public static void Logf(LogChannel channel, string format, params object[] args)
@@ -90,16 +91,16 @@ public static class GameLog
     {
         if (totalWaves <= 0)
         {
-            Log(LogChannel.Exploration, "探索进度：未知总波次（当前：" + currentWave + ")");
+            Log(LogChannel.Exploration, "探索：未知总波次（当前：" + currentWave + ")");
             return;
         }
         if (completed)
         {
-            Logf(LogChannel.Exploration, "探索进度：第 {0}/{1} 波完成（已通关本波）", currentWave, totalWaves);
+            Logf(LogChannel.Exploration, "探索：第 {0}/{1} 波完成（已通关本波）", currentWave, totalWaves);
         }
         else
         {
-            Logf(LogChannel.Exploration, "探索进度：进行到第 {0}/{1} 波", currentWave, totalWaves);
+            Logf(LogChannel.Exploration, "探索：进行到第 {0}/{1} 波", currentWave, totalWaves);
         }
     }
 
