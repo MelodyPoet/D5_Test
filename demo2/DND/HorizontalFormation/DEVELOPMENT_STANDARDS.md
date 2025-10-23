@@ -448,38 +448,27 @@ XXX_Old.cs           - 旧版本文件
   - 不得引入第二套命中/伤害流程；所有路径必须收敛到 HorizontalCombatRules.ResolveAttack(attacker, target, ICombatSource, 
   advantageFlag)。
 
-装备与背包系统 — 脚本与UI集成设计
-目标与范围
-- 以装备/法术源为唯一数据来源，驱动命中/伤害与规则判定；不改变现有 AI 位移、动画与事件通道链路。
-- 支持运行时动态：装备更换/升级、背包增删；严格手动挂载，最小改动接入。
-- 按键交互：装备和背包UI通过按键来打开/关闭且刷新角色当前数值。槽位装备/卸下、背包物品使用/丢弃/分割、拖拽排序与对比。进入战斗锁定装备。
+装备与背包系统 — 契约与集成（简版）
+- 运行时组件：
+  - CharacterInventory：items/capacity；事件 OnInventoryChanged；提供增删/堆叠/排序。
+  - CharacterEquipment：equipped 映射；事件 OnEquipmentChanged；处理 TwoHanded/盾冲突/背包满等规则。
+  - ItemInstance：持有 ItemBase_SO 与堆叠/强化等运行时属性。
+- UI 合同：
+  - UI_TabbedBackpackHub：负责标签切换、战斗锁定与绑定 Owner（CharacterStats/Inventory/Equipment）。
+  - UI_InventoryGrid：仅做呈现与交互回调，具体变更由 Inventory/Equipment 执行。
+  - UI_CharacterSheetPanel：仅做展示（HP 订阅 OnHealthChanged；其余在展示或装备变更时刷新）。
+- 事件解耦：
+  - HP 更新：CharacterStats.OnHealthChanged → UI 刷新；HealthBar 仍由既有管理器负责。
+  - 背包/装备：OnInventoryChanged/OnEquipmentChanged 触发最小范围刷新；避免全量轮询。
+- 规则归一：
+  - 所有命中/伤害/距离/暴击判定统一收敛到 HorizontalCombatRules；UI 不提供第二套逻辑。
+- 性能与稳定：
+  - 对象池、批量刷新，避免频繁实例化与在 Update 中扫描。
+  - 绑定/解绑时序清晰，切换角色需要 Unbind → Bind → Refresh，防止事件悬挂。
 
-运行时脚本组件（挂在角色上）
-- CharacterInventory（背包）
-  - 字段：items: List<ItemInstance>，capacity
-  - 事件：OnInventoryChanged
-  - API：AddItem(ItemInstance)/RemoveItem/CanAdd/FindFirst/Sort/Filter
-- CharacterEquipment（装备栏）
-  - 字段：equipped: Dictionary<EquipmentSlot, ItemInstance>
-  - 事件：OnEquipmentChanged(EquipmentSlot slot, ItemInstance newItem, ItemInstance oldItem)
-  - API：Equip(slot, inst)/Unequip(slot)/Get(slot)/CanEquip(slot, item)/TrySwap(slot, item)
-  - 规则：TwoHanded 占用主+副手；与盾冲突需处理；远程弹药默认不消耗，仅预留校验开关
-- ItemInstance（运行时物品实例）
-  - 字段：baseSO: ItemBase_SO，enhancementLevel，currentStack（弹药/消耗品），rolledAffixes（可选）
-  - 只读：DisplayName/Icon（透传 SO）
+（说明）本文件仅保留架构与设计思路。实际场景层级、组件选择、Inspector 字段映射与像素/列行等配置细节不在本文保存，统一由实现脚本注释与预制体示例承载。
 
-与模板/角色数据的集成（更新：接入熟练判定）
-- CharacterTemplate（SO，仅新增字段，不改旧逻辑）
-  - 战斗熟练配置（当前最小实现，可在 Inspector 勾选）：
-    - proficientMelee（近战熟练）/ proficientRanged（远程熟练）/ proficientSpellAttacks（法术攻击熟练）
-    - 预留列表：proficientWeaponClasses / proficientWeaponTypes（后续接入装备系统后细分到类别/类型）
-  - 提供统一方法：GetProficiencyBonus() / IsProficientForAttack(isSpell, isMelee)
-- HorizontalCombatRules
-  - 命中已接入熟练判定：当 IsProficientForAttack 为 true 时，叠加 CharacterTemplate.proficiencyBonus；否则不加
-  - 物理命中仍按兜底规则选择属性（STR/DEX 取大）；法术命中按 primarySpellAbility
-
-装备与命中规则（补充说明）
-- 熟练与加值（已落地到实现）：
-  - 物理命中 = 1d20（含优/劣势）+ 对应属性调整值 + 熟练加值（若熟练，来自上述 SO 开关/后续武器熟练列表）
-  - 法术命中 = 1d20（含优/劣势）+ primarySpellAbility 调整值 + 熟练加值（若熟练，来自 SO 开关）
-- 兼容与回退：未接入装备系统前，是否“近战/远程”由现有行为路径传入（isMeleeAttack），并通过 SO 开关决定是否计入熟练加值
+UI 布局与交互（概要）
+- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter，唯一例外是背包网格使用 GridLayoutGroup。
+- 运行时依旧遵循“严格手动挂载”：引用通过 Inspector 拖拽；战斗期通过 CanvasGroup 统一锁交互。
+- 具体步骤与参数不在本文记录，统一放在预制体与实现脚注中维护。
