@@ -2544,8 +2544,8 @@ MonoBehaviour:
   keepSquareCells: 1
   debugLogs: 1
   showDebugChessboard: 1
-  debugColorA: {r: 1, g: 1, b: 1, a: 0.05}
-  debugColorB: {r: 0, g: 0, b: 0, a: 0.05}
+  debugColorA: {r: 1, g: 1, b: 1, a: 0.4627451}
+  debugColorB: {r: 0, g: 0, b: 0, a: 0.48235294}
   includeSpacingInItemSize: 1
 --- !u!114 &1258497064
 MonoBehaviour:

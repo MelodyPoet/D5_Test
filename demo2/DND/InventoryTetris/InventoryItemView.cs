@@ -49,26 +49,38 @@ namespace demo2.DND.InventoryTetris
             dragging = true;
             startAnchoredPos = rect.anchoredPosition;
             hasStartGridPos = Grid.TryGetGridPosition(BoundItem, out startGridPos);
-            group.blocksRaycasts = false; // 避免阻挡事件
+            group.blocksRaycasts = false; // 避免阻拦事件
             BringToFront();
+            if (Grid.debugLogs)
+            {
+                Debug.Log($"[ItemView] BeginDrag '{BoundItem?.data?.displayName ?? BoundItem?.instanceId}' hasStartGridPos={hasStartGridPos} startPos={startGridPos}");
+            }
         }
 
         public void OnDrag(PointerEventData eventData)
         {
             if (!dragging || BoundItem == null || Grid == null) return;
 
-            // 目标格坐标（以物品左上角对齐）
             if (Grid.PointerToGrid(eventData, out int gx, out int gy))
             {
                 bool can = Grid.Model.CanPlaceIgnoring(BoundItem, gx, gy);
-                // 预览位置
                 rect.anchoredPosition = Grid.GridToLocalTopLeft(gx, gy);
                 rect.sizeDelta = new Vector2(Grid.ItemPixelWidth(BoundItem), Grid.ItemPixelHeight(BoundItem));
 
-                // 颜色提示
                 if (bgImage != null)
                 {
                     bgImage.color = can ? new Color(0.75f, 1f, 0.75f, bgOriginalColor.a) : new Color(1f, 0.6f, 0.6f, bgOriginalColor.a);
+                }
+                if (Grid.debugLogs)
+                {
+                    Debug.Log($"[ItemView] Drag preview -> ({gx},{gy}) can={can}");
+                }
+            }
+            else
+            {
+                if (Grid.debugLogs)
+                {
+                    Debug.Log("[ItemView] Drag preview -> out of container");
                 }
             }
         }
@@ -82,13 +94,18 @@ namespace demo2.DND.InventoryTetris
 
             if (Grid.PointerToGrid(eventData, out int gx, out int gy))
             {
-                // 最终尝试移动（占用表更新）
-                if (Grid.TryMove(BoundItem, gx, gy))
+                bool ok = Grid.TryMove(BoundItem, gx, gy);
+                if (Grid.debugLogs)
                 {
-                    // 成功则位置已由 Grid 更新
-                    return;
+                    Debug.Log($"[ItemView] EndDrag drop -> ({gx},{gy}) move={(ok ? "OK" : "FAIL")}");
                 }
+                if (ok) return;
             }
+            else if (Grid.debugLogs)
+            {
+                Debug.Log("[ItemView] EndDrag drop -> out of container, rollback");
+            }
+
             // 回滚
             rect.anchoredPosition = startAnchoredPos;
             if (hasStartGridPos)

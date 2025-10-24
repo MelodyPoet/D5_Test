@@ -217,7 +217,32 @@ namespace demo2.DND.InventoryTetris
         /// </summary>
         public bool TryMove(ItemInstance item, int x, int y)
         {
+            // 若模型中没有记录该物品的位置（例如某些初始化/竞态导致丢失），尝试直接按新位置落地
+            Vector2Int oldPos;
+            bool hasMapping = _model.TryGetPosition(item, out oldPos);
+            if (!hasMapping)
+            {
+                bool can = _model.CanPlace(item, x, y);
+                if (debugLogs)
+                {
+                    string id = item != null ? (item.data != null ? item.data.displayName : item.instanceId) : "<null>";
+                    Debug.Log($"[GridView] TryMove (no mapping) '{id}' -> ({x},{y}) can={can}");
+                }
+                if (!can) return false;
+                bool placed = _model.TryPlace(item, x, y);
+                if (placed && _views.TryGetValue(item, out var v0))
+                {
+                    PositionViewAtGrid(v0, x, y);
+                }
+                return placed;
+            }
+
             var ok = _model.TryMove(item, x, y);
+            if (debugLogs)
+            {
+                string id = item != null ? (item.data != null ? item.data.displayName : item.instanceId) : "<null>";
+                Debug.Log($"[GridView] TryMove (mapped {oldPos}) '{id}' -> ({x},{y}) result={(ok?"OK":"FAIL")}");
+            }
             if (ok && _views.TryGetValue(item, out var v))
             {
                 PositionViewAtGrid(v, x, y);
@@ -244,7 +269,13 @@ namespace demo2.DND.InventoryTetris
         /// </summary>
         public bool TryGetGridPosition(ItemInstance item, out Vector2Int pos)
         {
-            return _model.TryGetPosition(item, out pos);
+            bool ok = _model.TryGetPosition(item, out pos);
+            if (debugLogs)
+            {
+                string id = item != null ? (item.data != null ? item.data.displayName : item.instanceId) : "<null>";
+                Debug.Log($"[GridView] TryGetGridPosition for '{id}' -> {(ok ? pos.ToString() : "<none>")}");
+            }
+            return ok;
         }
 
         // 内部：创建并绑定物品视图
@@ -357,15 +388,37 @@ namespace demo2.DND.InventoryTetris
         public bool PointerToGrid(PointerEventData eventData, out int x, out int y)
         {
             x = -1; y = -1;
-            var cam = eventData != null ? eventData.pressEventCamera : null;
+            // 选择相机：Overlay 传 null；Camera/World 使用事件相机或主相机
+            Camera cam = null;
+            var canvas = container != null ? container.GetComponentInParent<Canvas>() : null;
+            if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                cam = null; // Overlay 必须传 null
+            }
+            else
+            {
+                if (eventData != null)
+                {
+                    cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
+                }
+                if (cam == null) cam = Camera.main;
+            }
+
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(container, eventData.position, cam, out var local))
                 return false;
 
-            // container 局部坐标转换为左上原点系
-            var tl = new Vector2(container.rect.xMin, container.rect.yMax);
-            var localTL = local - tl;
-            float lx = localTL.x - padding.x;
-            float ly = -(localTL.y - padding.y);
+            float halfW = container.rect.width * 0.5f;
+            float halfH = container.rect.height * 0.5f;
+            float fromLeft = local.x + halfW;
+            float fromTop  = halfH - local.y;
+
+            float lx = fromLeft - padding.x;
+            float ly = fromTop  - padding.y;
+
+            if (debugLogs)
+            {
+                Debug.Log($"[GridView] Pointer local=({local.x:F1},{local.y:F1}) fromLeftTop=({fromLeft:F1},{fromTop:F1}) afterPadding=({lx:F1},{ly:F1}) cam={(cam==null?"null":cam.name)}");
+            }
 
             if (lx < 0 || ly < 0) return false;
             float pitchX = cellSize.x + spacing.x;
