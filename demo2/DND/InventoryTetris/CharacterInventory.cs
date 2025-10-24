@@ -26,6 +26,16 @@ namespace demo2.DND.InventoryTetris
         /// </summary>
         public event Action OnInventoryChanged;
 
+        /// <summary>
+        /// 全局事件：任意 CharacterInventory 实例在 Start 后就绪时发布（包含 initialItems -> ItemInstance 转换完成）。
+        /// </summary>
+        public static event Action<CharacterInventory> OnAnyInventoryReady;
+
+        /// <summary>
+        /// 全局事件：任意 CharacterInventory 实例销毁时发布。
+        /// </summary>
+        public static event Action<CharacterInventory> OnAnyInventoryDestroyed;
+
         public IReadOnlyList<ItemInstance> Items => items;
 
         private void Awake()
@@ -50,6 +60,8 @@ namespace demo2.DND.InventoryTetris
             {
                 OnInventoryChanged?.Invoke();
             }
+            // 通知全局：该实例已就绪（无论是否有初始物品）
+            OnAnyInventoryReady?.Invoke(this);
         }
 
         /// <summary>
@@ -82,6 +94,11 @@ namespace demo2.DND.InventoryTetris
             if (items.Count == 0) return;
             items.Clear();
             OnInventoryChanged?.Invoke();
+        }
+
+        private void OnDestroy()
+        {
+            OnAnyInventoryDestroyed?.Invoke(this);
         }
 
         /// <summary>

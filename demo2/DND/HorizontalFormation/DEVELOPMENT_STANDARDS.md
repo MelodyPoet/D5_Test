@@ -464,41 +464,24 @@ XXX_Old.cs           - 旧版本文件
   - 局外的资源分配和角色成长运营让玩家策略性构思进入局内战斗时的默认装备和战术消耗道具，如在局内通过战斗获得自己职业构筑所需的更优质装备，则可更新当前装备。
   但战斗死亡就会失去所有收获的装备物品，回到初始装备状态。从而建立2D横版简约搜打撤机制。
  
-装备背包和角色属性UI
-- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），
-不使用 LayoutGroup。
-- 背包/角色属性UI采用左侧标签切换显示，从而共享有限的屏幕空间
+- UI 布局与交互（概要）
+  - 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），
+  不使用 LayoutGroup。
 
-当前需要实现的目标：
-1.不同物品占不同格、旋转、拖拽整理
-2.局内战斗时背包锁定、在“篝火”类checkpoint进入装备调整界面可允许编辑和改变现有装备
-3.装备增强角色属性：命中/伤害/防御等,TwoHanded/Shield等标签影响装备规则
-4.邻接/共生关系：不同装备之间存在共生和关联关系（举例如弓箭与箭矢放在临近位置激活增强远程攻击属性）
-5.角色职业流派/等级/种族/专长等构筑影响可装备物品的种类和数量
-6.局外构筑/局内掉落/死亡回到默认
-
-- 设计目标：
-  - 明确职责分离：数据持有（ItemInstance/ItemBase_SO） vs 运行时管理（CharacterInventory/CharacterEquipment） vs UI 呈现（InventoryUIBinder/InventoryGridView）。
-  - 事件驱动刷新：通过事件通知最小范围更新，避免全量轮询。
-  - 规则集中化：所有装备相关规则统一在 CharacterEquipment 中处理，避免分散逻辑。
-- 运行时组件：
-  - CharacterInventory：items/capacity；事件 OnInventoryChanged；提供增删/堆叠/排序。
-  - CharacterEquipment：equipped 映射；事件 OnEquipmentChanged；处理 TwoHanded/盾冲突/背包满等规则。
-  - ItemInstance：持有 ItemBase_SO 与堆叠/强化等运行时属性。
-- UI 合同（与当前实现对齐）：
-  - InventoryUIBinder：负责将 CharacterInventory 的 ItemInstance "落地" 到 InventoryGridView；标签切换 Hub（Tabbed）为后续规划。
-  - InventoryGridView：仅做呈现与交互回调（拖拽、旋转、位置换算）；具体背包变更由 CharacterInventory/未来的 CharacterEquipment 执行。
-  - CharacterSheetPanel（规划中）：仅做展示（HP 订阅 OnHealthChanged；其余在展示或装备变更时刷新）。
-- 事件解耦：
-  - HP 更新：CharacterStats.OnHealthChanged → UI 刷新；HealthBar 仍由既有管理器负责。
-  - 背包/装备：OnInventoryChanged/OnEquipmentChanged 触发最小范围刷新；避免全量轮询。
-- 规则归一：
-  - 所有命中/伤害/距离/暴击判定统一收敛到 HorizontalCombatRules；UI 不提供第二套逻辑。
-- 性能与稳定：
-  - 对象池、批量刷新，避免频繁实例化与在 Update 中扫描。
-  - 绑定/解绑时序清晰，切换角色需要 Unbind → Bind → Refresh，防止事件悬挂。
-
-（说明）本文件仅保留架构与设计思路。实际场景层级、组件选择、Inspector 字段映射与像素/列行等配置细节不在本文保存，统一由实现脚本注释与预制体示例承载。
-
-UI 布局与交互（概要）
-- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），不使用 LayoutGroup。
+[路径A落地决策与约束]
+- 决策：采用“在角色预制体/实例的 CharacterInventory.initialItems 直接配置初始物品”的路径A。启动时由该列表生成 ItemInstance 并触发刷新。
+- 绑定位置（强制）：CharacterInventory 必须挂在每个“玩家/盟友”角色预制体/实例上，禁止挂在场景空节点（如 PlayerData）。
+  - PlayerData 空节点不再承担背包数据容器的职责；仅当未来需要“队伍共享仓库/共用背包”时，另行定义独立 PartyInventory（不影响本规范的“角色个人背包”）。
+- 网格行列 rows/cols 的意义（保留且重要）：
+  - rows/cols 仍然是“容量/版面”（可用格子总数），用于判定是否存在可容纳物品占位的空区、物品旋转后的适配、碰撞/覆盖检测与自动排布；而物品占多少格由 ItemBaseSO 的 slotWidth/slotHeight 决定，二者职责不同、同时生效。
+- UI 绑定（切换合同）：
+  - InventoryUIBinder.sourceInventory 始终指向“当前选中角色”的 CharacterInventory；左右切换仅重绑引用→GridView 清空并重建→Binder 刷新显示。
+  - 强制手动挂载：FormationContainer 实例化后的角色对象，其 CharacterInventory 引用必须手动填入“角色选择器（SelectionHub）”的目标列表中，禁止自动查找。
+  - 多来源支持（新增）：InventoryUIBinder 允许挂载多个来源（sourceInventories），通过 activeSourceIndex 或 SetActiveSourceIndex(i) 在玩家/盟友等不同角色之间切换；旧字段 sourceInventory 仍兼容单一来源模式（UseSingleSource(inv)）。提供 AddSource/RemoveSource 以维护列表。切换时 Binder 会自动解绑旧源事件、按来源 rows/cols 重配 GridView 并重建。
+  - 约束：多来源列表中的每一项必须是对应角色预制体上的 CharacterInventory 引用；禁止将场景空节点（如 PlayerData）作为背包数据源使用。玩家与盟友的背包与装备分离时，分别作为不同来源挂入列表，以活动索引进行切换。
+- 运行时交互策略：
+  - 战斗中禁编辑：通过交互遮罩或交互开关屏蔽拖拽/旋转；篝火/休整界面再开放编辑与整理。
+  - AutoFitToContainer=启用；keepSquareCells 视美术风格选择；includeSpacingInItemSize 按是否要“覆盖格间隙”选择。
+- 物品来源：
+  - 初始物品：仅由各角色的 CharacterInventory.initialItems 决定（本规范）。
+  - 运行时新增：通过 InventoryUIBinder.TryAddNew(ItemBaseSO) 尝试落地→成功后再加入数据源；失败不改变数据源。

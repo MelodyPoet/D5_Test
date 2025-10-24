@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 8656571433496126432}
   - component: {fileID: 4286918360062315237}
   - component: {fileID: 1994949910500310956}
+  - component: {fileID: 299315423223609512}
   m_Layer: 6
   m_Name: AllyTemplate01
   m_TagString: Ally
@@ -232,6 +233,7 @@ MonoBehaviour:
   temporaryHitPoints: 0
   armorClass: 10
   statusEffects: 
+  hasPlayedDeath: 0
   strength: 10
   dexterity: 10
   constitution: 10
@@ -253,3 +255,19 @@ MonoBehaviour:
   characterStats: {fileID: 4286918360062315237}
   skeletonAnimation: {fileID: 8656571433496126432}
   animationConfig: {fileID: 11400000, guid: 2a80e86cbce9ae54c94e5621f6d6de9f, type: 2}
+--- !u!114 &299315423223609512
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7984810970041705236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f0bb2f14237c4cb085909994d3ba32f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rows: 4
+  cols: 6
+  initialItems:
+  - {fileID: 11400000, guid: 63b9235b68303c64a9e3ea0db3e33ad8, type: 2}
