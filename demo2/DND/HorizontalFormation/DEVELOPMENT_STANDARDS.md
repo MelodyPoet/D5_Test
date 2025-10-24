@@ -449,14 +449,46 @@ XXX_Old.cs           - 旧版本文件
   advantageFlag)。
 
 装备与背包系统 — 契约与集成（简版）
+- 核心玩法：（参考steam上很火的背包乱斗类游戏）
+  - 玩家通过构筑职业流派的装备组合来提升战斗力。
+  - 装备物品提供命中/伤害/防御等属性加成。
+  - 不同装备类别（武器/护甲/饰品）有不同的槽位限制。
+  - 装备物品可有特殊标签（如 TwoHanded/Shield），影响装备规则。
+  - 不同装备之间存在共生和关联关系（举例如弓箭与箭矢放在临近位置激活增强远程攻击属性）。考验玩家利用有限的背包空间进行优化配置的能力/不同装备组合带来的战斗策略差异。
+  - 玩家等级/种族/专长的构筑影响可装备物品的种类和数量。这样给玩家一定的成长指引。
+  - 不同装备所占背包内空间的基础单元格不同，从而让玩家在有限的背包空间内进行取舍和优化。包括手动旋转，组合，摆放整理物品，同时要考虑物品之间的关联和共生关系。  
+  - 物品的共生和关联关系受到自身职业构筑的流派指导和限制，(如板甲骑士的构筑必定会关联重甲类别的护甲，如战斗中获得更好的重甲，可以替换当前装备而不破坏自身
+  职业构筑带来的共生关系的加成，但此时如果通过战斗随机获得一件强力的轻甲，其属性足以颠覆原本的职业构筑)从而让玩家在构筑职业流派时有更多的思考和选择空间。也让玩家在战斗中根据随机获得的强力装备来不断构思
+  和调整自身的职业构筑和战术策略。（这种设计思路类似于Roguelike游戏中通过随机获得的装备来调整自身的构筑和策略）同时洗点的成本适中，可以让玩家有一定的沉没成本支付能力。
+  - 局内战斗时背包锁定不可操作，通过探索阶段遇到的“篝火”类checkpoint进入装备调整界面。
+  - 局外的资源分配和角色成长运营让玩家策略性构思进入局内战斗时的默认装备和战术消耗道具，如在局内通过战斗获得自己职业构筑所需的更优质装备，则可更新当前装备。
+  但战斗死亡就会失去所有收获的装备物品，回到初始装备状态。从而建立2D横版简约搜打撤机制。
+ 
+装备背包和角色属性UI
+- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），
+不使用 LayoutGroup。
+- 背包/角色属性UI采用左侧标签切换显示，从而共享有限的屏幕空间
+
+当前需要实现的目标：
+1.不同物品占不同格、旋转、拖拽整理
+2.局内战斗时背包锁定、在“篝火”类checkpoint进入装备调整界面可允许编辑和改变现有装备
+3.装备增强角色属性：命中/伤害/防御等,TwoHanded/Shield等标签影响装备规则
+4.邻接/共生关系：不同装备之间存在共生和关联关系（举例如弓箭与箭矢放在临近位置激活增强远程攻击属性）
+5.角色职业流派/等级/种族/专长等构筑影响可装备物品的种类和数量
+6.局外构筑/局内掉落/死亡回到默认
+
+- 设计目标：
+  - 明确职责分离：数据持有（ItemInstance/ItemBase_SO） vs 运行时管理（CharacterInventory/CharacterEquipment） vs UI 呈现（InventoryUIBinder/InventoryGridView）。
+  - 事件驱动刷新：通过事件通知最小范围更新，避免全量轮询。
+  - 规则集中化：所有装备相关规则统一在 CharacterEquipment 中处理，避免分散逻辑。
 - 运行时组件：
   - CharacterInventory：items/capacity；事件 OnInventoryChanged；提供增删/堆叠/排序。
   - CharacterEquipment：equipped 映射；事件 OnEquipmentChanged；处理 TwoHanded/盾冲突/背包满等规则。
   - ItemInstance：持有 ItemBase_SO 与堆叠/强化等运行时属性。
-- UI 合同：
-  - UI_TabbedBackpackHub：负责标签切换、战斗锁定与绑定 Owner（CharacterStats/Inventory/Equipment）。
-  - UI_InventoryGrid：仅做呈现与交互回调，具体变更由 Inventory/Equipment 执行。
-  - UI_CharacterSheetPanel：仅做展示（HP 订阅 OnHealthChanged；其余在展示或装备变更时刷新）。
+- UI 合同（与当前实现对齐）：
+  - InventoryUIBinder：负责将 CharacterInventory 的 ItemInstance "落地" 到 InventoryGridView；标签切换 Hub（Tabbed）为后续规划。
+  - InventoryGridView：仅做呈现与交互回调（拖拽、旋转、位置换算）；具体背包变更由 CharacterInventory/未来的 CharacterEquipment 执行。
+  - CharacterSheetPanel（规划中）：仅做展示（HP 订阅 OnHealthChanged；其余在展示或装备变更时刷新）。
 - 事件解耦：
   - HP 更新：CharacterStats.OnHealthChanged → UI 刷新；HealthBar 仍由既有管理器负责。
   - 背包/装备：OnInventoryChanged/OnEquipmentChanged 触发最小范围刷新；避免全量轮询。
@@ -469,6 +501,4 @@ XXX_Old.cs           - 旧版本文件
 （说明）本文件仅保留架构与设计思路。实际场景层级、组件选择、Inspector 字段映射与像素/列行等配置细节不在本文保存，统一由实现脚本注释与预制体示例承载。
 
 UI 布局与交互（概要）
-- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter，唯一例外是背包网格使用 GridLayoutGroup。
-- 运行时依旧遵循“严格手动挂载”：引用通过 Inspector 拖拽；战斗期通过 CanvasGroup 统一锁交互。
-- 具体步骤与参数不在本文记录，统一放在预制体与实现脚注中维护。
+- 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），不使用 LayoutGroup。
