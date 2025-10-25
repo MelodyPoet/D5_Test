@@ -32,6 +32,13 @@ namespace demo2.DND.InventoryTetris
         public bool clearAndRebuildOnBind = true;
         public bool bindOnStart = true;
 
+        [Header("网格显示模式")]
+        [Tooltip("启用后，使用固定的格子大小/间距/内边距；不同角色仅改变格子数量（rows/cols），图标大小保持一致。建议配合 ScrollRect，使内容可滚动。")]
+        public bool useUniformCellSize = true;
+        public Vector2 uniformCellSize = new Vector2(96, 96);
+        public Vector2 uniformSpacing = new Vector2(8, 8);
+        public Vector2 uniformPadding = new Vector2(8, 8);
+
         [Header("切换策略（运行时自动收集）")]
         [Tooltip("当自动收集到第一个可用背包，且当前无活动来源时，是否自动切换为该背包。")]
         public bool autoSwitchToFirstReady = true;
@@ -222,6 +229,16 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
+            // 统一背包表现：固定格子尺寸（保持图标大小一致），只随 rows/cols 改变内容范围
+            if (useUniformCellSize && gridView != null)
+            {
+                gridView.autoFitToContainer = false;
+                gridView.autoResizeContainer = true;
+                gridView.cellSize = uniformCellSize;
+                gridView.spacing = uniformSpacing;
+                gridView.padding = uniformPadding;
+            }
+
             // 确保 GridView 行列与来源容量一致
             if (gridView.rows != src.rows || gridView.cols != src.cols)
             {
@@ -231,6 +248,9 @@ namespace demo2.DND.InventoryTetris
             {
                 gridView.ClearAndRebuild();
             }
+
+            // 根据当前模式刷新容器尺寸或自适应 cell
+            gridView.RefreshLayoutSize();
 
             var items = src.Items;
             if (debugLogs)

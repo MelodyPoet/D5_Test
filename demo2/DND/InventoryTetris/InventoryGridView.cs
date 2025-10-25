@@ -12,9 +12,12 @@ namespace demo2.DND.InventoryTetris
     [RequireComponent(typeof(RectTransform))]
     public class InventoryGridView : MonoBehaviour
     {
+        private const int MaxRows = 7;
+        private const int MaxCols = 15;
+
         [Header("网格尺寸（单位：格）")]
-        public int rows = 6;
-        public int cols = 10;
+        [Range(1, MaxRows)] public int rows = 6;
+        [Range(1, MaxCols)] public int cols = 10;
 
         [HideInInspector]
         public Vector2 cellSize = new Vector2(96, 96);
@@ -40,7 +43,7 @@ namespace demo2.DND.InventoryTetris
         public bool debugLogs;
 
         [Header("可视化（调试）")]
-        [Tooltip("在容器下渲染一个棋盘格，便于观察每个网格单元的位置与大小（仅调试用）")]
+        [Tooltip("在容器下渲染一个棋盘格，便于观察每个网格单元的位置与大小（仅调试用)")]
         public bool showDebugChessboard = false;
         [Tooltip("棋盘格颜色 A（含透明度）")]
         public Color debugColorA = new Color(1f, 1f, 1f, 0.05f);
@@ -48,8 +51,14 @@ namespace demo2.DND.InventoryTetris
         public Color debugColorB = new Color(0f, 0f, 0f, 0.05f);
 
         [Header("显示选项")]
-        [Tooltip("当物品跨越多个格时，是否在视觉尺寸中包含格间距（true=物品覆盖到格间隙，false=只等于格子面积之和，不覆盖间隙）")]
+        [Tooltip("当物品跨越多个格时，是否在视觉尺寸中包含格间距（true=物品覆盖到格间隙，false=只等于格子面积之和，不覆盖间隙)")]
         public bool includeSpacingInItemSize = true;
+
+        [Header("容器对齐")]
+        [Tooltip("将 container 的锚点与 pivot 统一为左上，并将 anchoredPosition 归零，使网格从父容器左上角开始布局（避免在父容器中居中)")]
+        public bool alignContainerTopLeft = true;
+        [Tooltip("若父物体使用 LayoutGroup（Horizontal/Vertical/Grid），强制其 Child Alignment 为 Upper Left，避免子对象被居中对齐")]
+        public bool forceParentLayoutUpperLeft = true;
 
         // 内部状态
         private RectTransform _rect;
@@ -63,8 +72,13 @@ namespace demo2.DND.InventoryTetris
 
         private void Awake()
         {
+            ClampCapacity();
             _rect = GetComponent<RectTransform>();
             if (container == null) container = _rect;
+            if (alignContainerTopLeft && container != null)
+            {
+                AlignContainerToTopLeft();
+            }
             _model = new InventoryGridModel(rows, cols);
 
             if (autoFitToContainer)
@@ -78,6 +92,77 @@ namespace demo2.DND.InventoryTetris
             RebuildDebugBoard();
         }
 
+        private void OnValidate()
+        {
+            // 编辑器中修改 rows/cols 时进行约束，并刷新布局可视化
+            ClampCapacity();
+#if UNITY_EDITOR
+            if (_model != null)
+            {
+                // InventoryGridModel 未暴露 Rows/Cols 属性，这里直接重建以匹配新的行列配置
+                _model = new InventoryGridModel(rows, cols);
+            }
+            if (container != null)
+            {
+                if (autoFitToContainer) RecalculateCellSizeFromContainer();
+                else if (autoResizeContainer) RefreshLayoutSize();
+            }
+            if (showDebugChessboard) RebuildDebugBoard();
+#endif
+        }
+
+        private void ClampCapacity()
+        {
+            int newRows = Mathf.Clamp(rows, 1, MaxRows);
+            int newCols = Mathf.Clamp(cols, 1, MaxCols);
+            if (newRows != rows || newCols != cols)
+            {
+                rows = newRows;
+                cols = newCols;
+                if (debugLogs)
+                {
+                    Debug.Log($"[InventoryGridView] 网格容量已约束为 Rows={rows} (<= {MaxRows}), Cols={cols} (<= {MaxCols})");
+                }
+            }
+        }
+
+        private void OnEnable()
+        {
+            // 再次对齐，避免外部在 Awake/Start 之后修改父布局导致回弹到居中
+            if (alignContainerTopLeft && container != null)
+            {
+                AlignContainerToTopLeft();
+            }
+        }
+
+        private void AlignContainerToTopLeft()
+        {
+            // 统一 container 锚点/枢轴为左上，并归零偏移
+            container.anchorMin = new Vector2(0f, 1f);
+            container.anchorMax = new Vector2(0f, 1f);
+            container.pivot = new Vector2(0f, 1f);
+            container.anchoredPosition = Vector2.zero;
+
+            // 若父节点使用布局组件，强制设为左上对齐，避免子对象居中
+            FixParentLayoutAlignment();
+        }
+
+        private void FixParentLayoutAlignment()
+        {
+            if (!forceParentLayoutUpperLeft || container == null) return;
+            var parent = container.transform.parent as RectTransform;
+            if (parent == null) return;
+            var lg = parent.GetComponent<LayoutGroup>();
+            if (lg != null && lg.childAlignment != TextAnchor.UpperLeft)
+            {
+                lg.childAlignment = TextAnchor.UpperLeft;
+                if (debugLogs)
+                {
+                    Debug.Log("[InventoryGridView] 父布局组对齐方式已强制为 UpperLeft 以避免子对象居中。");
+                }
+            }
+        }
+
         /// <summary>
         /// 重新配置网格行列并清空现有物品视图。
         /// </summary>
@@ -85,6 +170,7 @@ namespace demo2.DND.InventoryTetris
         {
             rows = Mathf.Max(1, r);
             cols = Mathf.Max(1, c);
+            ClampCapacity();
             _model = new InventoryGridModel(rows, cols);
 
             foreach (var view in _views.Values)
@@ -92,6 +178,11 @@ namespace demo2.DND.InventoryTetris
                 if (view != null) Destroy(view.gameObject);
             }
             _views.Clear();
+
+            if (alignContainerTopLeft && container != null)
+            {
+                AlignContainerToTopLeft();
+            }
 
             if (autoFitToContainer)
             {
@@ -151,8 +242,8 @@ namespace demo2.DND.InventoryTetris
                         _views[inst] = view;
                         if (debugLogs)
                         {
-                            string name = inst.data != null ? inst.data.displayName : inst.instanceId;
-                            Debug.Log($"SpawnInstance success: {name} at ({x},{y})");
+                            string itemDisplayName = inst?.data?.displayName ?? inst?.instanceId ?? "<null>";
+                            Debug.Log($"SpawnInstance success: {itemDisplayName} at ({x},{y})");
                         }
                         return view;
                     }
@@ -161,8 +252,8 @@ namespace demo2.DND.InventoryTetris
 
             if (debugLogs)
             {
-                string name = inst.data != null ? inst.data.displayName : inst.instanceId;
-                Debug.LogWarning($"SpawnInstance failed (no space): {name}");
+                string itemDisplayName = inst?.data?.displayName ?? inst?.instanceId ?? "<null>";
+                Debug.LogWarning($"SpawnInstance failed (no space): {itemDisplayName}");
             }
             Debug.LogWarning("没有空间放置该实例物品");
             return null;
@@ -197,6 +288,10 @@ namespace demo2.DND.InventoryTetris
         public void RefreshLayoutSize()
         {
             if (container == null) return;
+            if (alignContainerTopLeft)
+            {
+                AlignContainerToTopLeft();
+            }
             if (autoFitToContainer)
             {
                 RecalculateCellSizeFromContainer();
@@ -452,17 +547,14 @@ namespace demo2.DND.InventoryTetris
         // ========================= 调试棋盘格 =========================
         private void RebuildDebugBoard()
         {
-            // 清理旧的
-            if (_debugBoard != null)
-            {
-                if (Application.isPlaying) Destroy(_debugBoard.gameObject);
-                else DestroyImmediate(_debugBoard.gameObject);
-                _debugBoard = null;
-            }
+            // 先尽力清理历史遗留的 DebugBoard（包括场景中可能遗留的同名子物体）
+            CleanupDebugBoard();
 
-            if (!showDebugChessboard || container == null) return;
+            // 只在运行时且开启调试时创建，避免在编辑器模式反复生成并保存到场景
+            if (!Application.isPlaying || !showDebugChessboard || container == null) return;
 
             var go = new GameObject("DebugBoard", typeof(RectTransform));
+            go.hideFlags = HideFlags.DontSave | HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild | HideFlags.HideInHierarchy;
             _debugBoard = go.GetComponent<RectTransform>();
             _debugBoard.SetParent(container, false);
             _debugBoard.anchorMin = new Vector2(0, 1);
@@ -477,6 +569,7 @@ namespace demo2.DND.InventoryTetris
                 for (int x = 0; x < cols; x++)
                 {
                     var cellGo = new GameObject($"cell_{x}_{y}", typeof(RectTransform), typeof(Image));
+                    cellGo.hideFlags = HideFlags.DontSave | HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild | HideFlags.HideInHierarchy;
                     var rt = cellGo.GetComponent<RectTransform>();
                     rt.SetParent(_debugBoard, false);
                     rt.anchorMin = new Vector2(0, 1);
@@ -492,6 +585,27 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
+        private void CleanupDebugBoard()
+        {
+            // 先销毁已有引用
+            if (_debugBoard != null)
+            {
+                if (Application.isPlaying) Destroy(_debugBoard.gameObject);
+                else DestroyImmediate(_debugBoard.gameObject);
+                _debugBoard = null;
+            }
+            // 再尝试按照名称查找并清理（防止因脚本重载/域重载导致引用丢失而残留）
+            if (container != null)
+            {
+                var t = container.Find("DebugBoard");
+                if (t != null)
+                {
+                    if (Application.isPlaying) Destroy(t.gameObject);
+                    else DestroyImmediate(t.gameObject);
+                }
+            }
+        }
+
         private void OnRectTransformDimensionsChange()
         {
             // 当本对象尺寸变化时（通常 container==自身），自适应模式下重算 cellSize
@@ -499,6 +613,8 @@ namespace demo2.DND.InventoryTetris
             {
                 RecalculateCellSizeFromContainer();
             }
+            // 调试棋盘自适应容器尺寸
+            RebuildDebugBoard();
         }
 
         private void RecalculateCellSizeFromContainer()
@@ -507,8 +623,8 @@ namespace demo2.DND.InventoryTetris
             var rect = container.rect; // 当前像素尺寸
             float availW = Mathf.Max(0f, rect.width - padding.x * 2f - Mathf.Max(0, cols - 1) * spacing.x);
             float availH = Mathf.Max(0f, rect.height - padding.y * 2f - Mathf.Max(0, rows - 1) * spacing.y);
-            float cx = cols > 0 ? availW / cols : 0f;
-            float cy = rows > 0 ? availH / rows : 0f;
+            float cx = availW / Mathf.Max(1, cols);
+            float cy = availH / Mathf.Max(1, rows);
 
             if (keepSquareCells)
             {
@@ -537,11 +653,40 @@ namespace demo2.DND.InventoryTetris
                 var item = kv.Key;
                 var view = kv.Value;
                 if (item == null || view == null) continue;
-                if (_model.TryGetPosition(item, out var pos))
+                if (_model != null && _model.TryGetPosition(item, out var pos))
                 {
-                    PositionViewAtGrid(view, pos.x, pos.y);
+                    // 直接更新尺寸与位置，避免额外的布局开销
+                    var rt = view.Rect != null ? view.Rect : view.GetComponent<RectTransform>();
+                    if (rt != null)
+                    {
+                        rt.sizeDelta = new Vector2(ItemPixelWidth(item), ItemPixelHeight(item));
+                        rt.anchoredPosition = GridToLocalTopLeft(pos.x, pos.y);
+                    }
                 }
             }
+        }
+
+        private void OnTransformParentChanged()
+        {
+            // 父对象改变后，若要求左上对齐且父有布局组件，重新校正一次，避免被居中。
+            if (alignContainerTopLeft && container != null)
+            {
+                FixParentLayoutAlignment();
+            }
+            // 同时清理/重建一次调试棋盘，避免层级变化导致重复
+            RebuildDebugBoard();
+        }
+
+        private void OnDisable()
+        {
+            // 退出运行或对象被禁用时清理调试棋盘，避免残留
+            CleanupDebugBoard();
+        }
+
+        private void OnDestroy()
+        {
+            // 保底清理
+            CleanupDebugBoard();
         }
     }
 }

@@ -11,9 +11,12 @@ namespace demo2.DND.InventoryTetris
     /// </summary>
     public class CharacterInventory : MonoBehaviour
     {
+        private const int MaxRows = 7;
+        private const int MaxCols = 15;
+
         [Header("网格容量（单位：格）")]
-        [Min(1)] public int rows = 6;
-        [Min(1)] public int cols = 10;
+        [Range(1, MaxRows)] public int rows = 6;
+        [Range(1, MaxCols)] public int cols = 10;
 
         [Header("初始道具（仅数据源，运行时自动转为 ItemInstance）")]
         [SerializeField] private List<ItemBaseSO> initialItems = new List<ItemBaseSO>();
@@ -38,8 +41,31 @@ namespace demo2.DND.InventoryTetris
 
         public IReadOnlyList<ItemInstance> Items => items;
 
+        private void ClampCapacity()
+        {
+            int newRows = Mathf.Clamp(rows, 1, MaxRows);
+            int newCols = Mathf.Clamp(cols, 1, MaxCols);
+            if (newRows != rows || newCols != cols)
+            {
+                rows = newRows;
+                cols = newCols;
+#if UNITY_EDITOR
+                Debug.Log($"[CharacterInventory] 已将网格容量约束到 Rows={rows} (<= {MaxRows}), Cols={cols} (<= {MaxCols})。");
+#endif
+            }
+        }
+
+        private void OnValidate()
+        {
+            // 编辑器中修改时也进行约束
+            ClampCapacity();
+        }
+
         private void Awake()
         {
+            // 运行时再次保障约束
+            ClampCapacity();
+
             // 将初始 SO 转为运行时实例
             if (initialItems != null)
             {

@@ -2958,12 +2958,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rows: 6
   cols: 12
-  cellSize: {x: 80, y: 80}
+  cellSize: {x: 67.200005, y: 67.200005}
   spacing: {x: 4, y: 4}
   padding: {x: 6, y: 6}
   container: {fileID: 1258497062}
   itemViewPrefab: {fileID: 5383637863661431341, guid: 8479633ae97cf824390431292d7ba03a, type: 3}
-  autoResizeContainer: 0
+  autoResizeContainer: 1
   autoFitToContainer: 1
   keepSquareCells: 1
   debugLogs: 1
@@ -2971,6 +2971,8 @@ MonoBehaviour:
   debugColorA: {r: 1, g: 1, b: 1, a: 0.4627451}
   debugColorB: {r: 0, g: 0, b: 0, a: 0.48235294}
   includeSpacingInItemSize: 1
+  alignContainerTopLeft: 1
+  forceParentLayoutUpperLeft: 1
 --- !u!114 &1258497064
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3479,6 +3481,10 @@ MonoBehaviour:
   statsUIBinder: {fileID: 1661983705}
   clearAndRebuildOnBind: 1
   bindOnStart: 1
+  useUniformCellSize: 1
+  uniformCellSize: {x: 60, y: 60}
+  uniformSpacing: {x: 4, y: 4}
+  uniformPadding: {x: 4, y: 4}
   autoSwitchToFirstReady: 1
   debugLogs: 1
   activeSourceIndex: 0
