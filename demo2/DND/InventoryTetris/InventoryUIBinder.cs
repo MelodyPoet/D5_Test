@@ -1,6 +1,8 @@
 ﻿// filepath: d:\UnityProject\Archive\Assets\demo2\DND\InventoryTetris\InventoryUIBinder.cs
 using UnityEngine;
 using System.Collections.Generic;
+using demo2.DND;
+using demo2.DND.HorizontalFormation;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -67,15 +69,22 @@ namespace demo2.DND.InventoryTetris
         {
             CharacterInventory.OnAnyInventoryReady += HandleInventoryReady;
             CharacterInventory.OnAnyInventoryDestroyed += HandleInventoryDestroyed;
+            // 订阅阵型生成事件（玩家动态实例生成后立即刷新属性UI）
+            HorizontalBattleFormationManager.OnPlayerFormationGenerated += HandlePlayerFormationGenerated;
+
             CollectExistingInventoriesInScene();
             SubscribeActive();
             UpdateStatsUI();
+
+            // 兜底：若事件已错过，尝试从当前阵型直接获取玩家角色并绑定
+            TryBindStatsFromExistingFormation();
         }
 
         private void OnDisable()
         {
             CharacterInventory.OnAnyInventoryReady -= HandleInventoryReady;
             CharacterInventory.OnAnyInventoryDestroyed -= HandleInventoryDestroyed;
+            HorizontalBattleFormationManager.OnPlayerFormationGenerated -= HandlePlayerFormationGenerated;
             UnsubscribeActive();
         }
 
@@ -279,35 +288,92 @@ namespace demo2.DND.InventoryTetris
         /// </summary>
         public void UpdateStatsUI()
         {
+            // 若未手动赋值，尝试自动查找一次（仅在本对象及其子物体中）
             if (statsUIBinder == null)
             {
-                return;
+                var all = GetComponentsInChildren<MonoBehaviour>(true);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    var mb = all[i];
+                    if (mb == null) continue;
+                    if (mb is ICharacterStatsUIBinder)
+                    {
+                        statsUIBinder = mb;
+                        if (debugLogs)
+                        {
+                            Debug.Log($"[InventoryUIBinder] 自动找到属性UI绑定器: {mb.GetType().Name} (GameObject={mb.gameObject.name})");
+                        }
+                        break;
+                    }
+                }
+                if (statsUIBinder == null)
+                {
+                    if (debugLogs) Debug.LogWarning("[InventoryUIBinder] 未找到属性UI绑定器（ICharacterStatsUIBinder）。已跳过属性刷新。");
+                    return;
+                }
             }
+
             var binder = statsUIBinder as ICharacterStatsUIBinder;
             if (binder == null)
             {
-                Debug.LogWarning("statsUIBinder 未实现 ICharacterStatsUIBinder，已忽略属性UI刷新。");
-                return;
+                // 尝试兜底自动查找一次（即便 statsUIBinder 被错误赋值为其他类型）
+                var all = GetComponentsInChildren<MonoBehaviour>(true);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    var mb = all[i];
+                    if (mb == null) continue;
+                    if (mb is ICharacterStatsUIBinder)
+                    {
+                        statsUIBinder = mb;
+                        binder = (ICharacterStatsUIBinder)mb;
+                        if (debugLogs)
+                        {
+                            Debug.Log($"[InventoryUIBinder] 修正：statsUIBinder 类型不匹配，已自动切换到 {mb.GetType().Name} (GameObject={mb.gameObject.name})");
+                        }
+                        break;
+                    }
+                }
+                if (binder == null)
+                {
+                    Debug.LogWarning("statsUIBinder 未实现 ICharacterStatsUIBinder，且未能在子物体中找到可用绑定器。已忽略属性UI刷新。");
+                    return;
+                }
             }
 
             var src = ActiveSource;
             CharacterStats stats = null;
             if (src != null)
             {
+                // 兼容多种挂载位置：自身 -> 父级 -> 子级（含未激活）
                 stats = src.GetComponent<CharacterStats>();
-                if (stats == null)
+                if (stats == null) stats = src.GetComponentInParent<CharacterStats>();
+                if (stats == null) stats = src.GetComponentInChildren<CharacterStats>(true);
+
+                if (stats == null && debugLogs)
                 {
-                    // 兼容：在父级上查找
-                    stats = src.GetComponentInParent<CharacterStats>();
+                    Debug.LogWarning($"[InventoryUIBinder] 未在 ActiveSource('{src.gameObject.name}') 的自身/父级/子级上找到 CharacterStats。");
                 }
             }
+            else if (debugLogs)
+            {
+                Debug.LogWarning("[InventoryUIBinder] UpdateStatsUI 时 ActiveSource 为空。");
+            }
+
             if (stats != null)
             {
                 binder.Bind(stats);
+                if (debugLogs)
+                {
+                    Debug.Log($"[InventoryUIBinder] 已绑定属性到 UI（角色: {stats.characterName}）。");
+                }
             }
             else
             {
                 binder.Unbind();
+                if (debugLogs)
+                {
+                    Debug.Log("[InventoryUIBinder] 未找到可绑定的 CharacterStats，已清空属性 UI。");
+                }
             }
         }
 
@@ -356,6 +422,125 @@ namespace demo2.DND.InventoryTetris
             bool ok = gridView.Remove(inst);
             ok = src.RemoveInstance(inst) && ok;
             return ok;
+        }
+
+        // 当玩家阵型根据 FormationContainer 生成完毕时触发
+        private void HandlePlayerFormationGenerated(List<CharacterStats> playerStats)
+        {
+            if (playerStats == null || playerStats.Count == 0)
+            {
+                if (debugLogs) Debug.LogWarning("[InventoryUIBinder] PlayerFormationGenerated 收到空列表");
+                // 清空属性 UI
+                var binder = statsUIBinder as ICharacterStatsUIBinder;
+                binder?.Unbind();
+                return;
+            }
+
+            BindStatsToPanel(SelectPreferred(playerStats));
+        }
+
+        private CharacterStats SelectPreferred(List<CharacterStats> list)
+        {
+            if (list == null) return null;
+            CharacterStats target = null;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var s = list[i];
+                if (s != null && s.currentHitPoints > 0) { target = s; break; }
+            }
+            if (target == null)
+            {
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i] != null) { target = list[i]; break; }
+                }
+            }
+            return target;
+        }
+
+        private void BindStatsToPanel(CharacterStats target)
+        {
+            // 自动定位 statsUIBinder（若未赋值）
+            if (statsUIBinder == null)
+            {
+                var all = GetComponentsInChildren<MonoBehaviour>(true);
+                foreach (var mb in all)
+                {
+                    if (mb is ICharacterStatsUIBinder) { statsUIBinder = mb; break; }
+                }
+            }
+            var uiBinder = statsUIBinder as ICharacterStatsUIBinder;
+            if (uiBinder == null)
+            {
+                // 若手动赋值类型不匹配，尝试自动查找一个可用的 ICharacterStatsUIBinder
+                var all = GetComponentsInChildren<MonoBehaviour>(true);
+                foreach (var mb in all)
+                {
+                    if (mb is ICharacterStatsUIBinder)
+                    {
+                        statsUIBinder = mb;
+                        uiBinder = (ICharacterStatsUIBinder)mb;
+                        if (debugLogs)
+                        {
+                            Debug.Log($"[InventoryUIBinder] 修正：statsUIBinder 类型不匹配，已自动切换到 {mb.GetType().Name} (GameObject={mb.gameObject.name})");
+                        }
+                        break;
+                    }
+                }
+                if (uiBinder == null)
+                {
+                    if (debugLogs) Debug.LogWarning("[InventoryUIBinder] 未找到或未实现 ICharacterStatsUIBinder 的属性面板组件，跳过绑定。");
+                    return;
+                }
+            }
+
+            if (target != null)
+            {
+                uiBinder.Bind(target);
+                if (debugLogs)
+                {
+                    Debug.Log($"[InventoryUIBinder] BindStatsToPanel -> {target.characterName}");
+                }
+            }
+            else
+            {
+                uiBinder.Unbind();
+                if (debugLogs)
+                {
+                    Debug.Log("[InventoryUIBinder] BindStatsToPanel -> target 空，已清空属性显示。");
+                }
+            }
+        }
+
+        // 兜底：若 OnPlayerFormationGenerated 事件错过，尝试直接从场景中获取玩家角色并绑定
+        private void TryBindStatsFromExistingFormation()
+        {
+            try
+            {
+                var all = FindObjectsByType<CharacterStats>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (all == null || all.Length == 0) return;
+
+                var list = new List<CharacterStats>(all.Length);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    var s = all[i];
+                    if (s == null) continue;
+                    if (!s.gameObject.scene.IsValid()) continue;
+                    // 仅绑定玩家侧可启用以下过滤
+                    // if (s.battleSide != demo2.DND.BattleSide.Player) continue;
+                    list.Add(s);
+                }
+
+                var selected = SelectPreferred(list);
+                if (selected != null)
+                {
+                    BindStatsToPanel(selected);
+                }
+            }
+            catch
+            {
+                // 忽略兜底扫描过程中的异常
+            }
         }
     }
 }

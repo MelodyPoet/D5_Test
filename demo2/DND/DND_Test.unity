@@ -3437,6 +3437,7 @@ GameObject:
   - component: {fileID: 1604332383}
   - component: {fileID: 1604332384}
   - component: {fileID: 1604332385}
+  - component: {fileID: 1604332386}
   m_Layer: 5
   m_Name: UI_Root
   m_TagString: Untagged
@@ -3478,7 +3479,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gridView: {fileID: 1258497063}
-  statsUIBinder: {fileID: 1661983705}
+  statsUIBinder: {fileID: 1604332384}
   clearAndRebuildOnBind: 1
   bindOnStart: 1
   useUniformCellSize: 1
@@ -3506,6 +3507,31 @@ MonoBehaviour:
   characterPanel: {fileID: 1661983703}
   startState: 0
   enableEscClose: 1
+--- !u!114 &1604332386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1604332382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6320c1049c44574b30b2ad617fe9889, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  nameText: {fileID: 2142854464}
+  classText: {fileID: 1872573108}
+  levelText: {fileID: 1272582034}
+  hpText: {fileID: 2140858326}
+  acText: {fileID: 1566784918}
+  strText: {fileID: 108223279}
+  dexText: {fileID: 1659868249}
+  conText: {fileID: 1629419056}
+  intText: {fileID: 2079605178}
+  wisText: {fileID: 1484244906}
+  chaText: {fileID: 571751640}
+  statusText: {fileID: 71517479}
+  debugLogs: 1
 --- !u!1 &1629419054
 GameObject:
   m_ObjectHideFlags: 0
@@ -3781,7 +3807,6 @@ GameObject:
   - component: {fileID: 1661983704}
   - component: {fileID: 1661983706}
   - component: {fileID: 1661983705}
-  - component: {fileID: 1661983707}
   m_Layer: 5
   m_Name: CharacterPanel
   m_TagString: Untagged
@@ -3858,30 +3883,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1661983703}
   m_CullTransparentMesh: 1
---- !u!114 &1661983707
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1661983703}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a6320c1049c44574b30b2ad617fe9889, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  nameText: {fileID: 2142854464}
-  classText: {fileID: 1872573108}
-  levelText: {fileID: 1272582034}
-  hpText: {fileID: 2140858326}
-  acText: {fileID: 1566784918}
-  strText: {fileID: 108223279}
-  dexText: {fileID: 1659868249}
-  conText: {fileID: 1629419056}
-  intText: {fileID: 2079605178}
-  wisText: {fileID: 1484244906}
-  chaText: {fileID: 571751640}
-  statusText: {fileID: 71517479}
 --- !u!1 &1701643021
 GameObject:
   m_ObjectHideFlags: 0

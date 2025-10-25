@@ -2,6 +2,7 @@
 using UnityEngine;
 using Spine.Unity;
 using DG.Tweening;
+using System;
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -54,6 +55,9 @@ namespace demo2.DND.HorizontalFormation
         private List<GameObject> activePlayerCharacters = new List<GameObject>();
         private List<GameObject> activeEnemyCharacters = new List<GameObject>();
         private int _currentWaveIndex = 0;
+
+        // 新增：发布“玩家阵型生成完成”事件，携带当前玩家角色的 CharacterStats 列表
+        public static event Action<List<demo2.DND.CharacterStats>> OnPlayerFormationGenerated;
 
         public int GetEnemyWaveCount()
         {
@@ -127,18 +131,15 @@ namespace demo2.DND.HorizontalFormation
                 SetPlayerFormationWalkingState();
                 Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
                 // 新增：收集所有非null角色并初始化血条UI
-                var playerStats = new List<CharacterStats>();
+                var playerStats = new List<demo2.DND.CharacterStats>();
                 foreach (var go in activePlayerCharacters)
                 {
                     if (go != null)
                     {
-                        var stats = go.GetComponent<CharacterStats>();
+                        var stats = go.GetComponent<demo2.DND.CharacterStats>();
                         if (stats != null) playerStats.Add(stats);
                     }
                 }
-
-                // 移除立即播放走路动画，改为由外部在背景滚动启动时同时调用
-                // SetPlayerFormationWalkingState();
 
                 if (HealthBarUIManager.Instance != null)
                 {
@@ -147,6 +148,16 @@ namespace demo2.DND.HorizontalFormation
                 else
                 {
                     Debug.LogWarning("HealthBarUIManager.Instance 为 null，无法初始化玩家血条 UI。请确保场景中有该单例。参考 HorizontalBattleFormationManager.CreateHealthBarForCharacter");
+                }
+
+                // 新增：广播事件，通知其他系统（如属性面板）玩家阵型已生成
+                try
+                {
+                    OnPlayerFormationGenerated?.Invoke(playerStats);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"OnPlayerFormationGenerated 事件触发异常: {ex}");
                 }
             }
             catch (System.Exception ex)

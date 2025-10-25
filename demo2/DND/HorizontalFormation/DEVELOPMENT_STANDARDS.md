@@ -485,3 +485,5 @@ XXX_Old.cs           - 旧版本文件
 - 物品来源：
   - 初始物品：仅由各角色的 CharacterInventory.initialItems 决定（本规范）。
   - 运行时新增：通过 InventoryUIBinder.TryAddNew(ItemBaseSO) 尝试落地→成功后再加入数据源；失败不改变数据源。
+
+角色默认属性+物品以及职业专长/技能等加成规则
