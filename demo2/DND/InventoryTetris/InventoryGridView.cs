@@ -70,6 +70,26 @@ namespace demo2.DND.InventoryTetris
         public InventoryGridModel Model => _model;
         public RectTransform Rect => _rect;
 
+        [Header("数据源（由 Binder 赋值）")]
+        [Tooltip("当前网格绑定的角色背包实例，供物品视图查找装备组件与属性组件。")]
+        [HideInInspector] public CharacterInventory SourceInventory;
+
+        [Tooltip("可选：显式指定角色的装备组件。若设置，则优先使用该引用，而不是从 SourceInventory 层级中自动查找。")]
+        [HideInInspector] public CharacterEquipment OverrideEquipment;
+
+        public CharacterEquipment SourceEquipment
+        {
+            get
+            {
+                if (OverrideEquipment != null) return OverrideEquipment;
+                if (SourceInventory == null) return null;
+                var eq = SourceInventory.GetComponent<CharacterEquipment>()
+                         ?? SourceInventory.GetComponentInParent<CharacterEquipment>()
+                         ?? SourceInventory.GetComponentInChildren<CharacterEquipment>(true);
+                return eq;
+            }
+        }
+
         private void Awake()
         {
             ClampCapacity();
@@ -353,10 +373,29 @@ namespace demo2.DND.InventoryTetris
             if (!_model.Remove(item)) return false;
             if (_views.TryGetValue(item, out var v))
             {
-                if (v != null) Destroy(v.gameObject);
+                if (v != null)
+                {
+                    Destroy(v.gameObject);
+                }
                 _views.Remove(item);
             }
             return true;
+        }
+
+        /// <summary>
+        /// 刷新所有条目的“已装备”标签。
+        /// </summary>
+        public void RefreshAllEquipLabels()
+        {
+            if (_views == null || _views.Count == 0) return;
+            foreach (var kv in _views)
+            {
+                var view = kv.Value;
+                if (view != null)
+                {
+                    view.RefreshEquipLabel();
+                }
+            }
         }
 
         /// <summary>
@@ -373,6 +412,66 @@ namespace demo2.DND.InventoryTetris
             return ok;
         }
 
+        /// <summary>
+        /// 获取指针在网格坐标系下（相对容器左上，扣除 padding 后）的像素偏移。
+        /// 返回 true 表示转换成功；lx/ly 可为负或超出内容范围。
+        /// </summary>
+        public bool TryGetPointerGridLocal(PointerEventData eventData, out float lx, out float ly)
+        {
+            lx = ly = 0f;
+            if (container == null || eventData == null)
+            {
+                if (debugLogs)
+                {
+                    Debug.Log("[GridView] TryGetPointerGridLocal failed: container or eventData is null");
+                }
+                return false;
+            }
+
+            // 选择相机
+            Camera cam = null;
+            var canvas = container.GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                {
+                    cam = null;
+                }
+                else
+                {
+                    // 优先用 Canvas.worldCamera（比 eventData 上的相机更可靠）
+                    cam = canvas.worldCamera;
+                    if (cam == null)
+                    {
+                        cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
+                        if (cam == null) cam = Camera.main;
+                    }
+                }
+            }
+            else
+            {
+                cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
+                if (cam == null) cam = Camera.main;
+            }
+
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(container, eventData.position, cam, out var local))
+            {
+                if (debugLogs)
+                {
+                    Debug.Log("[GridView] TryGetPointerGridLocal failed: ScreenPointToLocalPointInRectangle returned false");
+                }
+                return false;
+            }
+
+            var rect = container.rect;
+            float fromLeft = local.x + rect.width * container.pivot.x;
+            float fromTop  = rect.height * (1f - container.pivot.y) - local.y;
+
+            lx = fromLeft - padding.x;
+            ly = fromTop  - padding.y;
+            return true;
+        }
+
         // 内部：创建并绑定物品视图
         private InventoryItemView CreateView(ItemInstance item)
         {
@@ -385,18 +484,20 @@ namespace demo2.DND.InventoryTetris
             }
             if (view == null)
             {
-                Debug.LogError("itemViewPrefab 缺少 InventoryItemView 组件（根或子节点均未找到）。请在预制体根对象添加该组件，并在其字段中绑定 bgImage/iconImage。");
+                Debug.LogError("itemViewPrefab 缺少 InventoryItemView 组件（根或子节点均未找到）。请在条目预制体根对象添加该组件，并在其字段中绑定 bgImage/iconImage。");
                 Destroy(go);
                 return null;
             }
 
             view.Bind(item, this);
+            // 新增：Bind 后立即刷新一次“已装备”标签，避免首帧未显示
+            view.RefreshEquipLabel();
 
             // 视图使用左上对齐定位（直接获取 RectTransform，避免依赖 InventoryItemView.Awake 初始化时序）
             var rt = view.GetComponent<RectTransform>();
             if (rt == null)
             {
-                Debug.LogError("InventoryItemView 缺少 RectTransform 组件。");
+                Debug.LogError("[InventoryGridView] 无法定位视图：缺少 RectTransform。");
                 Destroy(go);
                 return null;
             }
@@ -449,6 +550,17 @@ namespace demo2.DND.InventoryTetris
                     Debug.LogWarning($"[InventoryGridView] 物品 '{itemName}' 的 icon 为空，使用预制体默认图。");
                 }
             }
+
+            // 关键：确保至少有一个 Image 可射线，优先 iconImage
+            if (view.iconImage != null)
+            {
+                view.iconImage.raycastTarget = true;
+            }
+            else if (view.bgImage != null)
+            {
+                view.bgImage.raycastTarget = true;
+            }
+
             return view;
         }
 
@@ -483,44 +595,84 @@ namespace demo2.DND.InventoryTetris
         public bool PointerToGrid(PointerEventData eventData, out int x, out int y)
         {
             x = -1; y = -1;
-            // 选择相机：Overlay 传 null；Camera/World 使用事件相机或主相机
-            Camera cam = null;
-            var canvas = container != null ? container.GetComponentInParent<Canvas>() : null;
-            if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            if (container == null || eventData == null)
             {
-                cam = null; // Overlay 必须传 null
+                if (debugLogs)
+                {
+                    Debug.Log("[GridView] PointerToGrid failed: container or eventData is null");
+                }
+                return false;
+            }
+
+            // 选择相机：Overlay 传 null；其他模式优先 Canvas.worldCamera
+            Camera cam = null;
+            var canvas = container.GetComponentInParent<Canvas>();
+            if (canvas != null)
+            {
+                if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                {
+                    cam = null; // Overlay 必须传 null
+                }
+                else
+                {
+                    cam = canvas.worldCamera;
+                    if (cam == null)
+                    {
+                        cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
+                        if (cam == null) cam = Camera.main;
+                    }
+                }
             }
             else
             {
-                if (eventData != null)
-                {
-                    cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
-                }
+                cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : eventData.enterEventCamera;
                 if (cam == null) cam = Camera.main;
             }
 
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(container, eventData.position, cam, out var local))
+            {
+                if (debugLogs)
+                {
+                    Debug.Log("[GridView] PointerToGrid failed: ScreenPointToLocalPointInRectangle returned false");
+                }
                 return false;
+            }
 
-            float halfW = container.rect.width * 0.5f;
-            float halfH = container.rect.height * 0.5f;
-            float fromLeft = local.x + halfW;
-            float fromTop  = halfH - local.y;
+            var rect = container.rect;
+            float fromLeft = local.x + rect.width * container.pivot.x;
+            float fromTop  = rect.height * (1f - container.pivot.y) - local.y;
 
             float lx = fromLeft - padding.x;
             float ly = fromTop  - padding.y;
 
-            if (debugLogs)
-            {
-                Debug.Log($"[GridView] Pointer local=({local.x:F1},{local.y:F1}) fromLeftTop=({fromLeft:F1},{fromTop:F1}) afterPadding=({lx:F1},{ly:F1}) cam={(cam==null?"null":cam.name)}");
-            }
-
-            if (lx < 0 || ly < 0) return false;
             float pitchX = cellSize.x + spacing.x;
             float pitchY = cellSize.y + spacing.y;
+
+            if (lx < 0 || ly < 0)
+            {
+                if (debugLogs)
+                {
+                    Debug.Log($"[GridView] PointerToGrid out: negative (lx,ly)=({lx:F1},{ly:F1}), local=({local.x:F1},{local.y:F1}), pivot={container.pivot}, rect={rect.size}");
+                }
+                return false;
+            }
+
             x = Mathf.FloorToInt(lx / pitchX);
             y = Mathf.FloorToInt(ly / pitchY);
-            if (x < 0 || y < 0 || x >= cols || y >= rows) return false;
+
+            if (x < 0 || y < 0 || x >= cols || y >= rows)
+            {
+                if (debugLogs)
+                {
+                    Debug.Log($"[GridView] PointerToGrid out: computed cell=({x},{y}) outside [0..{cols-1}], [0..{rows-1}] from (lx,ly)=({lx:F1},{ly:F1}) pitch=({pitchX:F1},{pitchY:F1})");
+                }
+                return false;
+            }
+
+            if (debugLogs)
+            {
+                Debug.Log($"[GridView] Pointer local=({local.x:F1},{local.y:F1}) fromLeftTop=({fromLeft:F1},{fromTop:F1}) afterPadding=({lx:F1},{ly:F1}) -> cell=({x},{y}) cam={(cam==null?"null":cam.name)}");
+            }
             return true;
         }
 

@@ -1,7 +1,8 @@
 ﻿// filepath: d:\UnityProject\Archive\Assets\demo2\DND\InventoryTetris\InventoryUIBinder.cs
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using System.Collections.Generic;
-using demo2.DND;
 using demo2.DND.HorizontalFormation;
 
 namespace demo2.DND.InventoryTetris
@@ -45,13 +46,22 @@ namespace demo2.DND.InventoryTetris
         [Tooltip("当自动收集到第一个可用背包，且当前无活动来源时，是否自动切换为该背包。")]
         public bool autoSwitchToFirstReady = true;
 
+        [Header("自动装备（可选)")]
+        [Tooltip("启用后，在将物品落地到网格前，如果角色装备栏的主手/护甲/盾牌为空，将自动把背包中的第一件同类物品装备到对应槽位（仅当 CanEquip 为真）。")]
+        public bool autoEquipOnBind;
+
         [Header("调试（可选）")]
         public bool debugLogs;
 
+        // Navigation buttons removed: navigation is now owned by UITabSwitcher (single-responsibility).
+        // nextButton/prevButton and acceptExternalNavigation have been removed intentionally.
+
         // 内部数据源：仅运行时维护
-        private readonly List<CharacterInventory> sourceInventories = new List<CharacterInventory>();
+        private List<CharacterInventory> sourceInventories = new List<CharacterInventory>();
         public IReadOnlyList<CharacterInventory> Sources => sourceInventories;
         public int activeSourceIndex;
+
+        private bool autoSwitchConsumed; // prevent repeated auto-switch when multiple inventories become ready at runtime
 
         private CharacterInventory subscribedSource; // 当前已订阅事件的来源
 
@@ -59,25 +69,73 @@ namespace demo2.DND.InventoryTetris
         {
             get
             {
-                if (sourceInventories.Count == 0) return null;
+                if (sourceInventories == null || sourceInventories.Count == 0) return null;
                 if (activeSourceIndex < 0 || activeSourceIndex >= sourceInventories.Count) return null;
                 return sourceInventories[activeSourceIndex];
             }
         }
 
+        private GraphicRaycaster debugRaycaster;
+        private EventSystem debugEventSystem;
+
+
         private void OnEnable()
         {
-            CharacterInventory.OnAnyInventoryReady += HandleInventoryReady;
-            CharacterInventory.OnAnyInventoryDestroyed += HandleInventoryDestroyed;
-            // 订阅阵型生成事件（玩家动态实例生成后立即刷新属性UI）
+            // Subscribe to formation events first
             HorizontalBattleFormationManager.OnPlayerFormationGenerated += HandlePlayerFormationGenerated;
 
+            // Collect any inventories already in the scene and initialize UI state
+            // Navigation UI is handled by UITabSwitcher; InventoryUIBinder no longer auto-binds Next/Prev buttons.
             CollectExistingInventoriesInScene();
             SubscribeActive();
             UpdateStatsUI();
 
-            // 兜底：若事件已错过，尝试从当前阵型直接获取玩家角色并绑定
             TryBindStatsFromExistingFormation();
+
+            // Now subscribe to CharacterInventory runtime events. Doing this after the initial
+            // collection avoids races where OnAnyInventoryReady fires while we're still collecting
+            // and causes duplicate or out-of-order entries.
+            CharacterInventory.OnAnyInventoryReady += HandleInventoryReady;
+            CharacterInventory.OnAnyInventoryDestroyed += HandleInventoryDestroyed;
+
+            // 初始化用于 UI 光���检测的组件引用（用于调试点击被哪个 UI 元素拦截）
+            debugEventSystem = EventSystem.current;
+            debugRaycaster = GetComponentInParent<GraphicRaycaster>() ?? FindObjectOfType<GraphicRaycaster>();
+
+            // 调试：输出本实例信息，便于在控制台追踪具体被绑定的 InventoryUIBinder 实例
+            // Always log a minimal OnEnable summary to help runtime diagnosis (no need to flip debugLogs)
+            var goName = gameObject != null ? gameObject.name : "<null>";
+            var srcCount = sourceInventories != null ? sourceInventories.Count : 0;
+            Debug.Log($"[InventoryUIBinder] OnEnable summary -> GO={goName}, sourcesCount={srcCount}");
+            if (debugLogs)
+            {
+                var gridName = gridView != null && gridView.gameObject != null ? gridView.gameObject.name : "<null>";
+                Debug.Log($"[InventoryUIBinder] OnEnable -> instanceID={this.GetInstanceID()}, activeInHierarchy={(gameObject!=null?gameObject.activeInHierarchy:false)}, gridView={gridName}, collectedSources={srcCount}");
+            }
+
+            // If nothing collected at OnEnable, log what CharacterInventory components actually exist in the scene
+            if (sourceInventories == null || sourceInventories.Count == 0)
+            {
+                try
+                {
+                    var found = FindObjectsByType<CharacterInventory>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    int foundCount = found != null ? found.Length : 0;
+                    Debug.Log($"[InventoryUIBinder] OnEnable scan -> found {foundCount} CharacterInventory components in scenes (including inactive)");
+                    if (found != null)
+                    {
+                        for (int i = 0; i < found.Length; i++)
+                        {
+                            var inv = found[i];
+                            if (inv == null) continue;
+                            Debug.Log($"[InventoryUIBinder]   scanned[{i}] = {DescribeInventory(inv)}");
+                        }
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"[InventoryUIBinder] OnEnable scan exception: {ex}");
+                }
+            }
         }
 
         private void OnDisable()
@@ -103,6 +161,31 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
+        private void Update()
+        {
+            if (!debugLogs) return;
+            // 调试模式下，在每次鼠标左键按下时输出光线检测结果，帮助判断是否有 UI 遮挡
+            if (Input.GetMouseButtonDown(0))
+            {
+                if (debugEventSystem == null) debugEventSystem = EventSystem.current;
+                var ped = new PointerEventData(debugEventSystem) { position = Input.mousePosition };
+                var results = new List<RaycastResult>();
+                if (debugRaycaster == null) debugRaycaster = FindObjectOfType<GraphicRaycaster>();
+                if (debugRaycaster != null)
+                {
+                    debugRaycaster.Raycast(ped, results);
+                }
+                Debug.Log($"[UIRaycast] MouseDown at {ped.position}, hits={results.Count}");
+                for (int i = 0; i < results.Count; i++)
+                {
+                    var r = results[i];
+                    Debug.Log($"[UIRaycast] #{i}: {r.gameObject.name} (module={r.module?.GetType().Name}, worldPos={r.worldPosition})");
+                }
+
+                // Navigation handled externally; no overlap-invoke fallback here.
+            }
+        }
+
         // 收集当前场景中已存在的 CharacterInventory（包含已激活/未激活）
         private void CollectExistingInventoriesInScene()
         {
@@ -114,11 +197,39 @@ namespace demo2.DND.InventoryTetris
                 if (inv == null) continue;
                 if (!inv.gameObject.scene.IsValid()) continue; // 过滤预制体资源
                 if (sourceInventories.Contains(inv)) continue;
+                // Avoid adding multiple CharacterInventory components from the same GameObject
+                bool sameGoExists = false;
+                for (int j = 0; j < sourceInventories.Count; j++)
+                {
+                    if (sourceInventories[j].gameObject == inv.gameObject)
+                    {
+                        sameGoExists = true;
+                        break;
+                    }
+                }
+                if (sameGoExists)
+                {
+                    if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] Skipping additional CharacterInventory component on same GameObject: {DescribeInventory(inv)}");
+                    continue;
+                }
                 sourceInventories.Add(inv);
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] Collected inventory '{inv.gameObject.name}' (scene={inv.gameObject.scene.name}) -> {DescribeInventory(inv)}");
+            }
+            if (debugLogs)
+            {
+                Debug.Log($"[InventoryUIBinder] CollectExistingInventoriesInScene -> totalCollected={sourceInventories.Count}, hadAnyBefore={hadAny}");
+                if (sourceInventories.Count > 0)
+                {
+                    for (int i = 0; i < sourceInventories.Count; i++)
+                    {
+                        Debug.Log($"[InventoryUIBinder]   source[{i}] = {DescribeInventory(sourceInventories[i])}");
+                    }
+                }
             }
             if (!hadAny && autoSwitchToFirstReady && sourceInventories.Count > 0)
             {
                 SetActiveSourceIndex(0);
+                autoSwitchConsumed = true;
             }
         }
 
@@ -126,16 +237,36 @@ namespace demo2.DND.InventoryTetris
         {
             if (inv == null) return;
             if (!inv.gameObject.scene.IsValid()) return;
-            if (!sourceInventories.Contains(inv))
+            if (!sourceInventories.Contains(inv)
+            )
             {
-                sourceInventories.Add(inv);
-                if (debugLogs) Debug.Log($"[InventoryUIBinder] 收集到运行时背包: {inv.name}");
+                // Avoid adding additional CharacterInventory components from the same GameObject
+                bool sameGoExists = false;
+                for (int i = 0; i < sourceInventories.Count; i++)
+                {
+                    if (sourceInventories[i].gameObject == inv.gameObject)
+                    {
+                        sameGoExists = true;
+                        break;
+                    }
+                }
+                if (sameGoExists)
+                {
+                    if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] HandleInventoryReady: an inventory component on the same GameObject already exists, skipping: {DescribeInventory(inv)}");
+                }
+                else
+                {
+                    sourceInventories.Add(inv);
+                    if (debugLogs) Debug.Log($"[InventoryUIBinder] 收集到运行时背包: {DescribeInventory(inv)}");
+                }
             }
 
-            // 若目前没有活动来源且允许自动切换到第一个
-            if (sourceInventories.Count == 1 && autoSwitchToFirstReady)
+            if (debugLogs) Debug.Log($"[InventoryUIBinder] HandleInventoryReady -> ActiveSourceName={(ActiveSource!=null?DescribeInventory(ActiveSource):"<null>" )}, inv={DescribeInventory(inv)}");
+
+            if (sourceInventories.Count == 1 && autoSwitchToFirstReady && !autoSwitchConsumed)
             {
                 SetActiveSourceIndex(0);
+                autoSwitchConsumed = true;
                 return;
             }
 
@@ -157,7 +288,6 @@ namespace demo2.DND.InventoryTetris
             if (wasActive)
             {
                 UnsubscribeActive();
-                // 重新夹紧索引并订阅/刷新
                 if (sourceInventories.Count == 0)
                 {
                     activeSourceIndex = 0;
@@ -176,23 +306,29 @@ namespace demo2.DND.InventoryTetris
         {
             var src = ActiveSource;
             if (src == null) return;
-            if (subscribedSource == src) return;
+            if (subscribedSource == src)
+            {
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] SubscribeActive -> already subscribed to '{DescribeInventory(src)}'");
+                return;
+            }
             UnsubscribeActive();
             src.OnInventoryChanged += RefreshFromInventory;
             subscribedSource = src;
+            if (debugLogs) Debug.Log($"[InventoryUIBinder] Subscribed to ActiveSource '{DescribeInventory(src)}'");
         }
 
         private void UnsubscribeActive()
         {
             if (subscribedSource != null)
             {
-                subscribedSource.OnInventoryChanged -= RefreshFromInventory;
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] Unsubscribing from '{subscribedSource.gameObject.name}'");
+                try { subscribedSource.OnInventoryChanged -= RefreshFromInventory; } catch (System.Exception ex) { if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] Exception while unsubscribing: {ex}"); }
                 subscribedSource = null;
             }
         }
 
         /// <summary>
-        /// 在多来源列表中设置活动索引。
+        /// 在��来源列表中设置活动索引。
         /// </summary>
         public void SetActiveSourceIndex(int index)
         {
@@ -201,23 +337,54 @@ namespace demo2.DND.InventoryTetris
                 if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] SetActiveSourceIndex invalid: {index}");
                 return;
             }
+
+            // 新增调试日志：记录切换请求与当前状态
+            if (debugLogs) Debug.Log($"[SetActiveSourceIndex] 切换请求 -> index={index}, currentIndex={activeSourceIndex}, sourcesCount={sourceInventories.Count}");
+
             if (activeSourceIndex == index && subscribedSource == ActiveSource)
             {
                 RefreshFromInventory();
                 UpdateStatsUI();
                 return;
             }
+
             UnsubscribeActive();
+            var prevActive = ActiveSource;
             activeSourceIndex = index;
             SubscribeActive();
+
+            if (debugLogs) Debug.Log($"[SetActiveSourceIndex] 切换完成 -> newActive={DescribeInventory(ActiveSource)}");
+
+            // If the active source did not actually change (e.g. two entries point to same GameObject), dump details
+            if (prevActive == ActiveSource)
+            {
+                if (debugLogs) Debug.LogWarning("[SetActiveSourceIndex] ActiveSource did not change after switching index — possible duplicate entries or same GameObject present multiple times.");
+                if (debugLogs)
+                {
+                    for (int i = 0; i < sourceInventories.Count; i++)
+                    {
+                        Debug.Log($"[SetActiveSourceIndex]   source[{i}] = {DescribeInventory(sourceInventories[i])}");
+                    }
+                }
+            }
+
+            // Also dump full sources list for clarity
+            if (debugLogs)
+            {
+                for (int i = 0; i < sourceInventories.Count; i++)
+                {
+                    Debug.Log($"[SetActiveSourceIndex]   source[{i}] = {DescribeInventory(sourceInventories[i])}");
+                }
+            }
+
             RefreshFromInventory();
             UpdateStatsUI();
         }
 
         /// <summary>
-        /// 将数据源中的 ItemInstance 按首个可用位置落地到网格；
+        /// �����据源中的 ItemInstance 按首个可用位置落地到网格；
         /// 若 clearAndRebuildOnBind=true，会先清空现有UI再逐一放置，确保映射一致性。
-        /// 现已支持按照“活动来源”的 rows/cols 自动配置 GridView。
+        /// 现已支持按照“活动来源”的 rows/cols ���动配置 GridView。
         /// </summary>
         public void RefreshFromInventory()
         {
@@ -228,7 +395,6 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
-            // 若当前来源不是场景实例（可能是误填了预制体资产），跳过刷新，等待自动收集到真正的场景实例
             if (!src.gameObject.scene.IsValid())
             {
                 if (debugLogs)
@@ -238,7 +404,6 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
-            // 统一背包表现：固定格子尺寸（保持图标大小一致），只随 rows/cols 改变内容范围
             if (useUniformCellSize && gridView != null)
             {
                 gridView.autoFitToContainer = false;
@@ -248,7 +413,23 @@ namespace demo2.DND.InventoryTetris
                 gridView.padding = uniformPadding;
             }
 
-            // 确保 GridView 行列与来源容量一致
+            gridView.SourceInventory = src;
+            // 显式指定装备组件，避免 UI 侧 eq 解析失败
+            var eq = src.GetComponent<CharacterEquipment>()
+                     ?? src.GetComponentInParent<CharacterEquipment>()
+                     ?? src.GetComponentInChildren<CharacterEquipment>(true);
+            gridView.OverrideEquipment = eq;
+            if (debugLogs && eq == null)
+            {
+                Debug.LogWarning("[InventoryUIBinder] 未找到 CharacterEquipment（src 自身/父/子），UI 将无法显示‘已装备’状态。");
+            }
+
+            // 可选：在生成 UI 之前为空槽位自动装备一件同类物品
+            if (autoEquipOnBind)
+            {
+                TryAutoEquipDefaults(src);
+            }
+
             if (gridView.rows != src.rows || gridView.cols != src.cols)
             {
                 gridView.Configure(src.rows, src.cols);
@@ -258,7 +439,6 @@ namespace demo2.DND.InventoryTetris
                 gridView.ClearAndRebuild();
             }
 
-            // 根据当前模式刷新容器尺寸或自适应 cell
             gridView.RefreshLayoutSize();
 
             var items = src.Items;
@@ -281,16 +461,20 @@ namespace demo2.DND.InventoryTetris
                     Debug.Log(view != null ? $"[InventoryUIBinder] Spawned: {itemName}" : $"[InventoryUIBinder] Spawn failed: {itemName}");
                 }
             }
+
+            // 新增：统一刷新一次“已装备”标签，避免启动顺序竞态导致首次不显示
+            gridView.RefreshAllEquipLabels();
         }
 
         /// <summary>
-        /// 可选：根据当前活动来源所在对象上的 CharacterStats 刷新属性 UI。
+        /// 可��：根据当前活动来源所在对象上的 CharacterStats 刷新属性 UI。
         /// </summary>
         public void UpdateStatsUI()
         {
             // 若未手动赋值，尝试自动查找一次（仅在本对象及其子物体中）
             if (statsUIBinder == null)
             {
+                if (debugLogs) Debug.Log("[UpdateStatsUI] statsUIBinder 为 null，尝试自动查找 ICharacterStatsUIBinder。");
                 var all = GetComponentsInChildren<MonoBehaviour>(true);
                 for (int i = 0; i < all.Length; i++)
                 {
@@ -301,14 +485,14 @@ namespace demo2.DND.InventoryTetris
                         statsUIBinder = mb;
                         if (debugLogs)
                         {
-                            Debug.Log($"[InventoryUIBinder] 自动找到属性UI绑定器: {mb.GetType().Name} (GameObject={mb.gameObject.name})");
+                            Debug.Log($"[UpdateStatsUI] 自动绑定 statsUIBinder: {mb.GetType().Name} (GameObject={mb.gameObject.name})");
                         }
                         break;
                     }
                 }
                 if (statsUIBinder == null)
                 {
-                    if (debugLogs) Debug.LogWarning("[InventoryUIBinder] 未找到属性UI绑定器（ICharacterStatsUIBinder）。已跳过属性刷新。");
+                    if (debugLogs) Debug.LogWarning("[UpdateStatsUI] 未找到属性UI绑定器（ICharacterStatsUIBinder）。已跳过属性刷新。");
                     return;
                 }
             }
@@ -316,6 +500,7 @@ namespace demo2.DND.InventoryTetris
             var binder = statsUIBinder as ICharacterStatsUIBinder;
             if (binder == null)
             {
+                if (debugLogs) Debug.LogWarning("[UpdateStatsUI] statsUIBinder 类型不匹配，尝试在子物体中修正绑定。");
                 // 尝试兜底自动查找一次（即便 statsUIBinder 被错误赋值为其他类型）
                 var all = GetComponentsInChildren<MonoBehaviour>(true);
                 for (int i = 0; i < all.Length; i++)
@@ -328,7 +513,7 @@ namespace demo2.DND.InventoryTetris
                         binder = (ICharacterStatsUIBinder)mb;
                         if (debugLogs)
                         {
-                            Debug.Log($"[InventoryUIBinder] 修正：statsUIBinder 类型不匹配，已自动切换到 {mb.GetType().Name} (GameObject={mb.gameObject.name})");
+                            Debug.Log($"[UpdateStatsUI] 修正：statsUIBinder 已切换到 {mb.GetType().Name} (GameObject={mb.gameObject.name})");
                         }
                         break;
                     }
@@ -348,6 +533,8 @@ namespace demo2.DND.InventoryTetris
                 stats = src.GetComponent<CharacterStats>();
                 if (stats == null) stats = src.GetComponentInParent<CharacterStats>();
                 if (stats == null) stats = src.GetComponentInChildren<CharacterStats>(true);
+
+                if (debugLogs) Debug.Log($"[UpdateStatsUI] ActiveSource={src.gameObject.name}, FoundStats={(stats!=null?stats.characterName:"null")}");
 
                 if (stats == null && debugLogs)
                 {
@@ -375,23 +562,6 @@ namespace demo2.DND.InventoryTetris
                     Debug.Log("[InventoryUIBinder] 未找到可绑定的 CharacterStats，已清空属性 UI。");
                 }
             }
-        }
-
-        // 便捷方法：切换到下一个/上一个角色（环绕）
-        public void NextCharacter()
-        {
-            int count = sourceInventories.Count;
-            if (count <= 0) return;
-            int next = (activeSourceIndex + 1) % count;
-            SetActiveSourceIndex(next);
-        }
-
-        public void PrevCharacter()
-        {
-            int count = sourceInventories.Count;
-            if (count <= 0) return;
-            int prev = (activeSourceIndex - 1 + count) % count;
-            SetActiveSourceIndex(prev);
         }
 
         /// <summary>
@@ -429,117 +599,186 @@ namespace demo2.DND.InventoryTetris
         {
             if (playerStats == null || playerStats.Count == 0)
             {
-                if (debugLogs) Debug.LogWarning("[InventoryUIBinder] PlayerFormationGenerated 收到空列表");
-                // 清空属性 UI
-                var binder = statsUIBinder as ICharacterStatsUIBinder;
-                binder?.Unbind();
+                if (debugLogs) Debug.LogWarning("[InventoryUIBinder] HandlePlayerFormationGenerated: playerStats is null or empty.");
                 return;
             }
 
-            BindStatsToPanel(SelectPreferred(playerStats));
+            // 尝试自动收集场景中已存在的背包（包括未激活的物体）
+            CollectExistingInventoriesInScene();
+
+            // 切换到当前阵型的主角背包
+            for (int i = 0; i < playerStats.Count; i++)
+            {
+                var stats = playerStats[i];
+                if (stats == null) continue;
+                var inv = stats.GetComponent<CharacterInventory>();
+                if (inv == null) continue;
+                if (!sourceInventories.Contains(inv)) continue;
+
+                Debug.Log($"[InventoryUIBinder] HandlePlayerFormationGenerated: switching to inventory of {stats.characterName}");
+                SetActiveSourceIndex(sourceInventories.IndexOf(inv));
+                return;
+            }
+
+            Debug.LogWarning("[InventoryUIBinder] HandlePlayerFormationGenerated: No valid CharacterInventory found for the given playerStats.");
         }
 
-        private CharacterStats SelectPreferred(List<CharacterStats> list)
+        /// <summary>
+        /// Advance to the next available source. This wraps SetActiveSourceIndex with extra
+        /// logic to avoid no-op when multiple entries reference the same GameObject.
+        /// </summary>
+        public void NextSource()
         {
-            if (list == null) return null;
-            CharacterStats target = null;
-            for (int i = 0; i < list.Count; i++)
+            var s = Sources;
+            int count = s != null ? s.Count : 0;
+            if (count == 0)
             {
-                var s = list[i];
-                if (s != null && s.currentHitPoints > 0) { target = s; break; }
+                if (debugLogs) Debug.Log("[InventoryUIBinder] NextSource: no sources available.");
+                return;
             }
-            if (target == null)
+            int start = activeSourceIndex;
+            int candidate = (start + 1) % count;
+            // Try to find a candidate with a different GameObject than current ActiveSource
+            var cur = ActiveSource != null ? ActiveSource.gameObject : null;
+            for (int i = 0; i < count; i++)
             {
-                for (int i = 0; i < list.Count; i++)
+                var idx = (start + 1 + i) % count;
+                var inv = s[idx];
+                if (inv == null) continue;
+                if (cur == null || inv.gameObject != cur)
                 {
-                    if (list[i] != null) { target = list[i]; break; }
+                    if (debugLogs) Debug.Log($"[InventoryUIBinder] NextSource -> switching to index {idx}");
+                    SetActiveSourceIndex(idx);
+                    return;
                 }
             }
-            return target;
+            // All entries point to same GameObject; still rotate index to next to preserve round-robin behaviour
+            if (debugLogs) Debug.Log("[InventoryUIBinder] NextSource: all sources map to same GameObject, rotating index anyway.");
+            SetActiveSourceIndex(candidate);
         }
 
-        private void BindStatsToPanel(CharacterStats target)
+        /// <summary>
+        /// Move to the previous available source. Similar protections as NextSource().
+        /// </summary>
+        public void PrevSource()
         {
-            // 自动定位 statsUIBinder（若未赋值）
-            if (statsUIBinder == null)
+            var s = Sources;
+            int count = s != null ? s.Count : 0;
+            if (count == 0)
             {
-                var all = GetComponentsInChildren<MonoBehaviour>(true);
-                foreach (var mb in all)
+                if (debugLogs) Debug.Log("[InventoryUIBinder] PrevSource: no sources available.");
+                return;
+            }
+            int start = activeSourceIndex;
+            int candidate = (start - 1 + count) % count;
+            var cur = ActiveSource != null ? ActiveSource.gameObject : null;
+            for (int i = 0; i < count; i++)
+            {
+                var idx = (start - 1 - i + count * 1000) % count; // safe modulo
+                var inv = s[idx];
+                if (inv == null) continue;
+                if (cur == null || inv.gameObject != cur)
                 {
-                    if (mb is ICharacterStatsUIBinder) { statsUIBinder = mb; break; }
+                    if (debugLogs) Debug.Log($"[InventoryUIBinder] PrevSource -> switching to index {idx}");
+                    SetActiveSourceIndex(idx);
+                    return;
                 }
             }
-            var uiBinder = statsUIBinder as ICharacterStatsUIBinder;
-            if (uiBinder == null)
+            if (debugLogs) Debug.Log("[InventoryUIBinder] PrevSource: all sources map to same GameObject, rotating index anyway.");
+            SetActiveSourceIndex(candidate);
+        }
+
+        // 便捷方法：描述背包内容的简洁字符串（用于调试日志）
+        private string DescribeInventory(CharacterInventory inv)
+        {
+            if (inv == null) return "<null>";
+            return $"<CharacterInventory: {inv.gameObject.name}, ItemsCount={inv.Items.Count}, Rows={inv.rows}, Cols={inv.cols}>";
+        }
+
+        // 尝试从已存在的阵型中绑定角色属性 UI（仅在场景中已存在的角色）
+        private void TryBindStatsFromExistingFormation()
+        {
+            if (statsUIBinder == null) return;
+
+            var activeSrc = ActiveSource;
+            if (activeSrc == null) return;
+
+            // 仅在场景中已存在的角色才尝试绑定属性 UI
+            var playerStats = FindObjectsByType<CharacterStats>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < playerStats.Length; i++)
             {
-                // 若手动赋值类型不匹配，尝试自动查找一个可用的 ICharacterStatsUIBinder
-                var all = GetComponentsInChildren<MonoBehaviour>(true);
-                foreach (var mb in all)
+                var stats = playerStats[i];
+                if (stats == null) continue;
+                if (!stats.gameObject.scene.IsValid()) continue; // 仅限于场景中的实例
+
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] TryBindStatsFromExistingFormation: checking {stats.characterName}");
+
+                // 如果角色的背包就是当前活动背包，则尝试绑定属性 UI
+                var inv = stats.GetComponent<CharacterInventory>();
+                if (inv != null && inv == activeSrc)
                 {
-                    if (mb is ICharacterStatsUIBinder)
-                    {
-                        statsUIBinder = mb;
-                        uiBinder = (ICharacterStatsUIBinder)mb;
-                        if (debugLogs)
-                        {
-                            Debug.Log($"[InventoryUIBinder] 修正：statsUIBinder 类型不匹配，已自动切换到 {mb.GetType().Name} (GameObject={mb.gameObject.name})");
-                        }
-                        break;
-                    }
-                }
-                if (uiBinder == null)
-                {
-                    if (debugLogs) Debug.LogWarning("[InventoryUIBinder] 未找到或未实现 ICharacterStatsUIBinder 的属性面板组件，跳过绑定。");
+                    if (debugLogs) Debug.Log($"[InventoryUIBinder] TryBindStatsFromExistingFormation: binding stats for {stats.characterName}");
+                    var binder = statsUIBinder as ICharacterStatsUIBinder;
+                    if (binder != null) binder.Bind(stats);
                     return;
                 }
             }
 
-            if (target != null)
-            {
-                uiBinder.Bind(target);
-                if (debugLogs)
-                {
-                    Debug.Log($"[InventoryUIBinder] BindStatsToPanel -> {target.characterName}");
-                }
-            }
-            else
-            {
-                uiBinder.Unbind();
-                if (debugLogs)
-                {
-                    Debug.Log("[InventoryUIBinder] BindStatsToPanel -> target 空，已清空属性显示。");
-                }
-            }
+            if (debugLogs) Debug.LogWarning("[InventoryUIBinder] TryBindStatsFromExistingFormation: No valid CharacterStats found in the scene to bind.");
         }
 
-        // 兜底：若 OnPlayerFormationGenerated 事件错过，尝试直接从场景中获取玩家角色并绑定
-        private void TryBindStatsFromExistingFormation()
+        /// <summary>
+        /// Public helper: ensure this binder has collected any CharacterInventory instances in the scene.
+        /// This wraps the existing private collection logic so external classes can trigger a retry without using reflection.
+        /// </summary>
+        public void EnsureCollected()
         {
             try
             {
-                var all = FindObjectsByType<CharacterStats>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-                if (all == null || all.Length == 0) return;
+                CollectExistingInventoriesInScene();
+            }
+            catch (System.Exception ex)
+            {
+                if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] EnsureCollected failed: {ex}");
+            }
+        }
 
-                var list = new List<CharacterStats>(all.Length);
-                for (int i = 0; i < all.Length; i++)
-                {
-                    var s = all[i];
-                    if (s == null) continue;
-                    if (!s.gameObject.scene.IsValid()) continue;
-                    // 仅绑定玩家侧可启用以下过滤
-                    // if (s.battleSide != demo2.DND.BattleSide.Player) continue;
-                    list.Add(s);
-                }
+        private void TryAutoEquipDefaults(CharacterInventory src)
+        {
+            if (src == null) return;
+            var eq = src.GetComponent<CharacterEquipment>()
+                     ?? src.GetComponentInParent<CharacterEquipment>()
+                     ?? src.GetComponentInChildren<CharacterEquipment>(true);
+            if (eq == null) return;
+            var items = src.Items;
+            if (items == null || items.Count == 0) return;
 
-                var selected = SelectPreferred(list);
-                if (selected != null)
+            // 主手武器
+            if (eq.mainHand == null)
+            {
+                for (int i = 0; i < items.Count; i++)
                 {
-                    BindStatsToPanel(selected);
+                    var it = items[i];
+                    if (it?.data != null && it.data.isWeapon && eq.CanEquip(it)) { eq.EquipMainHand(it); break; }
                 }
             }
-            catch
+            // 护甲
+            if (eq.armor == null)
             {
-                // 忽略兜底扫描过程中的异常
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var it = items[i];
+                    if (it?.data != null && it.data.isArmor && eq.CanEquip(it)) { eq.EquipArmor(it); break; }
+                }
+            }
+            // 盾牌
+            if (eq.shield == null)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var it = items[i];
+                    if (it?.data != null && it.data.isShield && eq.CanEquip(it)) { eq.EquipShield(it); break; }
+                }
             }
         }
     }

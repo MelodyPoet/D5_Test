@@ -35,6 +35,7 @@ AI 助手工作规范
 
 开发行为规范
 - 单一设计原则: 实现功能只提供一种设计方案
+不要多此一举在两个不同脚本上实现同样的功能留作预选，导致代码冗余和维护困难。所有功能只有一个实现路径和对应的脚本参数接口
 - 禁止自动推送: 严禁自动执行 git push 操作到 GitHub 仓库
 - 强制要求: 与用户的所有对话必须使用中文
 - 最小改动原则: 开发新功能时必须在不破坏当前运行逻辑的基础上进行最小化修改
@@ -106,8 +107,12 @@ GameEnums-定义游戏中使用的枚举类型
 横版阵型战斗系统
 
 阵型布局设计:
-实际阵型位置由HorizontalBattleFormationManager中配置的spawn点Transform决定
-前排/后排判断基于实际spawn点的X坐标，而非固定数值
+- 位置唯一真源：由 FormationContainer ScriptableObject 中的 6 个索引决定，并由 HorizontalBattleFormationManager 按相同索引实例化到对应 spawn 点。
+- 索引与排位映射固定：
+  - [0][1][2] → 前排（左/中/右）
+  - [3][4][5] → 后排（左/中/右）
+- spawn 点Transform 仅作为可视化与摆放载体，其逻辑含义与 FormationContainer 的索引严格一致。
+- 强制禁止：任何基于 AC 或其它角色属性的“自动位置分配/推断”。HorizontalFormationTypes 不负责位置分配，仅提供位置枚举与通用判断工具。
 
 战斗行为模式:
 - 近战职业 → 移动到敌人面前攻击后返回原位,不能在对方有前排阵型时攻击后排
@@ -136,7 +141,7 @@ spine素材因为朝向问题，所有角色（玩家/中立/敌人）预制体�
 -DOTween动画完成后统一回调，避免多处分散回调逻辑
 -预留状态机接口，方便后续扩展复杂动画状态
 -动画名称映射配置，支持不同角色使用不同动画名称
--动画映射通过SO配置，方便非程序人员调整
+- 动画映射通过SO配置，方便非程序人员调整
 
 当前实现状态总览
 
@@ -423,22 +428,24 @@ XXX_Old.cs           - 旧版本文件
   - 近战武器：默认使用力量；若武器含 Finesse（灵巧），可使用敏捷（或按模板 allowMeleeFinesse 开关，默认关闭）。
   - 远程武器：使用敏捷。
   - 法术攻击（含默认戏法）：只要角色有法术，命中就使用职业主属性（primarySpellAbility），且伤害仅取法术伤害骰（不叠加主属性）。
-  - 默认普通攻击策略：基于 CharacterTemplate.defaultAttackType 决定。Physical → 走装备/物理；Spell → 使用 defaultCantrip（若无则按兜底策略）。
+  - 默认普通攻击策略：基于 CharacterTemplate.defaultAttackType 决定。Physical → 走装备/物理；Spell → 使用 defaultCantrip
+  （若无则按兜底策略）。
 - 熟练与加值：
   - 物理命中 = 1d20（含优/劣势）+ 当前武器类型对应的属性调整值（如无武器则参考下面的拳头判定） + 熟练加值（若熟练）。
   - 法术命中 = 1d20（含优/劣势）+ 当前template设置的职业主施法属性调整值 + 熟练加值（若熟练）。
-  - 物理伤害 = 武器给的伤害骰 + 能力调整值 ；暴击仅翻倍骰，不翻倍修正。
+  - 物理伤害 = 武器给的伤害骰 + 当前武器类型对应的属性调整值 ；暴击仅翻倍骰，不翻倍修正。
   - 法术伤害 = 法术给的伤害骰 ；暴击仅翻倍骰，不翻倍修正。
   - 熟练判定来自模板：proficientWeaponClasses / proficientWeaponTypes 或职业施法熟练。
 - 阵位与动画不变：
   - 前排 = 近战位移攻击；后排 = 远程/施法原地攻击。AI/动画链路保持不变，仅更换 ICombatSource。
 - 远程弹药与兜底：
-  - 默认不需要弹药，但预留后面设计某些怪物需要特定弹药才能穿透其抗性，（Ammunition/Thrown）的武器在弹药不足时自动回退：优先默认戏法（SpellAttack）
+  - 默认不需要弹药，但预留后面设计某些怪物需要特定弹药才能穿透其抗性，（Ammunition/Thrown）的武器在弹药不足时自动回退：优先默认戏法
+  （SpellAttack）
 - 距离规则：使用源的 RangeMin/RangeMax 判定可攻击距离；近战短距离，远程/法术按配置。
 - 兼容与回退：
-  - 若未挂装备系统或无可用源（视作用双拳攻击）：物理攻击所有角色无论前、后排命中取力量和敏捷调整值中大的一方，伤害按1d6+力量调整值；施法攻击（前提是施法职业且拥有对应法术）
-  无限制（空手也可以使用攻击型戏法，使用职业主属性）。
-  - 拳头攻击视作未装备武器的近战武器，命中判定为力量/敏捷调整值二者取大。伤害判定为1d6+力量调整值。
+  - 若未挂装备系统或无可用源（视作用双拳攻击）：此时所有角色无论站位在前、后排，命中和伤害取力量调整值,伤害骰按1d4；施法攻击
+（前提是施法职业且拥有对应法术）无限制（空手也可以使用攻击型戏法，使用职业主属性）。
+  
 - 数据与枚举约束：
   - 新增枚举统一追加到 GameEnums.cs：AbilityScore / AttackCategory / EquipmentSlot / WeaponClass / WeaponType /
   WeaponTag / AmmoType；伤害骰用 DiceSpec（个数/面数/修正）。
@@ -454,31 +461,42 @@ XXX_Old.cs           - 旧版本文件
   - 装备物品提供命中/伤害/防御等属性加成。
   - 不同装备类别（武器/护甲/饰品）有不同的槽位限制。
   - 装备物品可有特殊标签（如 TwoHanded/Shield），影响装备规则。
-  - 不同装备之间存在共生和关联关系（举例如弓箭与箭矢放在临近位置激活增强远程攻击属性）。考验玩家利用有限的背包空间进行优化配置的能力/不同装备组合带来的战斗策略差异。
+  - 不同装备之间存在共生和关联关系（举例如弓箭与箭矢放在临近位置激活增强远程攻击属性）。考验玩家利用有限的背包空间进行优化配置的能力/不同装备组合
+  带来的战斗策略差异。
   - 玩家等级/种族/专长的构筑影响可装备物品的种类和数量。这样给玩家一定的成长指引。
-  - 不同装备所占背包内空间的基础单元格不同，从而让玩家在有限的背包空间内进行取舍和优化。包括手动旋转，组合，摆放整理物品，同时要考虑物品之间的关联和共生关系。  
-  - 物品的共生和关联关系受到自身职业构筑的流派指导和限制，(如板甲骑士的构筑必定会关联重甲类别的护甲，如战斗中获得更好的重甲，可以替换当前装备而不破坏自身
-  职业构筑带来的共生关系的加成，但此时如果通过战斗随机获得一件强力的轻甲，其属性足以颠覆原本的职业构筑)从而让玩家在构筑职业流派时有更多的思考和选择空间。也让玩家在战斗中根据随机获得的强力装备来不断构思
-  和调整自身的职业构筑和战术策略。（这种设计思路类似于Roguelike游戏中通过随机获得的装备来调整自身的构筑和策略）同时洗点的成本适中，可以让玩家有一定的沉没成本支付能力。
+  - 不同装备所占背包内空间的基础单元格不同，从而让玩家在有限的背包空间内进行取舍和优化。包括手动旋转，组合，摆放整理物品，同时要考虑物品之间的关联
+  和共生关系。  
+  - 物品的共生和关联关系受到自身职业构筑的流派指导和限制，(如板甲骑士的构筑必定会关联重甲类别的护甲，如战斗中获得更好的重甲，可以替换当前装备而不
+  破坏自身职业构筑带来的共生关系的加成，但此时如果通过战斗随机获得一件强力的轻甲，其属性足以颠覆原本的职业构筑)从而让玩家在构筑职业流派时有更多的思
+  考和选择空间。也让玩家在战斗中根据随机获得的强力装备来不断构思和调整自身的职业构筑和战术策略。（这种设计思路类似于Roguelike游戏中通过随机获得的
+  装备来调整自身的构筑和策略）同时洗点的成本适中，可以让玩家有一定的沉没成本支付能力。
   - 局内战斗时背包锁定不可操作，通过探索阶段遇到的“篝火”类checkpoint进入装备调整界面。
-  - 局外的资源分配和角色成长运营让玩家策略性构思进入局内战斗时的默认装备和战术消耗道具，如在局内通过战斗获得自己职业构筑所需的更优质装备，则可更新当前装备。
+  - 局外的资源分配和角色成长运营让玩家策略性构思进入局内战斗时的默认装备和战术消耗道具，如在局内通过战斗获得自己职业构筑所需的更优质装备，则可更新
+  当前装备。
   但战斗死亡就会失去所有收获的装备物品，回到初始装备状态。从而建立2D横版简约搜打撤机制。
  
 - UI 布局与交互（概要）
-  - 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位（按 cellSize/spacing/padding 计算），
-  不使用 LayoutGroup。
+  - 背包/角色属性 Hub 采用“锚点优先”的布局原则：不使用 LayoutGroup/ContentSizeFitter；背包网格（InventoryGridView）采用手动定位
+  （按cellSize/spacing/padding 计算），不使用 LayoutGroup。
 
 [路径A落地决策与约束]
 - 决策：采用“在角色预制体/实例的 CharacterInventory.initialItems 直接配置初始物品”的路径A。启动时由该列表生成 ItemInstance 并触发刷新。
 - 绑定位置（强制）：CharacterInventory 必须挂在每个“玩家/盟友”角色预制体/实例上，禁止挂在场景空节点（如 PlayerData）。
-  - PlayerData 空节点不再承担背包数据容器的职责；仅当未来需要“队伍共享仓库/共用背包”时，另行定义独立 PartyInventory（不影响本规范的“角色个人背包”）。
+  - PlayerData 空节点不再承担背包数据容器的职责；仅当未来需要“队伍共享仓库/共用背包”时，另行定义独立 PartyInventory（不影响本规范的“角色个人
+  背包”）。
 - 网格行列 rows/cols 的意义（保留且重要）：
-  - rows/cols 仍然是“容量/版面”（可用格子总数），用于判定是否存在可容纳物品占位的空区、物品旋转后的适配、碰撞/覆盖检测与自动排布；而物品占多少格由 ItemBaseSO 的 slotWidth/slotHeight 决定，二者职责不同、同时生效。
+  - rows/cols 仍然是“容量/版面”（可用格子总数），用于判定是否存在可容纳物品占位的空区、物品旋转后的适配、碰撞/覆盖检测与自动排布；而物品占多少
+  格由 ItemBaseSO 的 slotWidth/slotHeight 决定，二者职责不同、同时生效。
 - UI 绑定（切换合同）：
-  - InventoryUIBinder.sourceInventory 始终指向“当前选中角色”的 CharacterInventory；左右切换仅重绑引用→GridView 清空并重建→Binder 刷新显示。
-  - 强制手动挂载：FormationContainer 实例化后的角色对象，其 CharacterInventory 引用必须手动填入“角色选择器（SelectionHub）”的目标列表中，禁止自动查找。
-  - 多来源支持（新增）：InventoryUIBinder 允许挂载多个来源（sourceInventories），通过 activeSourceIndex 或 SetActiveSourceIndex(i) 在玩家/盟友等不同角色之间切换；旧字段 sourceInventory 仍兼容单一来源模式（UseSingleSource(inv)）。提供 AddSource/RemoveSource 以维护列表。切换时 Binder 会自动解绑旧源事件、按来源 rows/cols 重配 GridView 并重建。
-  - 约束：多来源列表中的每一项必须是对应角色预制体上的 CharacterInventory 引用；禁止将场景空节点（如 PlayerData）作为背包数据源使用。玩家与盟友的背包与装备分离时，分别作为不同来源挂入列表，以活动索引进行切换。
+  - InventoryUIBinder.sourceInventory 始终指向“当前选中角色”的 CharacterInventory；左右切换仅重绑引用→GridView 清空并重建→Binder 
+  刷新显示。
+  - 强制手动挂载：FormationContainer 实例化后的角色对象，其 CharacterInventory 引用必须手动填入“角色选择器（SelectionHub）”的目标列
+  表中，禁止自动查找。
+  - 多来源支持（新增）：InventoryUIBinder 允许挂载多个来源（sourceInventories），通过 activeSourceIndex 或 
+  SetActiveSourceIndex(i) 在玩家/盟友等不同角色之间切换；旧字段 sourceInventory 仍兼容单一来源模式（UseSingleSource(inv)）。
+  提供 AddSource/RemoveSource 以维护列表。切换时 Binder 会自动解绑旧源事件、按来源 rows/cols 重配 GridView 并重建。
+  - 约束：多来源列表中的每一项必须是对应角色预制体上的 CharacterInventory 引用；禁止将场景空节点（如 PlayerData）作为背包数据源使用。
+  玩家与盟友的背包与装备分离时，分别作为不同来源挂入列表，以活动索引进行切换。
 - 运行时交互策略：
   - 战斗中禁编辑：通过交互遮罩或交互开关屏蔽拖拽/旋转；篝火/休整界面再开放编辑与整理。
   - AutoFitToContainer=启用；keepSquareCells 视美术风格选择；includeSpacingInItemSize 按是否要“覆盖格间隙”选择。
@@ -487,3 +505,185 @@ XXX_Old.cs           - 旧版本文件
   - 运行时新增：通过 InventoryUIBinder.TryAddNew(ItemBaseSO) 尝试落地→成功后再加入数据源；失败不改变数据源。
 
 角色默认属性+物品以及职业专长/技能等加成规则
+
+战斗时角色数据源中属性是根据Base层+Permanent层+Equipment层+Effects层+Situational层来计算的,严禁在代码中硬编码固定战斗属性值
+
+CharacterTemplate（角色模板）的定位与职责
+- 单一职责：ScriptableObject 仅作为“配置与规则”的权威来源，绝不直接充当运行时数值容器。
+- 初始化来源：角色实例（CharacterStats）在 Awake/InitializeFromTemplate 阶段，从模板拷贝基础信息（名称/职业/等级/六维/基础AC），
+并按本规范的生命值公式计算 MaxHP/CurrentHP。
+- 规则查询：战斗/系统仅从模板读取“静态规则与表项”，包括但不限于：
+  - primarySpellAbility / defaultAttackType / defaultCantrip（默认戏法与施法主属性）
+  - 熟练项与熟练加值（按等级段（Lv1-4:+2，5-8:+3，9-12:+4，…））
+  - baseArmorClass / immunities / resistances / vulnerabilities（基础AC与免疫/抗性/弱点）
+- 运行时权威：一切“当前值/可变值”（如 currentHitPoints、temporaryHitPoints、armorClass、六维、状态效果）一律以实例 CharacterStats 
+为唯一权威；模板不参与当下数值运算。
+- 修改影响：运行中修改模板不会回溯已生成角色实例；如需生效必须在实例侧显式重算（如 RecalculateMaxHitPointsFromLevel / 
+UpdateArmorClass 等）。
+- 挂载约束：每个角色预制体必须手动挂载 CharacterStats，并在其 template 字段手动引用对应 CharacterTemplate；禁止在代码中 AddComponent 
+或自动查找。
+- 战斗读取约定：HorizontalCombatRules 使用 CharacterStats 读取即时数值（命中检定所需的能力调整、目标 AC、当前 HP 等），同时仅用模板
+提供的“规则项”（主施法属性、熟练、默认戏法、抗性/弱点等）。
+- 与装备系统对齐：当 ICombatSource（武器/法术）路径落地后，命中与伤害参数由“装备/法术源”单一路径提供；模板继续提供熟练与主施法等规则项，
+不得新增第二套并行路径。
+- 角色模板上应该有对应的护甲，武器等熟练与否配置项
+  如无武器熟练则无法装备对应武器/如无护甲熟练则无法穿戴对应护甲
+- Base层角色天生有物理攻击手段（双拳攻击，命中和伤害加值用力量调整值，伤害骰1d4） 
+无护甲时（盾也算护甲)天生AC取基础AC10+敏捷调整值
+
+属性修正与叠加 — 统一规则参考（实现前置设计）
+- 单一权威：运行时一切“当前值/可变值”仅以实例 `CharacterStats` 为准；模板/种族/职业/专长/装备/BUFF/DEBUFF 都作为“修正源”，统一汇总到 `CharacterStats` 后输出给战斗系统与UI。
+
+一）来源层级（自上而下应用）
+1. Base 基础出生值（来自模板，初始化到实例）
+   - 名称/职业/等级/六维/基础AC/抗性集合等。
+2. Permanent 永久成长/被动（实例长期生效）
+   - 等级带来的 Proficiency Bonus、职业特性（Class Features）、ASI、已选择的专长（Feats）、种族天赋（Racial Traits）。
+3. Equipment 装备（WhileEquipped）
+   - 武器/护甲/盾牌/饰品等的静态与条件修正；护甲可覆盖 AC 计算公式；武器/法术作为 ICombatSource 提供命中/伤害参数。
+4. Effects 临时效果（TimedSeconds/TimedRounds/UntilRest/WhileConcentrating）
+   - BUFF/DEBUFF/光环等；支持持续时间、栈策略、条件（如“穿重甲时才生效”）。
+5. Situational 情境瞬时（本轮或本动作）
+   - 优/劣势、距离/姿态判定、专注检定结果等。
+
+二）修正器模型（StatModifier，统一数据契约）
+- 字段建议：
+  - stat: StatType（STR/DEX/CON/INT/WIS/CHA/AC/MaxHP/AttackBonus/DamageBonus/SavingThrowX/Speed/Resist/Immune/Vulnerable/AdvantageX/DisadvantageX…）
+  - op: ModifierOp（Add/Multiply/Override/Flag）
+  - value: 数值或枚举（按 stat 类型解释）
+  - source: 来源对象（Trait/Feat/Item/Effect/Skill 等）
+  - stackKey: string（同源/同类唯一键；用于“相同效果不叠加”或“取最大/最新”）
+  - policy: 冲突策略（Max/Min/Sum/Replace）
+  - duration: {type: TimedSeconds/TimedRounds/WhileEquipped/WhileConcentrating, amount}
+  - conditions: 可选条件（例：穿重甲、持盾、距离≤X、目标在光环内等）
+
+三）叠加与优先级
+- 应用顺序：Base → Permanent → Equipment → Effects → Situational（后者可覆盖前者）。
+- 运算规则：
+  - Add：相加；Multiply：连乘（少用）；Override：替换（如护甲AC公式）；Flag：优势/劣势/免疫/抗性/易伤等布尔或集合。
+  - 同 stackKey 的效果遵循 policy；不同来源不同 stackKey 可叠加。
+- 特例约定：
+  - 优势/劣势不叠加：多个优势仍视为1个优势；优势与劣势相互抵消。
+  - 护甲 AC 覆盖优先于基础AC；盾牌等 Additive 加在覆盖结果上。
+  - 光环（Aura）按来源去重或取最大（由 stackKey/policy 控制）。
+
+四）计算顺序（一次重算，全局生效）
+1. 六维（STR~CHA）
+2. 熟练加值（Proficiency，按等级段）
+3. MaxHP 按既定公式增长
+4. AC（基础/护甲覆盖/盾牌/姿态/临时）
+5. 抗性/免疫/易伤集合合并
+6. 命中/伤害参数：从 ICombatSource 取（能力类型/熟练/伤害骰/标签），结合最终六维/熟练得出命中加值与伤害修正
+7. 旗标：Advantage/Disadvantage/不可行动/隐形/集中等
+
+五）实时更新（事件驱动）
+- 触发重算：LevelUp、Feat 选择、ASI、装备变化、效果增减/到期、姿态切换、专注失败等。
+- 执行：标记 Dirty → RecalculateAll → 触发 `OnStatsChanged(finalSnapshot)`；已有 `OnHealthChanged` 继续用于HP。
+- 联动：
+  - UI 面板/血条订阅事件刷新
+  - 战斗系统读取“最终快照”（或直接读 `CharacterStats` 的已汇总字段）
+
+六）典型规则清单（参考实现）
+- 人类（Racial Traits）
+  - 普通人类：六维 +1（Add）
+  - 变体人类：任意两项 +1（Add）+ 赠送 1 个专长（Feat）
+- 职业与熟练
+  - 主施法属性：来自模板 primarySpellAbility，仅用于确定命中能力类型；数值来自实例最终六维
+  - 熟练加值：按等级段（Lv1-4:+2，5-8:+3，9-12:+4，…）
+  - 职业特性：如重甲熟练（允许护甲覆盖AC）、额外攻击（规则侧消费，不做数值；或通过 ICombatSource 提供多次打击）
+- 装备
+  - 武器：
+    - Finesse：命中可用DEX替代STR（取更优或按规则固定）
+    - 远程：命中用DEX
+    - 伤害：由武器伤害骰 +（近战默认加 STR 调整）
+    - 熟练：若武器类别/类型熟练，叠加 Proficiency
+  - 法术：默认戏法 `defaultCantrip` 提供伤害骰；命中用主施法属性调整 + 熟练（若熟练）
+  - 护甲：覆盖 AC 公式（Override），盾牌：AC +2（Add）
+- BUFF（Effects）
+  - Bless：命中/豁免 +1d4（可简化为 +2 命中/+2 豁免期望值）
+  - Dodge（防御姿态）：AC +2 或对方命中劣势（二选一，遵循当前项目既有定义）
+- DEBUFF（Effects）
+  - Poisoned：攻击与检定劣势（Flag）
+  - Weakened：近战伤害减半（Multiply 0.5）或固定 -X（Add，简化模型）
+  - Restrained/Slowed：移动/命中/AC/豁免的综合不利（按需要拆解为多个修正器）
+- 抗性/免疫/易伤
+  - 基础来自模板；效果或装备可临时增减；结算在 `ApplyDamageToSelf` 前判定并调整伤害
+- 升级（LevelUp）
+  - MaxHP 按既定公式增长
+  - 指定等级节点触发 ASI 或 Feat 选择
+  - 解锁职业特性与更高戏法伤害骰
+
+七）边界策略
+- MaxHP 下降：仅夹住 currentHP≤newMax，不做额外扣血
+- CON 改变：MaxHP 统一按“全等级重算并夹住”或“差额法”二选一，保持一致性（建议：全等级重算并夹住）
+- 优/劣势：不叠加；优势与劣势互相抵消为“正常”
+- 专注（Concentration）：以 `Concentrating` 标志表示；受伤时进行专注检定，失败移除对应效果
+- 持续时间：
+  - TimedRounds 由 AutoBattleAI 的回合推进减少
+  - TimedSeconds 由计时器减少
+
+八）实现落地路线图（建议）
+1. 在 `CharacterStats` 内引入修正聚合器（ModifierAggregator）与 `ActiveEffects` 容器
+2. 定义 SO：RaceTraitSO / ClassFeatureSO / FeatSO / EffectSO / ItemBaseSO（含修正器列表）
+3. 确立 ICombatSource（武器/法术），`HorizontalCombatRules` 仅用该接口提供的命中/伤害参数
+4. 提供 RecalculateAll 与 `OnStatsChanged` 事件；UI与AI订阅刷新
+5. 逐步用修正器替换零散“直接改字段”的逻辑，保留最小向后兼容
+
+- 绝对约束（与本文其他章节保持一致）
+  - 只保留一条命中/伤害流程：ICombatSource → ResolveAttack
+  - 运行时权威仅在 `CharacterStats`；模板/物品/专长/效果仅作为修正源
+  - 强制手动挂载；禁止自动 AddComponent；禁止在文档之外另起新规范
+
+---
+
+更新：装备与徒手结算规范（2025-10-26)
+
+为统一战斗数值计算与项目配置，新增并确认如下规范：
+
+- 计算命中/伤害/AC 时，仅读取 `CharacterEquipment` 的装备槽：
+  - 武器：主手 `mainHand`或者双手 `twoHanded`，视物品标签而定。
+  如果主手装备双手武器，则副手槽位无效。如果主手装备单手武器，则副手槽位可以装备盾牌或另一把单手武器（若熟练则可双持攻击）。
+  - 护甲：`armor`
+  - 盾牌：`shield`
+- 若对应槽位未装备，则：
+  - 攻击按“徒手”处理（见下文可配置），不再从背包挑选任何物品。
+  - AC 按“未着甲公式”处理：`baseArmorClass + DexMod (+ 盾牌加值，若装备盾)`。
+- 背包（`CharacterInventory`）中的未装备物品不参与任何战斗数值结算（不再有“背包即装备”的回退逻辑）。
+
+## 徒手伤害可配置
+
+在 `CharacterTemplate` 上新增了徒手配置，用于当未装备武器时的伤害骰与能力修正：
+
+- `unarmedDamageDice: DiceFormula`（默认 1d6）
+- `unarmedDamageAbilityMode: PhysicalHitAbilityMode`
+  - `Strength`（默认）
+  - `Dexterity`
+  - `BestOfStrDex`（在 STR/DEX 中取较优）
+
+说明：
+- 法术普通攻击依旧按模板 `defaultCantrip` 与主法术属性（`primarySpellAbility`）处理。
+- 物理普通攻击（有武器）按武器的 `isFinesse / weaponHitAbilityMode / weaponDamageDice` 与模板熟练计算。
+
+## 相关实现位置
+
+- 普通攻击/伤害结算：`HorizontalCombatRules.cs`
+  - 仅读取装备槽；徒手时读取 `CharacterTemplate.unarmedDamage*`。
+- AC 计算：`ModifierAggregator.cs`
+  - 仅读取装备槽中的护甲/盾牌；未穿甲按未着甲规则。
+- 背包与装备：
+  - `CharacterEquipment.cs`：仅“已装备”才生效，负责给 `CharacterStats` 添加/移除装备来源的修饰。
+  - `CharacterInventory.cs`：背包变更只会驱动装备槽校正与重新应用，未装备物品不再生效数值。
+
+## 配置建议
+
+- 如果希望更贴近 5e 基本徒手（如 1 + STR 或 1d4 + STR），可在各个职业模板上按需设置：
+  - `unarmedDamageDice = { 1d1 -> 表示固定 1, 或 1d4 }`
+  - `unarmedDamageAbilityMode = Strength`
+
+背包的规则：
+根据游戏运行时候的角色预制体上的CharacterInventory.initialItems字段来初始化角色的背包物品
+这些物品会被注册到在装备层，表示当前角色对应装备槽位被占用，且只能通过装备层来影响角色的战斗属性，禁止通过代码硬编码角色的战斗属性
+完成注册的装备条目预制体，会通过InventoryItemView脚本上的状态文本接口指向的UI文本组件来显示当前装备的状态
+如“XX位置：已装备”
+
+当前问题：UI_Root下子Button(UI)的Btn_BpNext/Btn_BpPrev,点击切换不同角色对应的背包栏/属性栏

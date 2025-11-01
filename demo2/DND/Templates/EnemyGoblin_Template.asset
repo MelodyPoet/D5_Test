@@ -31,7 +31,7 @@ MonoBehaviour:
   immunities: 
   vulnerabilities: 
   proficiencyBonus: 2
-  proficientSkills: 0200000003000000
+  proficientSkills: 0f000000
   proficientSaves: []
   proficientSpellAttacks: 0
   proficientMelee: 0

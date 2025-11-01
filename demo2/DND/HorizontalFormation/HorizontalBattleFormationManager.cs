@@ -242,11 +242,6 @@ namespace demo2.DND.HorizontalFormation
             }
         }
 
-        [System.Obsolete("此方法已过时，请使用 GenerateEnemyFormation(int waveIndex) 替代")]
-        public void GenerateEnemyFormation()
-        {
-            GenerateEnemyFormation(0);
-        }
 
         /// <summary>
         /// 执行整个阵型的进场动画 - DOTween版本
@@ -559,7 +554,7 @@ namespace demo2.DND.HorizontalFormation
                 if (characterObj != null)
                 {
                     CharacterStats stats = characterObj.GetComponent<CharacterStats>();
-                    if (stats != null && stats.currentHitPoints > 0)
+                    if (stats != null && stats.CurrentHitPoints > 0)
                     {
                         aliveCharacters.Add(stats);
                     }
@@ -655,7 +650,7 @@ namespace demo2.DND.HorizontalFormation
                 {
                     var stats = enemy.GetComponent<CharacterStats>();
                     // 如果敌人还有血（异常场景），直接销毁；否则交由角色自身的3秒尸体消失逻辑处理
-                    if (stats == null || stats.currentHitPoints > 0)
+                    if (stats == null || stats.CurrentHitPoints > 0)
                     {
                         Destroy(enemy);
                     }
@@ -796,7 +791,7 @@ namespace demo2.DND.HorizontalFormation
                 if (targetList[i] != null)
                 {
                     CharacterStats stats = targetList[i].GetComponent<CharacterStats>();
-                    if (stats != null && stats.currentHitPoints > 0)
+                    if (stats != null && stats.CurrentHitPoints > 0)
                     {
                         frontline.Add(stats);
                     }
@@ -820,7 +815,7 @@ namespace demo2.DND.HorizontalFormation
                 if (targetList[i] != null)
                 {
                     CharacterStats stats = targetList[i].GetComponent<CharacterStats>();
-                    if (stats != null && stats.currentHitPoints > 0)
+                    if (stats != null && stats.CurrentHitPoints > 0)
                     {
                         backline.Add(stats);
                     }
@@ -914,7 +909,7 @@ namespace demo2.DND.HorizontalFormation
                 if (characterList[i] != null)
                 {
                     CharacterStats stats = characterList[i].GetComponent<CharacterStats>();
-                    info += $"索引{i}: {characterList[i].name} - 血量: {stats?.currentHitPoints}\n";
+                    info += $"索引{i}: {characterList[i].name} - 血量: {stats?.CurrentHitPoints}\n";
                 }
                 else
                 {
@@ -1001,7 +996,7 @@ namespace demo2.DND.HorizontalFormation
                 if (stats == null) continue;
 
                 bool isUnconscious = stats.HasStatusEffect(StatusEffectType.Unconscious);
-                bool isZeroOrBelow = stats.currentHitPoints <= 0;
+                bool isZeroOrBelow = stats.CurrentHitPoints <= 0;
                 if (isUnconscious || isZeroOrBelow)
                 {
                     // HealDamage(1) 会在HP>0时自动移除Unconscious状态（见 CharacterStats.HealDamage 实现）

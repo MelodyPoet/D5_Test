@@ -16,19 +16,36 @@ MonoBehaviour:
   characterClass: 3
   level: 3
   defaultSide: 0
+  defaultAttackType: 0
+  primarySpellAbility: intelligence
+  defaultCantrip: {fileID: 0}
   strength: 12
   dexterity: 10
   constitution: 14
   intelligence: 10
   wisdom: 16
   charisma: 13
-  baseArmorClass: 15
+  baseArmorClass: 10
   hitDie: 8
+  unarmedDamageDice:
+    diceCount: 1
+    diceSize: 6
+  unarmedDamageAbilityMode: 0
+  unarmedProficient: 1
   resistances: 
   immunities: 
   vulnerabilities: 
   proficiencyBonus: 2
-  proficientSkills: 0b0000000a000000
+  proficientSkills: 0b00000009000000
   proficientSaves:
   - wisdom
   - charisma
+  proficientSpellAttacks: 0
+  proficientMelee: 1
+  proficientRanged: 0
+  proficientLightArmor: 1
+  proficientMediumArmor: 0
+  proficientHeavyArmor: 0
+  proficientShield: 1
+  proficientWeaponClasses: []
+  proficientWeaponTypes: []

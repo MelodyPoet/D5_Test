@@ -109,7 +109,7 @@ namespace demo2.DND.HorizontalFormation
                     Debug.Log($"✅ 队伍生成成功！存活角色数量: {aliveCharacters.Count}");
                     foreach (var character in aliveCharacters)
                     {
-                        Debug.Log($"   - {character.GetDisplayName()} (HP: {character.currentHitPoints}/{character.maxHitPoints})");
+                        Debug.Log($"   - {character.GetDisplayName()} (HP: {character.CurrentHitPoints}/{character.MaxHitPoints})");
                     }
                     StartExploreMode();
                 }
@@ -142,7 +142,7 @@ namespace demo2.DND.HorizontalFormation
                 Debug.Log($"✅ 队伍生成成功！存活角色数量: {aliveCharacters.Count}");
                 foreach (var character in aliveCharacters)
                 {
-                    Debug.Log($"   - {character.GetDisplayName()} (HP: {character.currentHitPoints}/{character.maxHitPoints})");
+                    Debug.Log($"   - {character.GetDisplayName()} (HP: {character.CurrentHitPoints}/{character.MaxHitPoints})");
                 }
                 StartExploreMode();
             }

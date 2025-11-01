@@ -21,6 +21,15 @@ public enum CharacterClass {
 }
 
 /// <summary>
+/// 护甲类别（用于 5e AC 计算）
+/// </summary>
+public enum ArmorType {
+    Light,
+    Medium,
+    Heavy
+}
+
+/// <summary>
 /// 状态效果类型枚举
 /// </summary>
 public enum StatusEffectType {
@@ -97,6 +106,13 @@ public enum BattleSide {
 public enum DefaultAttackType {
     Physical,   // 物理普通攻击（后续由装备系统决定命中属性）
     Spell       // 法术普通攻击（施法职业：命中按职业主属性）
+}
+
+// 物理普通攻击命中能力的选择模式（供武器/模板配置使用）
+public enum PhysicalHitAbilityMode {
+    Strength,       // 固定使用 力量
+    Dexterity,      // 固定使用 敏捷
+    BestOfStrDex    // 取 力量/敏捷 中较大者
 }
 
 /// <summary>

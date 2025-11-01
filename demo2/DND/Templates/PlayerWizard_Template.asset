@@ -25,18 +25,28 @@ MonoBehaviour:
   intelligence: 16
   wisdom: 13
   charisma: 10
-  baseArmorClass: 12
+  baseArmorClass: 10
   hitDie: 6
+  unarmedDamageDice:
+    diceCount: 1
+    diceSize: 1
+  unarmedDamageAbilityMode: 0
+  unarmedProficient: 1
   resistances: 
   immunities: 
   vulnerabilities: 
   proficiencyBonus: 2
-  proficientSkills: 0400000006000000
+  proficientSkills: 0500000008000000
   proficientSaves:
   - intelligence
   - wisdom
   proficientSpellAttacks: 1
   proficientMelee: 1
   proficientRanged: 0
-  proficientWeaponClasses: []
+  proficientLightArmor: 0
+  proficientMediumArmor: 0
+  proficientHeavyArmor: 0
+  proficientShield: 0
+  proficientWeaponClasses:
+  - simple
   proficientWeaponTypes: []

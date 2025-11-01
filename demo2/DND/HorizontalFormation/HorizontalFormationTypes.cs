@@ -4,6 +4,8 @@ namespace demo2.DND.HorizontalFormation
     /// 横版战斗位置枚举 - 2D线性阵型
     /// X轴从左到右：玩家后排 → 玩家前排 → 敌人前排 → 敌人后排
     /// Y轴控制左中右排列
+    /// 本文件只提供类型与通用判断工具，不负责根据角色属性分配位置。
+    /// 实际前/后排与左右位置严格由 FormationContainer + HorizontalBattleFormationManager 的手动配置与索引映射决定。
     /// </summary>
     public enum HorizontalPosition {
         // 玩家前排 (X轴中左位置，接近敌人)
@@ -49,25 +51,9 @@ namespace demo2.DND.HorizontalFormation
 
     /// <summary>
     /// 横版阵型辅助类
-    /// 提供位置计算和战术判断功能
+    /// 提供位置归类与战术判断的通用工具
     /// </summary>
     public static class HorizontalFormationAI {
-        /// <summary>
-        /// 根据角色特性获取最佳位置
-        /// </summary>
-        public static HorizontalPosition GetOptimalPosition(CharacterStats character, BattleSide side)
-        {
-            // 简化的位置分配逻辑
-            if (side == BattleSide.Player)
-            {
-                return character.armorClass >= 15 ? HorizontalPosition.PlayerFrontCenter : HorizontalPosition.PlayerBackCenter;
-            }
-            else
-            {
-                return character.armorClass >= 15 ? HorizontalPosition.EnemyFrontCenter : HorizontalPosition.EnemyBackCenter;
-            }
-        }
-
         /// <summary>
         /// 判断位置是否为前排
         /// </summary>

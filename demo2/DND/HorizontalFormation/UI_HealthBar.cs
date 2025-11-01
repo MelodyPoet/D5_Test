@@ -153,7 +153,7 @@ namespace demo2.DND.HorizontalFormation
             // 确保血条可见
             gameObject.SetActive(true);
 
-            Debug.Log($"血条初始化完成 - 角色: {owner.characterName}, 血量: {owner.currentHitPoints}/{owner.maxHitPoints}");
+            Debug.Log($"血条初始化完成 - 角色: {owner.characterName}, 血量: {owner.CurrentHitPoints}/{owner.MaxHitPoints}");
         }
 
         /// <summary>
@@ -204,8 +204,8 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            int maxHp = Mathf.Max(1, owner.maxHitPoints);
-            int clampedHp = Mathf.Clamp(owner.currentHitPoints, 0, maxHp);
+            int maxHp = Mathf.Max(1, owner.MaxHitPoints);
+            int clampedHp = Mathf.Clamp(owner.CurrentHitPoints, 0, maxHp);
 
             if (healthSlider != null)
             {
@@ -214,7 +214,6 @@ namespace demo2.DND.HorizontalFormation
                     healthSlider.maxValue = maxHp;
                 }
 
-                // 直接使用夹取后的 currentHitPoints 作为 slider 的 value
                 healthSlider.value = clampedHp;
 
                 Debug.Log($"[UI_HealthBar] UpdateHealthDisplay: {owner.characterName} {clampedHp}/{maxHp} healthSlider.value={healthSlider.value} (max={healthSlider.maxValue})");

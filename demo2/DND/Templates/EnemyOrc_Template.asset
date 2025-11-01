@@ -16,6 +16,9 @@ MonoBehaviour:
   characterClass: 0
   level: 1
   defaultSide: 1
+  defaultAttackType: 0
+  primarySpellAbility: intelligence
+  defaultCantrip: {fileID: 0}
   strength: 14
   dexterity: 12
   constitution: 16
@@ -28,5 +31,10 @@ MonoBehaviour:
   immunities: 
   vulnerabilities: 
   proficiencyBonus: 2
-  proficientSkills: 0f000000
+  proficientSkills: 03000000
   proficientSaves: []
+  proficientSpellAttacks: 0
+  proficientMelee: 1
+  proficientRanged: 0
+  proficientWeaponClasses: []
+  proficientWeaponTypes: []

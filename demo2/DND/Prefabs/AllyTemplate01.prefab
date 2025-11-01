@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 4286918360062315237}
   - component: {fileID: 1994949910500310956}
   - component: {fileID: 299315423223609512}
+  - component: {fileID: -134981435787175177}
   m_Layer: 6
   m_Name: AllyTemplate01
   m_TagString: Ally
@@ -228,18 +229,13 @@ MonoBehaviour:
   characterClass: 1
   characterLevel: 1
   battleSide: 0
-  maxHitPoints: 10
-  currentHitPoints: 10
-  temporaryHitPoints: 0
-  armorClass: 10
-  statusEffects: 
-  hasPlayedDeath: 0
   strength: 10
   dexterity: 10
   constitution: 10
   intelligence: 10
   wisdom: 10
   charisma: 10
+  armorClass: 10
 --- !u!114 &1994949910500310956
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -271,3 +267,27 @@ MonoBehaviour:
   cols: 6
   initialItems:
   - {fileID: 11400000, guid: 63b9235b68303c64a9e3ea0db3e33ad8, type: 2}
+--- !u!114 &-134981435787175177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7984810970041705236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a867f4e59d3b405ea6ae81ebded743d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mainHand:
+    instanceId: 
+    data: {fileID: 0}
+    rotated: 0
+  armor:
+    instanceId: 
+    data: {fileID: 0}
+    rotated: 0
+  shield:
+    instanceId: 
+    data: {fileID: 0}
+    rotated: 0

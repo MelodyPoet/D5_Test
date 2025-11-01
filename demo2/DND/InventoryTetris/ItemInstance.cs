@@ -27,5 +27,7 @@ namespace demo2.DND.InventoryTetris
                 rotated = !rotated;
             }
         }
+
+        public InventoryItemView view { get; set; } // Link to the associated InventoryItemView
     }
 }

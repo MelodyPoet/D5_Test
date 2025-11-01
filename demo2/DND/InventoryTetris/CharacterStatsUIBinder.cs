@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Text;
-using demo2.DND; // ensure CharacterStats type is resolved
+using demo2.DND.Stats; // use FinalStatsSnapshot
 #if TMP_PRESENT
 using TMPro; // optional TMP support when define is set
 #endif
@@ -84,13 +84,15 @@ namespace demo2.DND.InventoryTetris
             if (bound != null)
             {
                 bound.OnHealthChanged -= HandleHealthChanged;
+                bound.OnStatsChanged -= HandleStatsChanged;
             }
 
             bound = stats;
             if (bound != null)
             {
-                // 订阅血量变化以自动刷新 UI
+                // 订阅血量变化/属性变化以自动刷新 UI
                 bound.OnHealthChanged += HandleHealthChanged;
+                bound.OnStatsChanged += HandleStatsChanged;
                 if (debugLogs)
                 {
                     Debug.Log($"[CharacterStatsUIBinder] 已绑定: {bound.characterName}");
@@ -104,6 +106,7 @@ namespace demo2.DND.InventoryTetris
             if (bound != null)
             {
                 bound.OnHealthChanged -= HandleHealthChanged;
+                bound.OnStatsChanged -= HandleStatsChanged;
             }
             bound = null;
             ClearTexts();
@@ -111,7 +114,10 @@ namespace demo2.DND.InventoryTetris
 
         private void HandleHealthChanged(int current, int max)
         {
-            // 仅刷新相关字段，或直接整体 Refresh（简单可靠）
+            Refresh();
+        }
+        private void HandleStatsChanged(FinalStatsSnapshot snap)
+        {
             Refresh();
         }
 
@@ -129,6 +135,8 @@ namespace demo2.DND.InventoryTetris
                 Debug.LogWarning("[CharacterStatsUIBinder] 所有文本字段均未在 Inspector 中赋值，无法显示文本。");
             }
 
+            var snap = bound.CurrentSnapshot; // struct; 初始 Awake 已计算
+
             // 基础信息
             SetText(nameText, bound.characterName);
 #if TMP_PRESENT
@@ -143,17 +151,20 @@ namespace demo2.DND.InventoryTetris
             SetText(levelTMP, $"Lv.{bound.characterLevel}");
 #endif
 
-            // 战斗属性
-            SetText(hpText, $"HP: {bound.currentHitPoints}/{bound.maxHitPoints}");
+            // 战斗属性（max 使用快照，current 取运行时当前值）
+            int uiMaxHp = snap.maxHitPoints > 0 ? snap.maxHitPoints : bound.MaxHitPoints;
+            SetText(hpText, $"HP: {bound.CurrentHitPoints}/{uiMaxHp}");
 #if TMP_PRESENT
-            SetText(hpTMP, $"HP: {bound.currentHitPoints}/{bound.maxHitPoints}");
+            SetText(hpTMP, $"HP: {bound.CurrentHitPoints}/{uiMaxHp}");
 #endif
-            SetText(acText, $"AC: {bound.armorClass}");
+            // AC 优先用最终快照；否则使用绑定对象的安全只读属性
+            int uiAc = (snap.armorClass > 0 ? snap.armorClass : bound.CurrentArmorClass);
+            SetText(acText, $"AC: {uiAc}");
 #if TMP_PRESENT
-            SetText(acTMP, $"AC: {bound.armorClass}");
+            SetText(acTMP, $"AC: {uiAc}");
 #endif
 
-            // 能力值
+            // 能力值（显示分数与修正）
             SetText(strText, FormatAbility(bound.strength, bound.StrMod, "STR"));
             SetText(dexText, FormatAbility(bound.dexterity, bound.DexMod, "DEX"));
             SetText(conText, FormatAbility(bound.constitution, bound.ConMod, "CON"));
@@ -170,13 +181,13 @@ namespace demo2.DND.InventoryTetris
 #endif
 
             // 状态效果
-            if (bound.statusEffects != null && bound.statusEffects.Count > 0)
+            if (bound.StatusEffects != null && bound.StatusEffects.Count > 0)
             {
                 var sb = new StringBuilder();
-                for (int i = 0; i < bound.statusEffects.Count; i++)
+                for (int i = 0; i < bound.StatusEffects.Count; i++)
                 {
                     if (i > 0) sb.Append(',');
-                    sb.Append(bound.statusEffects[i].ToString());
+                    sb.Append(bound.StatusEffects[i].ToString());
                 }
                 SetText(statusText, sb.ToString());
 #if TMP_PRESENT

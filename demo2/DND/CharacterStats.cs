@@ -4,6 +4,8 @@ using demo2.DND.HorizontalFormation;
 using DG.Tweening;
 using UnityEngine.UI;
 using System;
+using demo2.DND.Stats; // for StatModifier/FinalStatsSnapshot/ModifierAggregator
+using demo2.DND.InventoryTetris; // For ItemBaseSO
 
 namespace demo2.DND
 {
@@ -17,23 +19,22 @@ namespace demo2.DND
         [Header("事件通道")]
         public DamageEventChannel_SO damageEventChannel; // 拖入伤害事件通道资产
 
-        [Header("运行时数据")]
-        public string characterName = "角色";
-        public CharacterClass characterClass = CharacterClass.Fighter;
-        public int characterLevel = 1;
-        public BattleSide battleSide = BattleSide.Player;
+        [Header("运行时数据（只读）")] // 不在 Inspector 暴露，可通过只读属性访问
+        private int maxHitPoints = 10;
+        private int currentHitPoints = 10;
+        private int temporaryHitPoints; // 临时生命值仅在战斗中变化
 
-        [Header("当前状态")]
-        public int maxHitPoints = 10;
-        public int currentHitPoints = 10;
-        public int temporaryHitPoints; // 移除默认值初始化
-        public int armorClass = 10;
+        [Header("基本信息（初始化后一般不在Inspector改动）")]
+        [HideInInspector] public string characterName = "角色";
+        [HideInInspector] public CharacterClass characterClass = CharacterClass.Fighter;
+        [HideInInspector] public int characterLevel = 1;
+        [HideInInspector] public BattleSide battleSide = BattleSide.Player;
 
-        [Header("状态效果")]
-        public List<StatusEffectType> statusEffects = new List<StatusEffectType>();
+        [Header("当前状态效果（运行时）")] // 运行时维护，不在 Inspector 手动配置
+        private readonly List<StatusEffectType> statusEffects = new List<StatusEffectType>();
 
-        // 标记：是否已经进入死亡表现（用于阵型清理与诊断）
-        public bool hasPlayedDeath;
+        // 标记：是否已经进入死亡表现（用于阵型清理与诊断） - 只读属性对外提供
+        public bool HasPlayedDeath { get; private set; }
 
         // 从模板初始化时的属性值
         [HideInInspector] public int strength = 10;
@@ -51,6 +52,16 @@ namespace demo2.DND
         public int WisMod => (wisdom - 10) / 2;
         public int ChaMod => (charisma - 10) / 2;
 
+        // 新增：对外只读访问器（运行时值）
+        public int CurrentHitPoints => currentHitPoints;
+        public int MaxHitPoints => maxHitPoints;
+        public int TemporaryHitPoints => temporaryHitPoints;
+        public IReadOnlyList<StatusEffectType> StatusEffects => statusEffects;
+
+        [Obsolete("请不要直接读取或修改该字段。未穿甲基础AC用于AC公式底座；最终AC请使用 CurrentArmorClass（基于 CurrentSnapshot）或通过 UpdateArmorClass 触发重算后由规则读取。")]
+        [Tooltip("未穿甲基础AC（Base Unarmored AC）；最终AC请读取 CurrentSnapshot.armorClass 或通过 UpdateArmorClass 请求重算后由规则层读取")]
+        public int armorClass = 10;
+
         // 新增：昏迷/豁免相关私有字段（之前被误删）
         private int unconsciousSuccessCount;
         private int unconsciousFailureCount;
@@ -59,6 +70,21 @@ namespace demo2.DND
 
         // 便捷属性访问 - 修正命名规范（移除重复的小写 level）
         public int Level => characterLevel;
+        public int ProficiencyBonus => template != null ? template.GetProficiencyBonusByLevel(Level) : 2;
+        public int CurrentArmorClass {
+            get {
+                // 优先使用最终快照；若还未初始化，则用基础未着甲AC + DexMod 兜底
+                int snapAc = CurrentSnapshot.armorClass;
+                if (snapAc > 0) return snapAc;
+                int baseAc = template != null ? template.baseArmorClass : armorClass;
+                return baseAc + DexMod;
+            }
+        }
+
+        // 新增：属性修正聚合与最终快照
+        public event Action<FinalStatsSnapshot> OnStatsChanged;
+        private ModifierAggregator mods = new ModifierAggregator();
+        public FinalStatsSnapshot CurrentSnapshot { get; private set; }
 
         private void Awake() {
             // 从模板初始化角色数据
@@ -66,6 +92,45 @@ namespace demo2.DND
 
             // 连接动画适配器事件
             SetupAdapterEvents();
+
+            // 初始化一次最终属性快照
+            RecalculateStats();
+        }
+
+        // 最小骨架：对外暴露修正接口（后续由装备/种族/职业/效果调用）
+        public void AddModifier(StatModifier mod)
+        {
+            if (mod == null) return;
+            mods.Add(mod);
+            RecalculateStats();
+        }
+        public void RemoveModifiersBySource(object source)
+        {
+            mods.RemoveBySource(source);
+            mods.PurgeExpired();
+            RecalculateStats();
+        }
+        public void TickEffectSeconds(float deltaSeconds)
+        {
+            mods.TickSeconds(deltaSeconds);
+            if (mods.PurgeExpired()) RecalculateStats();
+        }
+        public void TickEffectRound(int count = 1)
+        {
+            mods.TickRounds(count);
+            if (mods.PurgeExpired()) RecalculateStats();
+        }
+
+        private void RecalculateStats()
+        {
+            CurrentSnapshot = mods.Recalculate(this);
+            try { OnStatsChanged?.Invoke(CurrentSnapshot); } catch (Exception ex) { Debug.LogWarning($"OnStatsChanged listener threw: {ex}"); }
+        }
+
+        // 新增：对外公开的强制重算接口（用于状态变更/装备更换触发）
+        public void RequestRecalculateStats()
+        {
+            RecalculateStats();
         }
 
         /// <summary>
@@ -161,14 +226,14 @@ namespace demo2.DND
                 RegisterUnconsciousHit(isCritical);
 
                 // 显示伤害数字与刷新UI（保持视觉反馈）
-                try { ShowDamageNumber(damage, true); } catch (Exception) { }
+                try { ShowDamageNumber(damage); } catch (Exception ex) { Debug.LogWarning($"ShowDamageNumber failed: {ex.Message}"); }
                 HealthBarUIManager.Instance?.RefreshBar(this);
                 NotifyHealthChanged();
                 return;
             }
 
             // 记录修改前生命值以便计算溢出（overflow）
-            int prevHp = currentHitPoints;
+            // int prevHp = currentHitPoints; // 未使用，移除
 
             // 扣除实际生命值（允许先计算溢出，再将hp夹住为0）
             int afterHp = currentHitPoints - damage;
@@ -188,12 +253,8 @@ namespace demo2.DND
             }
 
             // 显示伤害数字（优先使用 DamageDisplayManager）
-            try {
-                ShowDamageNumber(damage, true);
-            }
-            catch (System.Exception ex) {
-                Debug.LogWarning($"ApplyDamageToSelf: ShowDamageNumber 触发异常 - {ex}");
-            }
+            try { ShowDamageNumber(damage); }
+            catch (System.Exception ex) { Debug.LogWarning($"ApplyDamageToSelf: ShowDamageNumber 触发异常 - {ex}"); }
 
             // 通知UI直接刷新
             HealthBarUIManager.Instance?.RefreshBar(this);
@@ -225,13 +286,13 @@ namespace demo2.DND
             int add = isCritical ? 2 : 1;
             unconsciousFailureCount += add;
             Debug.Log($"{GetDisplayName()} 倒地时受到攻击，记录死豁失败 +{add} -> now failures={unconsciousFailureCount}/3");
-            try { GameLog.LogAction(GetDisplayName(), $"倒地期间被攻击，死豁失败 +{add}（{unconsciousFailureCount}/3）"); } catch { }
+            try { GameLog.LogAction(GetDisplayName(), $"倒地期间被攻击，死豁失败 +{add}（{unconsciousFailureCount}/3）"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
 
             // 检查是否达到真正死亡
             if (unconsciousFailureCount >= 3)
             {
                 Debug.Log($"{GetDisplayName()} 倒地死豁失败达到3次，触发真正死亡");
-                try { GameLog.LogAction(GetDisplayName(), "倒地死豁失败达到3次，真正死亡"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), "倒地死豁失败达到3次，真正死亡"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
                 HandleTrueDeath();
             }
         }
@@ -256,7 +317,7 @@ namespace demo2.DND
             // 添加昏迷状态
             AddStatusEffect(StatusEffectType.Unconscious);
             Debug.Log($"{GetDisplayName()} 失去意识，进入昏迷状态!");
-            try { GameLog.LogAction(GetDisplayName(), "失去意识，进入昏迷状态"); } catch { }
+            try { GameLog.LogAction(GetDisplayName(), "失去意识，进入昏迷状态"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
 
             // 播放昏迷动画（使用SO映射名/兜底名，直接驱动动画，不依赖Spine事件）
             PlayUnconsciousAnimation();
@@ -271,7 +332,7 @@ namespace demo2.DND
         private void HandleEnemyDeath() {
             // 敌人直接死亡，不再添加昏迷状态
             Debug.Log($"{GetDisplayName()} 死亡!");
-            try { GameLog.LogAction(GetDisplayName(), "死亡"); } catch { }
+            try { GameLog.LogAction(GetDisplayName(), "死亡"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
 
             // 播放死亡动画
             PlayDeathAnimation();
@@ -307,7 +368,7 @@ namespace demo2.DND
             DND_CharacterAdapter characterAdapter = GetAdapter();
             if (characterAdapter != null) {
                 characterAdapter.PlayDeathAnimation();
-                hasPlayedDeath = true;
+                HasPlayedDeath = true;
             }
         }
 
@@ -350,13 +411,13 @@ namespace demo2.DND
             {
                 unconsciousSuccessCount++;
                 Debug.Log($"{GetDisplayName()} 回合体质豁免成功 ({constitutionSave} vs DC{savingThrowDc}) - 成功次数: {unconsciousSuccessCount}/3");
-                try { GameLog.LogAction(GetDisplayName(), $"体质死豁成功（{unconsciousSuccessCount}/3）"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), $"体质死豁成功（{unconsciousSuccessCount}/3）"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
             }
             else
             {
                 unconsciousFailureCount++;
                 Debug.Log($"{GetDisplayName()} 回合体质豁免失败 ({constitutionSave} vs DC{savingThrowDc}) - 失败次数: {unconsciousFailureCount}/3");
-                try { GameLog.LogAction(GetDisplayName(), $"体质死豁失败（{unconsciousFailureCount}/3）"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), $"体质死豁失败（{unconsciousFailureCount}/3）"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
             }
 
             // 检查是否达到结束条件
@@ -369,7 +430,7 @@ namespace demo2.DND
                 unconsciousSuccessCount = 0;
 
                 Debug.Log($"{GetDisplayName()} 回合豁免: 三次成功，恢复意识并获得1点血量!");
-                try { GameLog.LogAction(GetDisplayName(), "死豁三次成功，恢复意识并获得1点生命"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), "死豁三次成功，恢复意识并获得1点生命"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
                 DND_CharacterAdapter characterAdapter = GetComponent<DND_CharacterAdapter>();
                 if (characterAdapter != null)
                 {
@@ -381,7 +442,7 @@ namespace demo2.DND
             if (unconsciousFailureCount >= 3)
             {
                 Debug.Log($"{GetDisplayName()} 回合豁免: 三次失败，触发真正死亡");
-                try { GameLog.LogAction(GetDisplayName(), "死豁三次失败，真正死亡"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), "死豁三次失败，真正死亡"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
                 HandleTrueDeath();
             }
         }
@@ -391,7 +452,7 @@ namespace demo2.DND
         /// </summary>
         private void HandleTrueDeath() {
             Debug.Log($"{GetDisplayName()} 真正死亡!");
-            try { GameLog.LogAction(GetDisplayName(), "真正死亡"); } catch { }
+            try { GameLog.LogAction(GetDisplayName(), "真正死亡"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
 
             // 播放死亡动画
             PlayDeathAnimation();
@@ -424,7 +485,7 @@ namespace demo2.DND
                 {
                     HealthBarUIManager.Instance?.RemoveBarFor(this);
                 }
-                catch { }
+                catch (Exception ex) { Debug.LogWarning($"HealthBarUIManager.RemoveBarFor failed: {ex.Message}"); }
 
                 RemoveFromFormation();
                 Debug.Log($"{GetDisplayName()} 尸体已消失");
@@ -529,6 +590,9 @@ namespace demo2.DND
             // 同步血条UI
             HealthBarUIManager.Instance?.RefreshBar(this);
             NotifyHealthChanged();
+
+            // 等级变化可能影响熟练加值与其他派生属性，触发一次总重算
+            RequestRecalculateStats();
         }
 
         /// <summary>
@@ -561,7 +625,7 @@ namespace demo2.DND
             currentHitPoints = Mathf.Min(maxHitPoints, currentHitPoints + amount);
 
             Debug.Log($"{GetDisplayName()} 恢复 {amount} 点生命值! 当前生命值: {currentHitPoints}/{maxHitPoints}");
-            try { GameLog.LogAction(GetDisplayName(), $"恢复 {amount} 点生命值"); } catch { }
+            try { GameLog.LogAction(GetDisplayName(), $"恢复 {amount} 点生命值"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
 
             // 显示治疗数字
             ShowHealNumber(amount);
@@ -573,7 +637,7 @@ namespace demo2.DND
             if (currentHitPoints > 0 && HasStatusEffect(StatusEffectType.Unconscious)) {
                 RemoveStatusEffect(StatusEffectType.Unconscious);
                 Debug.Log($"{GetDisplayName()} 恢复意识!");
-                try { GameLog.LogAction(GetDisplayName(), "恢复意识"); } catch { }
+                try { GameLog.LogAction(GetDisplayName(), "恢复意识"); } catch (Exception ex) { Debug.LogWarning($"GameLog.LogAction failed: {ex.Message}"); }
             }
         }
 
@@ -709,18 +773,18 @@ namespace demo2.DND
 
             // 尝试使用 UnityEngine.UI.Text
             Text uiText = null;
-            var textGO = new GameObject("Text");
-            textGO.transform.SetParent(go.transform, false);
-            uiText = textGO.AddComponent<Text>();
-            uiText.text = text;
-            uiText.color = color;
-            uiText.alignment = TextAnchor.MiddleCenter;
-            uiText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            uiText.raycastTarget = false;
+            var textGo = new GameObject("Text");
+            textGo.transform.SetParent(go.transform, false);
+            uiText = textGo.AddComponent<Text>();
+             uiText.text = text;
+             uiText.color = color;
+             uiText.alignment = TextAnchor.MiddleCenter;
+             uiText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+             uiText.raycastTarget = false;
 
-            RectTransform rt = go.AddComponent<RectTransform>();
-            RectTransform childRt = textGO.GetComponent<RectTransform>();
-            childRt.sizeDelta = new Vector2(200, 50);
+             RectTransform rt = go.AddComponent<RectTransform>();
+             RectTransform childRt = textGo.GetComponent<RectTransform>();
+             childRt.sizeDelta = new Vector2(200, 50);
 
             // 计算屏幕坐标并设置 anchoredPosition
             Camera worldCamera = Camera.main ?? FindObjectOfType<Camera>();
@@ -775,15 +839,8 @@ namespace demo2.DND
         /// 更新护甲等级
         /// </summary>
         public void UpdateArmorClass() {
-            // 从基础AC开始
-            int baseAc = template != null ? template.baseArmorClass : 10;
-            armorClass = baseAc;
-
-            // 应用状态效果的修正
-            if (HasStatusEffect(StatusEffectType.Dodging)) {
-                armorClass += 2; // 防御姿态提供+2 AC
-                Debug.Log($"{GetDisplayName()} 处于防御姿态，AC+2，当前AC: {armorClass}");
-            }
+            // 交由聚合器按 5e 装备规则重算（包含 Dodging 状态）
+            RequestRecalculateStats();
         }
 
         /// <summary>
@@ -856,6 +913,21 @@ namespace demo2.DND
                 adapter = GetComponentInParent<DND_CharacterAdapter>();
             }
             return adapter;
+        }
+
+        public void AddModifiersFrom(ItemBaseSO data, object source)
+        {
+            if (data == null || source == null) return;
+            foreach (var mod in data.BuildRuntimeModifiers(source))
+            {
+                AddModifier(mod);
+            }
+        }
+
+        public void RemoveModifiersFrom(ItemBaseSO data, object source)
+        {
+            if (data == null || source == null) return;
+            RemoveModifiersBySource(source);
         }
     }
 }

@@ -62,7 +62,7 @@ namespace demo2.DND.HorizontalFormation
         /// </summary>
         public bool CanAct() {
             return character != null &&
-                   character.currentHitPoints > 0 &&
+                   character.CurrentHitPoints > 0 &&
                    !hasActedThisRound;
         }
 

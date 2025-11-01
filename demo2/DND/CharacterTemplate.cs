@@ -34,6 +34,14 @@ public class CharacterTemplate : ScriptableObject {
     public int baseArmorClass = 10;
     public int hitDie = 8; // 生命骰
 
+    [Header("徒手（未装备武器）配置")]
+    [Tooltip("徒手默认伤害骰（未装备武器时使用）")]
+    public DiceFormula unarmedDamageDice = new DiceFormula { diceCount = 1, diceSize = 6 };
+    [Tooltip("徒手伤害的能力修正选择：Strength/Dexterity/BestOfStrDex")]
+    public PhysicalHitAbilityMode unarmedDamageAbilityMode = PhysicalHitAbilityMode.Strength;
+    [Tooltip("徒手命中是否计算熟练加值（5e：是，所有角色默认熟练徒手）")]
+    public bool unarmedProficient = true;
+
     [Header("抗性与免疫")]
     public List<DamageType> resistances = new List<DamageType>();
     public List<DamageType> immunities = new List<DamageType>();
@@ -53,6 +61,17 @@ public class CharacterTemplate : ScriptableObject {
     public bool proficientMelee = true;
     [Tooltip("是否熟练远程武器（在未接入装备系统前，按阵位行为或调用方的 isMeleeAttack 判定使用）")]
     public bool proficientRanged = false;
+
+    [Header("护甲/盾牌熟练（SO 可配置）")]
+    [Tooltip("是否熟练轻甲（Light Armor）")]
+    public bool proficientLightArmor = true;
+    [Tooltip("是否熟练中甲（Medium Armor）")]
+    public bool proficientMediumArmor = false;
+    [Tooltip("是否熟练重甲（Heavy Armor）")]
+    public bool proficientHeavyArmor = false;
+    [Tooltip("是否熟练盾牌（Shield）")]
+    public bool proficientShield = true;
+
     [Tooltip("武器类别熟练（预留）：如 simple/martial 等；当前版本未在命中中细分使用")]
     public List<string> proficientWeaponClasses = new List<string>();
     [Tooltip("武器类型熟练（预留）：如 longsword/shortbow/finesse 等；当前版本未在命中中细分使用")]
@@ -86,6 +105,28 @@ public class CharacterTemplate : ScriptableObject {
     public bool IsProficientForAttack(bool isSpell, bool isMelee) {
         if (isSpell) return proficientSpellAttacks;
         return isMelee ? proficientMelee : proficientRanged;
+    }
+
+    /// <summary>
+    /// 当前模板是否熟练某护甲类型
+    /// </summary>
+    public bool IsProficientForArmor(ArmorType armorType)
+    {
+        switch (armorType)
+        {
+            case ArmorType.Light: return proficientLightArmor;
+            case ArmorType.Medium: return proficientMediumArmor;
+            case ArmorType.Heavy: return proficientHeavyArmor;
+            default: return false;
+        }
+    }
+
+    /// <summary>
+    /// 当前模板是否熟练盾牌
+    /// </summary>
+    public bool IsProficientForShield()
+    {
+        return proficientShield;
     }
 
     /// <summary>

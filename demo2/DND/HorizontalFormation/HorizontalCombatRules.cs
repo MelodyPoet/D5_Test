@@ -1,48 +1,98 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using demo2.DND.InventoryTetris;
+using demo2.DND.Stats;
 
 namespace demo2.DND.HorizontalFormation
 {
     /// <summary>
-    /// 横版战斗规则系统
-    /// 处理先攻检定、攻击计算等战斗逻辑
+    /// 横版战斗规则系统：先攻、命中与伤害结算。
+    /// 约束：只读取装备栏（CharacterEquipment）中的武器/护甲/盾牌；未装备时一律按“默认徒手/未着甲”处理，与背包内容无关。
     /// </summary>
     public static class HorizontalCombatRules
     {
-        /// <summary>
-        /// 执行先攻检定并排序
-        /// </summary>
-        public static List<InitiativeEntry> RollAndSortInitiative(List<CharacterStats> combatants)
+        // ---------- 基础工具 ----------
+        private static FinalStatsSnapshot? TryGetSnapshot(CharacterStats c)
         {
-            List<InitiativeEntry> initiativeList = new List<InitiativeEntry>();
-
-            foreach (CharacterStats character in combatants)
+            return c != null ? c.CurrentSnapshot : (FinalStatsSnapshot?)null;
+        }
+        private static int GetAbilityModifier(int score) => (score - 10) / 2;
+        private static string NormalizeAbilityName(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "strength";
+            string s = input.Trim().ToLowerInvariant();
+            if (s.StartsWith("str")) return "strength";
+            if (s.StartsWith("dex")) return "dexterity";
+            if (s.StartsWith("con")) return "constitution";
+            if (s.StartsWith("int")) return "intelligence";
+            if (s.StartsWith("wis")) return "wisdom";
+            if (s.StartsWith("cha")) return "charisma";
+            switch (s)
             {
-                if (character == null) continue;
-
-                // 先攻检定：1d20 + 敏捷调整值
-                int dexModifier = GetAbilityModifier(character.dexterity);
-                int roll = Random.Range(1, 21); // 1d20
-                int totalInitiative = roll + dexModifier;
-
-                InitiativeEntry entry = new InitiativeEntry(character, totalInitiative);
-                initiativeList.Add(entry);
-
-                Debug.Log($"{character.GetDisplayName()} 先攻检定: {roll} + {dexModifier} = {totalInitiative}");
-                // 日志：先攻
-                try { GameLog.LogInitiative(character.GetDisplayName(), roll, dexModifier, totalInitiative); } catch { }
+                case "strength":
+                case "dexterity":
+                case "constitution":
+                case "intelligence":
+                case "wisdom":
+                case "charisma":
+                    return s;
+                default: return "strength";
             }
-
-            // 按先攻值从高到低排序
-            initiativeList = initiativeList.OrderByDescending(entry => entry.initiativeValue).ToList();
-
-            return initiativeList;
+        }
+        private static int GetAbilityModifierFromSnapshot(FinalStatsSnapshot? snap, CharacterStats c, string abilityName)
+        {
+            string n = NormalizeAbilityName(abilityName);
+            if (snap.HasValue)
+            {
+                switch (n)
+                {
+                    case "strength": return snap.Value.StrMod;
+                    case "dexterity": return snap.Value.DexMod;
+                    case "constitution": return snap.Value.ConMod;
+                    case "intelligence": return snap.Value.IntMod;
+                    case "wisdom": return snap.Value.WisMod;
+                    case "charisma": return snap.Value.ChaMod;
+                    default: return 0;
+                }
+            }
+            else
+            {
+                switch (n)
+                {
+                    case "strength": return GetAbilityModifier(c != null ? c.strength : 10);
+                    case "dexterity": return GetAbilityModifier(c != null ? c.dexterity : 10);
+                    case "constitution": return GetAbilityModifier(c != null ? c.constitution : 10);
+                    case "intelligence": return GetAbilityModifier(c != null ? c.intelligence : 10);
+                    case "wisdom": return GetAbilityModifier(c != null ? c.wisdom : 10);
+                    case "charisma": return GetAbilityModifier(c != null ? c.charisma : 10);
+                    default: return 0;
+                }
+            }
         }
 
-        /// <summary>
-        /// 攻击结果数据结构
-        /// </summary>
+        // ---------- 先攻 ----------
+        public static List<InitiativeEntry> RollAndSortInitiative(List<CharacterStats> combatants)
+        {
+            var list = new List<InitiativeEntry>();
+            if (combatants == null) return list;
+
+            foreach (var c in combatants)
+            {
+                if (c == null) continue;
+                var snap = TryGetSnapshot(c);
+                int dexMod = snap.HasValue ? snap.Value.DexMod : GetAbilityModifier(c.dexterity);
+                int roll = Random.Range(1, 21);
+                int total = roll + dexMod;
+                list.Add(new InitiativeEntry(c, total));
+                Debug.Log($"{c.GetDisplayName()} 先攻检定: {roll} + {dexMod} = {total}");
+                try { GameLog.LogInitiative(c.GetDisplayName(), roll, dexMod, total); } catch { }
+            }
+
+            return list.OrderByDescending(e => e.initiativeValue).ToList();
+        }
+
+        // ---------- 攻击 ----------
         public struct AttackResult
         {
             public bool isHit;
@@ -52,289 +102,182 @@ namespace demo2.DND.HorizontalFormation
             public DamageType damageType;
         }
 
-        /// <summary>
-        /// 解决攻击检定
-        /// </summary>
-        /// <param name="attacker">发起攻击的角色</param>
-        /// <param name="target">被攻击的目标角色</param>
-        /// <param name="advantageFlag">1 = advantage, 0 = normal, -1 = disadvantage</param>
-        /// <param name="isMeleeAttack">是否为近战（用于物理攻击时选择 STR/DEX）</param>
         public static AttackResult ResolveAttack(CharacterStats attacker, CharacterStats target, int advantageFlag = 0, bool isMeleeAttack = true)
         {
-            AttackResult result = new AttackResult();
+            AttackResult r = new AttackResult { isHit = false, damage = 0, isCritical = false, description = "" };
+            if (attacker == null || target == null) { r.description = "无效攻击"; return r; }
 
-            if (attacker == null || target == null)
-            {
-                result.isHit = false;
-                result.description = "无效攻击";
-                return result;
-            }
+            bool isSpell = attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell;
+            var weapon = isSpell ? null : FindEquippedWeapon(attacker);
 
-            bool isSpellAttack = attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell;
+            string hitAbility;
+            string attackName;
+            int attackBonus = GetAttackBonus(attacker, isMeleeAttack, out hitAbility, out attackName, weapon);
 
-            // 选择攻击类型与能力（不再根据前/后排决定能力，按模板与兜底规则）
-            string abilityNameForHit;
-            int abilityModForHit;
-            string attackTypeName;
-            int attackBonus = GetAttackBonus(attacker, isMeleeAttack, out abilityNameForHit, out abilityModForHit, out attackTypeName);
-
-            // 攻击检定：1d20 (+ advantage/disadvantage) + 攻击加值
             int roll1 = Random.Range(1, 21);
             int roll2 = Random.Range(1, 21);
-            int attackRoll = roll1;
-            if (advantageFlag > 0)
-            {
-                attackRoll = Mathf.Max(roll1, roll2);
-            }
-            else if (advantageFlag < 0)
-            {
-                attackRoll = Mathf.Min(roll1, roll2);
-            }
-            int totalAttack = attackRoll + attackBonus;
+            int d20 = (advantageFlag > 0) ? Mathf.Max(roll1, roll2) : (advantageFlag < 0 ? Mathf.Min(roll1, roll2) : roll1);
+            int totalAttack = d20 + attackBonus;
 
-            // 检查暴击（天然20）
-            if (advantageFlag > 0)
+            r.isCritical = (advantageFlag > 0) ? (roll1 == 20 || roll2 == 20) : (advantageFlag < 0 ? (roll1 == 20 && roll2 == 20) : (d20 == 20));
+
+            var tsnap = TryGetSnapshot(target);
+            int targetAc = tsnap.HasValue ? tsnap.Value.armorClass : target.armorClass;
+            r.isHit = r.isCritical || totalAttack >= targetAc;
+
+            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackName, hitAbility, d20, attackBonus, totalAttack, targetAc, r.isHit); } catch { }
+
+            if (!r.isHit)
             {
-                result.isCritical = (roll1 == 20 || roll2 == 20);
-            }
-            else if (advantageFlag < 0)
-            {
-                result.isCritical = (roll1 == 20 && roll2 == 20);
-            }
-            else
-            {
-                result.isCritical = (attackRoll == 20);
+                r.description = "攻击未命中";
+                return r;
             }
 
-            // 命中检定
-            result.isHit = totalAttack >= target.armorClass || result.isCritical;
+            int diceSize, rolled, dmgAbilityMod;
+            string dmgAbilityName;
+            r.damage = CalculateDamageUnified(attacker, r.isCritical, isSpell, hitAbility, out diceSize, out rolled, out dmgAbilityMod, weapon, out dmgAbilityName);
+            r.description = r.isCritical ? $"暴击命中！伤害: {r.damage}" : $"命中！伤害: {r.damage}";
+            r.damageType = isSpell
+                ? ((attacker.template != null && attacker.template.defaultCantrip != null) ? attacker.template.defaultCantrip.damageType : DamageType.Force)
+                : (weapon != null ? weapon.weaponDamageType : DamageType.Bludgeoning);
 
-            // 实时日志：命中检定（显示选择的能力与总修正）
-            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackTypeName, abilityNameForHit, attackRoll, attackBonus, totalAttack, target.armorClass, result.isHit); } catch { }
+            int baseDice = isSpell
+                ? (attacker.template != null && attacker.template.defaultCantrip != null ? attacker.template.defaultCantrip.GetDamageDiceAtCasterLevel(attacker.Level).diceCount : 1)
+                : (weapon != null ? Mathf.Max(1, weapon.weaponDamageDice.diceCount) : (attacker.template != null ? Mathf.Max(1, attacker.template.unarmedDamageDice.diceCount) : 1));
+            string diceExpr = (r.isCritical ? baseDice * 2 : baseDice) + "d" + diceSize + (r.isCritical ? "（暴击）" : "");
 
-            if (result.isHit)
+            try
             {
-                // 计算伤害（Spell 使用法术骰且不叠加属性；Physical 使用 1d6+STR）
-                int diceSize, rolledTotal, strModForDmg;
-                int damage = CalculateDamageUnified(attacker, result.isCritical, isSpellAttack, out diceSize, out rolledTotal, out strModForDmg);
-                result.damage = damage;
-                result.description = result.isCritical ?
-                    $"暴击命中！伤害: {result.damage}" :
-                    $"命中！伤害: {result.damage}";
-
-                // 伤害类型
-                result.damageType = isSpellAttack
-                    ? ((attacker.template != null && attacker.template.defaultCantrip != null) ? attacker.template.defaultCantrip.damageType : DamageType.Force)
-                    : DamageType.Bludgeoning;
-
-                // 构造骰子表达（暴击：仅翻倍骰子个数）
-                int baseDiceCount = isSpellAttack
-                    ? (attacker.template != null && attacker.template.defaultCantrip != null
-                        ? attacker.template.defaultCantrip.GetDamageDiceAtCasterLevel(attacker.Level).diceCount
-                        : 1)
-                    : 1;
-                string diceExpr = (result.isCritical ? (baseDiceCount * 2) : baseDiceCount) + "d" + diceSize;
-                if (result.isCritical)
-                {
-                    diceExpr += "（暴击）";
-                }
-
-                if (isSpellAttack)
-                {
-                    // Spell 伤害日志：不显示能力修正
-                    try { GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), result.damageType.ToString(), diceExpr, rolledTotal, "未应用抗性/易伤", result.damage); } catch { }
-                }
+                if (isSpell)
+                    GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), r.damageType.ToString(), diceExpr, rolled, "未应用抗性/易伤", r.damage);
                 else
-                {
-                    // Physical 伤害日志：显示 STR 修正
-                    try { GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), result.damageType.ToString(), diceExpr, rolledTotal, "strength", strModForDmg, "未应用抗性/易伤", result.damage); } catch { }
-                }
+                    GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), r.damageType.ToString(), diceExpr, rolled, dmgAbilityName, dmgAbilityMod, "未应用抗性/易伤", r.damage);
             }
-            else
-            {
-                result.damage = 0;
-                result.description = "攻击未命中";
-            }
+            catch { }
 
-            return result;
+            return r;
         }
 
-        /// <summary>
-        /// 计算攻击加值，并返回用于命中的能力与类型名
-        /// Physical：命中使用 max(STR, DEX) 的调整值（兜底规则），不依赖前/后排；
-        /// Spell：使用模板主施法属性。
-        /// </summary>
-        private static int GetAttackBonus(CharacterStats character, bool isMeleeAttack, out string abilityNameForHit, out int abilityModForHit, out string attackTypeName)
+        // 仅读取装备栏主手；未装备=>null（徒手）
+        private static ItemBaseSO FindEquippedWeapon(CharacterStats c)
         {
-            // 默认值
+            if (c == null) return null;
+            var eq = c.GetComponent<CharacterEquipment>()
+                     ?? c.GetComponentInParent<CharacterEquipment>()
+                     ?? c.GetComponentInChildren<CharacterEquipment>(true);
+            if (eq != null && eq.mainHand != null && eq.mainHand.data != null && eq.mainHand.data.isWeapon)
+                return eq.mainHand.data;
+            return null;
+        }
+
+        private static int GetAttackBonus(CharacterStats c, bool isMelee, out string abilityNameForHit, out string attackTypeName, ItemBaseSO weapon = null)
+        {
             abilityNameForHit = "strength";
             attackTypeName = "物理普通攻击";
+            var snap = TryGetSnapshot(c);
 
-            bool isSpell = character.template != null && character.template.defaultAttackType == DefaultAttackType.Spell;
+            bool isSpell = c.template != null && c.template.defaultAttackType == DefaultAttackType.Spell;
             if (isSpell)
             {
-                // 使用默认法术名字作为攻击类型名
-                attackTypeName = (character.template != null && character.template.defaultCantrip != null && !string.IsNullOrEmpty(character.template.defaultCantrip.spellName))
-                    ? character.template.defaultCantrip.spellName
-                    : "法术普通攻击";
-                abilityNameForHit = NormalizeAbilityName(character.template != null ? character.template.primarySpellAbility : "intelligence");
-                abilityModForHit = GetAbilityModifierFromStats(character, abilityNameForHit);
+                attackTypeName = (c.template != null && c.template.defaultCantrip != null && !string.IsNullOrEmpty(c.template.defaultCantrip.spellName)) ? c.template.defaultCantrip.spellName : "法术普通攻击";
+                abilityNameForHit = NormalizeAbilityName(c.template != null ? c.template.primarySpellAbility : "intelligence");
+                int mod = GetAbilityModifierFromSnapshot(snap, c, abilityNameForHit);
+                int prof = (c.template != null && c.template.IsProficientForAttack(true, isMelee)) ? c.template.GetProficiencyBonusByLevel(c.Level) : 0;
+                return mod + prof;
+            }
+
+            int str = GetAbilityModifierFromSnapshot(snap, c, "strength");
+            int dex = GetAbilityModifierFromSnapshot(snap, c, "dexterity");
+
+            if (weapon != null && weapon.isWeapon)
+            {
+                var mode = weapon.isFinesse ? PhysicalHitAbilityMode.BestOfStrDex : weapon.weaponHitAbilityMode;
+                switch (mode)
+                {
+                    case PhysicalHitAbilityMode.Strength: abilityNameForHit = "strength"; break;
+                    case PhysicalHitAbilityMode.Dexterity: abilityNameForHit = "dexterity"; break;
+                    default: abilityNameForHit = (dex > str) ? "dexterity" : "strength"; break;
+                }
+                int mod = abilityNameForHit == "dexterity" ? dex : str;
+                int prof = (c.template != null && c.template.IsProficientForAttack(false, isMelee)) ? c.template.GetProficiencyBonusByLevel(c.Level) : 0;
+                return mod + prof;
             }
             else
             {
-                // 物理兜底：命中取 STR/DEX 中较大者
-                int str = GetAbilityModifierFromStats(character, "strength");
-                int dex = GetAbilityModifierFromStats(character, "dexterity");
-                if (dex > str)
-                {
-                    abilityNameForHit = "dexterity";
-                    abilityModForHit = dex;
-                }
-                else
-                {
-                    abilityNameForHit = "strength";
-                    abilityModForHit = str;
-                }
+                // 徒手命中：取 STR/DEX 较大者；是否加熟练由模板 unarmedProficient 决定（5e：默认加熟练）
+                abilityNameForHit = (dex > str) ? "dexterity" : "strength";
+                int mod = (dex > str) ? dex : str;
+                int prof = (c.template != null && c.template.unarmedProficient) ? c.template.GetProficiencyBonusByLevel(c.Level) : 0;
+                return mod + prof;
             }
-
-            // 熟练加值：仅当模板判定本次攻击为熟练时才叠加
-            int prof = 0;
-            if (character != null && character.template != null)
-            {
-                bool proficient = character.template.IsProficientForAttack(isSpell, isMeleeAttack);
-                if (proficient)
-                {
-                    prof = character.template.GetProficiencyBonusByLevel(character.Level);
-                }
-            }
-            return abilityModForHit + prof;
         }
 
-        /// <summary>
-        /// 统一伤害计算：
-        /// - Spell：使用 defaultCantrip 的伤害骰（随等级成长），不叠加属性；暴击仅翻倍骰子数。
-        /// - Physical：使用 1d6 + STR 调整值；暴击仅翻倍骰。
-        /// 输出：diceSize（面数）、rolledTotal（掷骰合计）、strModForDmg（物理用的STR修正；Spell为0）。
-        /// </summary>
-        private static int CalculateDamageUnified(CharacterStats character, bool isCritical, bool isSpellAttack, out int diceSize, out int rolledTotal, out int strModForDmg)
+        private static int CalculateDamageUnified(CharacterStats c, bool isCritical, bool isSpell, string damageAbilityFromHit, out int diceSize, out int rolledTotal, out int abilityModForDmg, ItemBaseSO weapon, out string damageAbilityName)
         {
             rolledTotal = 0;
-            strModForDmg = 0;
+            abilityModForDmg = 0;
+            damageAbilityName = "strength";
 
-            if (isSpellAttack)
+            if (isSpell)
             {
-                // 法术：取模板 defaultCantrip
-                DiceFormula dice;
-                DamageType dt = DamageType.Force;
-                if (character.template != null && character.template.defaultCantrip != null)
+                DiceFormula dice = (c.template != null && c.template.defaultCantrip != null) ? c.template.defaultCantrip.GetDamageDiceAtCasterLevel(c.Level) : new DiceFormula { diceCount = 1, diceSize = 8 };
+                int count = isCritical ? dice.diceCount * 2 : dice.diceCount;
+                diceSize = dice.diceSize;
+                for (int i = 0; i < count; i++) rolledTotal += Random.Range(1, diceSize + 1);
+                return Mathf.Max(1, rolledTotal);
+            }
+
+            // 物理
+            DiceFormula pdice = (weapon != null && weapon.isWeapon)
+                ? new DiceFormula { diceCount = Mathf.Max(1, weapon.weaponDamageDice.diceCount), diceSize = Mathf.Max(2, weapon.weaponDamageDice.diceSize) }
+                : (c.template != null
+                    ? new DiceFormula { diceCount = Mathf.Max(1, c.template.unarmedDamageDice.diceCount), diceSize = Mathf.Max(2, c.template.unarmedDamageDice.diceSize) }
+                    : new DiceFormula { diceCount = 1, diceSize = 6 });
+            int pcount = isCritical ? pdice.diceCount * 2 : pdice.diceCount;
+            diceSize = pdice.diceSize;
+            for (int i = 0; i < pcount; i++) rolledTotal += Random.Range(1, diceSize + 1);
+
+            var snap = TryGetSnapshot(c);
+            int str = GetAbilityModifierFromSnapshot(snap, c, "strength");
+            int dex = GetAbilityModifierFromSnapshot(snap, c, "dexterity");
+
+            if (weapon != null && weapon.isWeapon)
+            {
+                if (weapon.useSeparateDamageAbility)
                 {
-                    dice = character.template.defaultCantrip.GetDamageDiceAtCasterLevel(character.Level);
-                    dt = character.template.defaultCantrip.damageType;
+                    var mode = weapon.isFinesse ? PhysicalHitAbilityMode.BestOfStrDex : weapon.weaponDamageAbilityMode;
+                    switch (mode)
+                    {
+                        case PhysicalHitAbilityMode.Strength: damageAbilityName = "strength"; abilityModForDmg = str; break;
+                        case PhysicalHitAbilityMode.Dexterity: damageAbilityName = "dexterity"; abilityModForDmg = dex; break;
+                        default: damageAbilityName = (dex > str) ? "dexterity" : "strength"; abilityModForDmg = (dex > str) ? dex : str; break;
+                    }
                 }
                 else
                 {
-                    dice = new DiceFormula { diceCount = 1, diceSize = 8 };
+                    string hit = NormalizeAbilityName(damageAbilityFromHit);
+                    if (hit == "dexterity") { damageAbilityName = "dexterity"; abilityModForDmg = dex; }
+                    else { damageAbilityName = "strength"; abilityModForDmg = str; }
                 }
-                int count = dice.diceCount;
-                diceSize = dice.diceSize;
-                if (isCritical) count *= 2;
-                for (int i = 0; i < count; i++)
-                {
-                    rolledTotal += Random.Range(1, diceSize + 1);
-                }
-                // 不叠加属性
-                return Mathf.Max(1, rolledTotal);
             }
             else
             {
-                // 物理兜底：1d6 + STR
-                diceSize = 6;
-                int count = isCritical ? 2 : 1;
-                for (int i = 0; i < count; i++)
+                // 徒手伤害：按模板配置的徒手能力模式取加值（默认 STR）
+                var mode = c.template != null ? c.template.unarmedDamageAbilityMode : PhysicalHitAbilityMode.Strength;
+                switch (mode)
                 {
-                    rolledTotal += Random.Range(1, diceSize + 1);
+                    case PhysicalHitAbilityMode.Dexterity:
+                        damageAbilityName = "dexterity"; abilityModForDmg = dex; break;
+                    case PhysicalHitAbilityMode.BestOfStrDex:
+                        if (dex > str) { damageAbilityName = "dexterity"; abilityModForDmg = dex; }
+                        else { damageAbilityName = "strength"; abilityModForDmg = str; }
+                        break;
+                    default:
+                        damageAbilityName = "strength"; abilityModForDmg = str; break;
                 }
-                strModForDmg = GetAbilityModifierFromStats(character, "strength");
-                return Mathf.Max(1, rolledTotal + strModForDmg);
             }
-        }
 
-        /// <summary>
-        /// 通过角色当前属性获取指定能力的调整值
-        /// </summary>
-        private static int GetAbilityModifierFromStats(CharacterStats c, string ability)
-        {
-            switch ((ability ?? string.Empty).ToLowerInvariant())
-            {
-                case "strength":
-                case "str": return GetAbilityModifier(c.strength);
-                case "dexterity":
-                case "dex": return GetAbilityModifier(c.dexterity);
-                case "constitution":
-                case "con": return GetAbilityModifier(c.constitution);
-                case "intelligence":
-                case "int": return GetAbilityModifier(c.intelligence);
-                case "wisdom":
-                case "wis": return GetAbilityModifier(c.wisdom);
-                case "charisma":
-                case "cha": return GetAbilityModifier(c.charisma);
-                default: return 0;
-            }
-        }
-
-        /// <summary>
-        /// 归一化能力名
-        /// </summary>
-        private static string NormalizeAbilityName(string ability)
-        {
-            if (string.IsNullOrWhiteSpace(ability)) return "intelligence";
-            string val = ability.Trim().ToLowerInvariant();
-            switch (val)
-            {
-                case "str": return "strength";
-                case "dex": return "dexterity";
-                case "con": return "constitution";
-                case "int": return "intelligence";
-                case "wis": return "wisdom";
-                case "cha": return "charisma";
-                default: return val;
-            }
-        }
-
-        /// <summary>
-        /// 计算属性调整值（通用）
-        /// </summary>
-        private static int GetAbilityModifier(int abilityScore)
-        {
-            return (abilityScore - 10) / 2;
-        }
-
-        /// <summary>
-        /// 检查角色是否可以攻击目标
-        /// </summary>
-        public static bool CanAttackTarget(CharacterStats attacker, CharacterStats target)
-        {
-            if (attacker == null || target == null) return false;
-            // 允许对处于昏迷（Unconscious）的角色进行攻击，即使其 currentHitPoints <= 0
-            if (attacker.currentHitPoints <= 0) return false;
-            if (target.currentHitPoints <= 0 && !target.HasStatusEffect(StatusEffectType.Unconscious)) return false;
-            if (attacker.battleSide == target.battleSide) return false; // 不能攻击同伙
-
-            return true;
-        }
-
-        /// <summary>
-        /// 获取攻击距离
-        /// </summary>
-        public static float GetAttackRange(CharacterStats character)
-        {
-            // 简化逻辑：前排=近战，后排=远程
-            BattlePositionComponent positionComponent = character.GetComponent<BattlePositionComponent>();
-            if (positionComponent != null && positionComponent.rowPosition == RowPosition.Back)
-            {
-                return 10f; // 远程攻击距离
-            }
-            return 1.5f; // 近战攻击距离
+            return Mathf.Max(1, rolledTotal + abilityModForDmg);
         }
     }
 }

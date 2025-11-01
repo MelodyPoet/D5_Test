@@ -49,9 +49,12 @@ namespace demo2.DND
                 // 立即应用一次，确保本帧就生效
                 skeletonAnimation.AnimationState.Apply(skeletonAnimation.Skeleton);
                 skeletonAnimation.Skeleton.UpdateWorldTransform();
-                try { skeletonAnimation.Update(0f); } catch { }
+                try { skeletonAnimation.Update(0f); } catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] CutImmediatelyForAttack.Update(0) 异常: {ex.Message}"); }
             }
-            catch { }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[{gameObject.name}] CutImmediatelyForAttack 异常: {ex.Message}");
+            }
         }
 
         // 终止状态（死亡或昏迷）判断
@@ -61,7 +64,8 @@ namespace demo2.DND
             // HP<=0 或带有昕迷状态都视为终止状态
             bool hpDown = characterStats.IsDownOrDead();
             bool unconscious = false;
-            try { unconscious = characterStats.HasStatusEffect(StatusEffectType.Unconscious); } catch { }
+            try { unconscious = characterStats.HasStatusEffect(StatusEffectType.Unconscious); }
+            catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] IsTerminalState 查询状态异常: {ex.Message}"); }
             return hpDown || unconscious;
         }
 
@@ -100,7 +104,7 @@ namespace demo2.DND
             if (stateData == null) return;
 
             // 全局禁用默认混合，避免资源侧DefaultMix导致的长过渡
-            try { stateData.DefaultMix = 0f; } catch { }
+            try { stateData.DefaultMix = 0f; } catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] 设置 DefaultMix=0 失败: {ex.Message}"); }
 
             string walk = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.walkAnimation)) ? animationConfig.walkAnimation : "walk";
             string run  = (animationConfig != null && !string.IsNullOrEmpty(animationConfig.runAnimation))  ? animationConfig.runAnimation  : "run";
@@ -113,8 +117,8 @@ namespace demo2.DND
             foreach (var atk in possibleAttackNames)
             {
                 if (string.IsNullOrEmpty(atk)) continue;
-                try { stateData.SetMix(walk, atk, 0f); } catch { }
-                try { stateData.SetMix(run,  atk, 0f); } catch { }
+                try { stateData.SetMix(walk, atk, 0f); } catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] SetMix({walk}->{atk}) 失败: {ex.Message}"); }
+                try { stateData.SetMix(run,  atk, 0f); } catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] SetMix({run}->{atk}) 失败: {ex.Message}"); }
             }
         }
 
@@ -415,7 +419,10 @@ namespace demo2.DND
                     skeletonAnimation.AnimationState.ClearTracks();
                     skeletonAnimation.Skeleton.SetToSetupPose();
                 }
-                catch { }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"[{gameObject.name}] PlayDeathAnimation 清轨/复位失败: {ex.Message}");
+                }
 
                 // 终止所有位移Tween，解除攻击锁
                 if (currentMoveTween != null && currentMoveTween.IsActive()) { currentMoveTween.Kill(); currentMoveTween = null; }
@@ -444,7 +451,10 @@ namespace demo2.DND
                     skeletonAnimation.AnimationState.ClearTracks();
                     skeletonAnimation.Skeleton.SetToSetupPose();
                 }
-                catch { }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"[{gameObject.name}] PlayUnconsciousAnimation 清轨/复位失败: {ex.Message}");
+                }
 
                 // 终止所有位移Tween，解除攻击锁
                 if (currentMoveTween != null && currentMoveTween.IsActive()) { currentMoveTween.Kill(); currentMoveTween = null; }
@@ -682,11 +692,8 @@ namespace demo2.DND
             Debug.Log($"[{gameObject.name}] 开始播放攻击动画");
 
             // 清理第0轨道以避免残留的walk/idle覆盖
-            try
-            {
-                skeletonAnimation.AnimationState.ClearTrack(0);
-            }
-            catch { }
+            try { skeletonAnimation.AnimationState.ClearTrack(0); }
+            catch (System.Exception ex) { Debug.LogWarning($"[{gameObject.name}] ClearTrack(0) 失败: {ex.Message}"); }
 
             if (IsTerminalState())
             {
@@ -727,9 +734,12 @@ namespace demo2.DND
                         {
                             skeletonAnimation.AnimationState.Apply(skeletonAnimation.Skeleton);
                             skeletonAnimation.Skeleton.UpdateWorldTransform();
-                            try { skeletonAnimation.Update(0f); } catch { }
+                            try { skeletonAnimation.Update(0f); } catch (System.Exception ex0) { Debug.LogWarning($"[{gameObject.name}] attack Ensure Update(0) 失败: {ex0.Message}"); }
                         }
-                        catch { }
+                        catch (System.Exception ex1)
+                        {
+                            Debug.LogWarning($"[{gameObject.name}] attack Ensure Apply 刷新失败: {ex1.Message}");
+                        }
                     }
                 }
                 catch (System.Exception ex)
@@ -1241,7 +1251,7 @@ namespace demo2.DND
                         if (item == null || string.IsNullOrEmpty(item.Name)) continue;
                         if (toLower(item.Name).Contains(prefLower))
                         {
-                            return item.Name; // 返回原始大小��名
+                            return item.Name; // 返回原始大小写名
                         }
                     }
                 }
@@ -1264,7 +1274,10 @@ namespace demo2.DND
                     }
                 }
             }
-            catch { }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[{gameObject.name}] FindBestAnimationName 模糊匹配失败: {ex.Message}");
+            }
 
             return null;
         }

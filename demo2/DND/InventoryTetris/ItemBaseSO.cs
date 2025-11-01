@@ -1,4 +1,7 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
+using System;
+using demo2.DND.Stats;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -16,5 +19,76 @@ namespace demo2.DND.InventoryTetris
 
         [Tooltip("是否允许旋转（90°）")]
         public bool canRotate = true;
+
+        [Header("武器（可选）")]
+        [Tooltip("勾选后，该物品作为武器参与普通物理攻击的命中与伤害计算；未勾选则按无武器规则进行。")]
+        public bool isWeapon;
+        [Tooltip("是否为灵巧武器（Finesse）：启用后命中与伤害能力按 STR/DEX 择优。")]
+        public bool isFinesse;
+        [Tooltip("物理普通攻击的命中能力选择模式：力量/敏捷/两者择优（仅当 isWeapon=true 时生效；若 isFinesse=true，此项将被视为 BestOfStrDex)")]
+        public PhysicalHitAbilityMode weaponHitAbilityMode = PhysicalHitAbilityMode.BestOfStrDex;
+        [Tooltip("武器伤害骰（例如 1d8、2d6）；暴击时仅翻倍骰子数量，不翻倍属性加值（当前实现沿用STR/DEX加值）")]
+        public DiceFormula weaponDamageDice = new DiceFormula { diceCount = 1, diceSize = 6 };
+        [Tooltip("武器伤害类型（用于日志与抗性结算）；未勾选 isWeapon 或不使用时可忽略")]
+        public DamageType weaponDamageType = DamageType.Bludgeoning;
+        [Header("武器高级（特殊场景，可选）")]
+        [Tooltip("是否启用‘伤害能力’与‘命中能力’分离。缺省关闭时：伤害沿用命中所用的能力；启用后：可单独配置伤害能力模式。")]
+        public bool useSeparateDamageAbility = false;
+        [Tooltip("当启用‘伤害能力分离’时生效：力量/敏捷/两者择优（若 isFinesse=true，则仍按 STR/DEX 择优）")]
+        public PhysicalHitAbilityMode weaponDamageAbilityMode = PhysicalHitAbilityMode.BestOfStrDex;
+
+        [Header("护甲/盾牌（可选）")]
+        [Tooltip("勾选后，该物品作为护甲参与AC计算")]
+        public bool isArmor;
+        [Tooltip("护甲类别：轻甲/中甲/重甲——决定敏捷加值的上限规则")]
+        public ArmorType armorType = ArmorType.Light;
+        [Tooltip("护甲基础AC（例如 轻甲 11，鳞甲 14，锁甲 16 等）")]
+        public int armorBaseAC = 11;
+        [Tooltip("勾选后，该物品作为盾牌提供额外AC加值（通常为+2）")]
+        public bool isShield;
+        [Tooltip("盾牌AC加值（标准+2）")]
+        public int shieldACBonus = 2;
+
+        [Header("属性加成（装备在背包中即生效，按 WhileEquipped 层应用）")]
+        [Tooltip("为该物品配置若干条属性修饰，进入背包后在战斗中生效；移出背包即移除。")]
+        public List<ModifierData> modifiers = new List<ModifierData>();
+
+        [Serializable]
+        public struct ModifierData
+        {
+            public StatType stat;
+            public ModifierOp op;
+            public float value;
+            public string stackKey;
+            public StackPolicy policy;
+            public ModifierLayer layer;
+            public DurationType durationType; // 建议设置为 WhileEquipped；允许配置兼容
+            public float seconds;
+            public int rounds;
+
+            public StatModifier ToRuntime(object source)
+            {
+                var m = new StatModifier(stat, op, value, stackKey, policy, layer);
+                m.source = source;
+                m.durationType = durationType;
+                m.seconds = seconds;
+                m.rounds = rounds;
+                // WhileEquipped 统一由背包驱动移除，防止计时移除
+                if (durationType == DurationType.WhileEquipped)
+                {
+                    m.removeOnExpire = false;
+                }
+                return m;
+            }
+        }
+
+        public IEnumerable<StatModifier> BuildRuntimeModifiers(object source)
+        {
+            if (modifiers == null) yield break;
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                yield return modifiers[i].ToRuntime(source);
+            }
+        }
     }
 }

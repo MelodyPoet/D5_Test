@@ -19,7 +19,7 @@ namespace demo2.DND.HorizontalFormation
         [Header("阵型配置说明")]
         [TextArea(3, 5)]
         [SerializeField] private string configurationNotes =
-            "索引对应关系：\n" +
+            "索引对应关系:\n" +
             "[0]前排左翼 [1]前排中锋 [2]前排右翼\n" +
             "[3]后排左翼 [4]后排中路 [5]后排右翼\n" +
             "null值表示该位置无角色";
@@ -92,17 +92,6 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
             playerFormationPrefabs[positionIndex] = prefab;
-        }
-
-        /// <summary>
-        /// 设置敌人指定位置的预制体
-        /// </summary>
-        /// <param name="positionIndex">位置索引 (0-5)</param>
-        /// <param name="prefab">要设置的预制体</param>
-        [System.Obsolete("敌人阵型已由EnemyWave配置，此方法不再适用")]
-        public void SetEnemyPrefab(int positionIndex, GameObject prefab)
-        {
-            Debug.LogWarning("SetEnemyPrefab 已过时，请直接配置 EnemyWave ScriptableObject。");
         }
     }
 }
