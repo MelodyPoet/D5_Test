@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+using demo2.DND.Utility;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -102,6 +103,9 @@ namespace demo2.DND.InventoryTetris
 
         public void ShowBackpack()
         {
+            // NOTE: Pause handling intentionally decoupled from UITabSwitcher.
+            // The Pause button / Space key should only affect game pause state and not control UI visibility here.
+
             if (backpackPanel != null) backpackPanel.SetActive(true);
             if (characterPanel != null) characterPanel.SetActive(false);
             // Quick runtime check: ensure an EventSystem exists so UI clicks work
@@ -120,6 +124,7 @@ namespace demo2.DND.InventoryTetris
 
         public void ShowCharacter()
         {
+            // NOTE: Pause handling intentionally decoupled from UITabSwitcher。
             if (backpackPanel != null) backpackPanel.SetActive(false);
             if (characterPanel != null) characterPanel.SetActive(true);
             // Re-wire nav buttons (in case character panel contains navigation in some layouts)
@@ -131,6 +136,7 @@ namespace demo2.DND.InventoryTetris
 
         public void ToggleBackpack()
         {
+            // NOTE: Do not treat Pause selection as special here; Pause is handled elsewhere.
             bool isActive = backpackPanel != null && backpackPanel.activeSelf;
             if (isActive) ShowNone(); else ShowBackpack();
             if (DebugLogEnabled) Debug.Log($"[UITabSwitcher] ToggleBackpack -> now {(backpackPanel!=null && backpackPanel.activeSelf ? "shown" : "hidden")}");
@@ -138,6 +144,8 @@ namespace demo2.DND.InventoryTetris
 
         public void ToggleCharacter()
         {
+            // NOTE: Do not treat Pause selection as special here; Pause is handled elsewhere.
+
             bool isActive = characterPanel != null && characterPanel.activeSelf;
             if (isActive) ShowNone(); else ShowCharacter();
         }
@@ -174,13 +182,13 @@ namespace demo2.DND.InventoryTetris
                         var b = allBinders[i];
                         if (b == null) continue;
                         // If binder GameObject is child of panel
-                        if (b.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
+                        if (panelRoot != null && b.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
                         // Otherwise, if it references a gridView that is under the panel, consider it part of panel
                         var gridField = typeof(InventoryUIBinder).GetField("gridView", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
                         if (gridField != null)
                         {
                             var gv = gridField.GetValue(b) as UnityEngine.Object;
-                            if (gv is Component gvComp && gvComp.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
+                            if (gv is Component gvComp && panelRoot != null && gvComp.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
                         }
                     }
                     binders = list.ToArray();
@@ -360,6 +368,13 @@ namespace demo2.DND.InventoryTetris
          // Handler invoked when the panel Next button is pressed. Routes to cached binders
          public void PanelNext()
          {
+            // Ignore invocations that occur immediately after a pause toggle
+            if (PauseController.StaticShouldIgnoreUIChanges())
+            {
+                if (DebugLogEnabled) Debug.Log("[UITabSwitcher] PanelNext ignored due to recent Pause toggle (suppression).");
+                return;
+            }
+
             // Diagnostics: print invocation + nav button state + EventSystem selection
             Debug.Log("[UITabSwitcher] PanelNext() invoked");
             if (panelNextButton != null)
@@ -455,6 +470,12 @@ namespace demo2.DND.InventoryTetris
          // Handler invoked when the panel Prev button is pressed. Routes to cached binders
           public void PanelPrev()
            {
+            // Ignore invocations that occur immediately after a pause toggle
+            if (PauseController.StaticShouldIgnoreUIChanges())
+            {
+                if (DebugLogEnabled) Debug.Log("[UITabSwitcher] PanelPrev ignored due to recent Pause toggle (suppression).");
+                return;
+            }
 
            // Diagnostics: print invocation + nav button state + EventSystem selection
            Debug.Log("[UITabSwitcher] PanelPrev() invoked");
@@ -612,13 +633,13 @@ namespace demo2.DND.InventoryTetris
                 var b = all[i];
                 if (b == null) continue;
                 // If binder GameObject is child of panel
-                if (b.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
+                if (panelRoot != null && b.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
                 // Otherwise, if it references a gridView that is under the panel, consider it part of panel
                 var gridField = typeof(InventoryUIBinder).GetField("gridView", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
                 if (gridField != null)
                 {
                     var gv = gridField.GetValue(b) as UnityEngine.Object;
-                    if (gv is Component gvComp && gvComp.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
+                    if (gv is Component gvComp && panelRoot != null && gvComp.transform.IsChildOf(panelRoot)) { list.Add(b); continue; }
                 }
             }
             return list.ToArray();

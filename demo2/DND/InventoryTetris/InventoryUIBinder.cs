@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using demo2.DND.HorizontalFormation;
+using demo2.DND.Utility; // add reference to PauseController namespace
 
 namespace demo2.DND.InventoryTetris
 {
@@ -22,7 +23,8 @@ namespace demo2.DND.InventoryTetris
     /// 不做 AddComponent；不包含任何战斗/装备逻辑。
     /// 说明：本组件不再支持任何全局 PlayerData 或“单一默认来源”。
     /// </summary>
-    public class InventoryUIBinder : MonoBehaviour
+    // Implement PauseController.IExcludableFromPause so PauseController.excludedComponents can detect and call OnPauseExcluded
+    public class InventoryUIBinder : MonoBehaviour, PauseController.IExcludableFromPause
     {
         [Header("网格视图（手动挂载）")]
         public InventoryGridView gridView;
@@ -779,6 +781,16 @@ namespace demo2.DND.InventoryTetris
                     var it = items[i];
                     if (it?.data != null && it.data.isShield && eq.CanEquip(it)) { eq.EquipShield(it); break; }
                 }
+            }
+        }
+
+        // Implement the IExcludableFromPause interface to handle exclusion from pause
+        public void OnPauseExcluded()
+        {
+            // No action needed; inventory UI remains unaffected by pause state
+            if (debugLogs)
+            {
+                Debug.Log("InventoryUIBinder: Ignored pause state change.");
             }
         }
     }

@@ -24,6 +24,8 @@ namespace demo2.DND.Utility
         [Tooltip("在脚本启用时立即刷新一次按钮文字")]
         [SerializeField] private bool reflectStateOnEnable = true;
 
+        private bool lastKnownPaused;
+
         private void Reset()
         {
             AutoFindRefs();
@@ -33,9 +35,18 @@ namespace demo2.DND.Utility
         {
             AutoFindRefs();
             if (button != null)
-                button.onClick.AddListener(OnClick);
+            {
+                // Disable keyboard/gamepad navigation for the Pause button to avoid Submit via Space triggering it.
+                try
+                {
+                    var nav = button.navigation;
+                    nav.mode = Navigation.Mode.None;
+                    button.navigation = nav;
+                }
+                catch { }
 
-            PauseController.OnPauseStateChanged += OnPauseStateChanged;
+                button.onClick.AddListener(OnClick);
+            }
         }
 
         private void OnEnable()
@@ -43,6 +54,7 @@ namespace demo2.DND.Utility
             if (reflectStateOnEnable)
             {
                 bool isPaused = PauseController.Instance != null && PauseController.Instance.IsPaused;
+                lastKnownPaused = isPaused;
                 UpdateLabel(isPaused);
             }
         }
@@ -51,7 +63,20 @@ namespace demo2.DND.Utility
         {
             if (button != null)
                 button.onClick.RemoveListener(OnClick);
-            PauseController.OnPauseStateChanged -= OnPauseStateChanged;
+        }
+
+        private void Update()
+        {
+            // Poll for pause state changes so the label stays in sync even if Pause is toggled elsewhere.
+            if (PauseController.Instance != null)
+            {
+                bool isPaused = PauseController.Instance.IsPaused;
+                if (isPaused != lastKnownPaused)
+                {
+                    lastKnownPaused = isPaused;
+                    UpdateLabel(isPaused);
+                }
+            }
         }
 
         private void OnClick()
@@ -62,10 +87,9 @@ namespace demo2.DND.Utility
                 return;
             }
             PauseController.Instance.Toggle();
-        }
-
-        private void OnPauseStateChanged(bool isPaused)
-        {
+            // Update label immediately to reflect the action we just triggered
+            bool isPaused = PauseController.Instance != null && PauseController.Instance.IsPaused;
+            lastKnownPaused = isPaused;
             UpdateLabel(isPaused);
         }
 
@@ -84,4 +108,3 @@ namespace demo2.DND.Utility
         }
     }
 }
-
