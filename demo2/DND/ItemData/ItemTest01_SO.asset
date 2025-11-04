@@ -24,7 +24,7 @@ MonoBehaviour:
   weaponDamageDice:
     diceCount: 1
     diceSize: 6
-  weaponDamageType: 1
+  weaponDamageType: 2
   useSeparateDamageAbility: 0
   weaponDamageAbilityMode: 2
   isArmor: 0

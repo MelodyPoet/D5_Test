@@ -654,7 +654,7 @@ UpdateArmorClass 等）。
 
 在 `CharacterTemplate` 上新增了徒手配置，用于当未装备武器时的伤害骰与能力修正：
 
-- `unarmedDamageDice: DiceFormula`（默认 1d6）
+- `unarmedDamageDice: DiceFormula`
 - `unarmedDamageAbilityMode: PhysicalHitAbilityMode`
   - `Strength`（默认）
   - `Dexterity`
@@ -663,6 +663,8 @@ UpdateArmorClass 等）。
 说明：
 - 法术普通攻击依旧按模板 `defaultCantrip` 与主法术属性（`primarySpellAbility`）处理。
 - 物理普通攻击（有武器）按武器的 `isFinesse / weaponHitAbilityMode / weaponDamageDice` 与模板熟练计算。
+- 武器伤害类型如果有isFinesse,且当前持握的角色选择使用力量则是Slashing伤害类型，选择敏捷则是Piercing伤害类型
+
 
 ## 相关实现位置
 
@@ -674,16 +676,35 @@ UpdateArmorClass 等）。
   - `CharacterEquipment.cs`：仅“已装备”才生效，负责给 `CharacterStats` 添加/移除装备来源的修饰。
   - `CharacterInventory.cs`：背包变更只会驱动装备槽校正与重新应用，未装备物品不再生效数值。
 
-## 配置建议
+## 装备 / UI / 暂停 — 快速参考（极简）
+- 主要脚本（最小集）
+  - `EquipmentSO`：配置（slotType, icon, statModifiers）。
+  - `ItemInstance`：运行时条目（so, isEquipped）。
+  - `CharacterInventory`：持物/发起 TryEquip/TryUnequip。
+  - `CharacterEquipment`：槽位管理，应用/撤销 modifiers，触发 `OnEquipmentChanged`。
+  - `CharacterStats`：接收 modifiers 并触发 `OnStatsChanged`。
+  - `InventoryUIBinder`：渲染格子、右键菜单、发起 RequestEquip/RequestUnequip。
+  - `UITabSwitcher`：面板显隐与翻页（不直接改装备/属性）。
+  - `PauseController` + `PauseButtonBinder` + `PreventSpaceSubmit`：Pause 状态管理与避免 Space->UI Submit 的保护。
 
-- 如果希望更贴近 5e 基本徒手（如 1 + STR 或 1d4 + STR），可在各个职业模板上按需设置：
-  - `unarmedDamageDice = { 1d1 -> 表示固定 1, 或 1d4 }`
-  - `unarmedDamageAbilityMode = Strength`
+- 运行时最简调用流程
+  1. 右键物品（InventoryUIBinder）→ 显示菜单（装备/卸下/旋转）。
+  2. 选“装备”→ InventoryUIBinder.RequestEquip -> CharacterInventory.TryEquip -> CharacterEquipment.SetSlot。
+  3. SetSlot 应用 item.so.statModifiers 到 CharacterStats -> 触发 OnEquipmentChanged / OnStatsChanged -> UI 更新槽位 icon 与背包标识。
+  4. 选“卸下”则 ClearSlot -> 移除 modifiers -> 物品回 inventory -> 触发事件并更新 UI。
 
-背包的规则：
-根据游戏运行时候的角色预制体上的CharacterInventory.initialItems字段来初始化角色的背包物品
-这些物品会被注册到在装备层，表示当前角色对应装备槽位被占用，且只能通过装备层来影响角色的战斗属性，禁止通过代码硬编码角色的战斗属性
-完成注册的装备条目预制体，会通过InventoryItemView脚本上的状态文本接口指向的UI文本组件来显示当前装备的状态
-如“XX位置：已装备”
+- 最关键接口（便于对照实现）
+  - `bool CharacterInventory.TryEquip(ItemInstance item, Character target)`
+  - `bool CharacterInventory.TryUnequip(ItemInstance item, Character target)`
+  - `bool CharacterEquipment.SetSlot(SlotType slot, ItemInstance item)`
+  - `ItemInstance CharacterEquipment.ClearSlot(SlotType slot)`
+  - `event Action<Character, SlotType, ItemInstance newItem, ItemInstance oldItem> OnEquipmentChanged`
+  - `void CharacterStats.ApplyModifiers(IEnumerable<StatModifier>)` / `RemoveModifiers(...)`
+  - `void InventoryUIBinder.RequestEquip(ItemInstance item, Character target)` / `RequestUnequip(...)`
 
-当前问题：UI_Root下子Button(UI)的Btn_BpNext/Btn_BpPrev,点击切换不同角色对应的背包栏/属性栏
+- 必须校验的边界（三点）
+  1. 装备前验证 `slotType` 兼容性（否则拒绝）；
+  2. 若槽位被占，替换逻辑需明确（替换时旧物应安全返回 inventory）；
+  3. 装备/卸下通过事件驱动更新 UI 与属性，避免短时显示不一致。
+
+(追加时间：2025-11-04)
