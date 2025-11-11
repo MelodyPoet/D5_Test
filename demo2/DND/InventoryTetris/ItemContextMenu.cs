@@ -98,122 +98,63 @@ namespace demo2.DND.InventoryTetris
 
             // 定位到鼠标处并进行边界夹紧
             PositionPanelAt(screenPosition);
+
+            // 关键修复：将面板强制置于顶层，确保它不会被背景遮罩等同级UI遮挡
+            if (_view.panelRoot != null)
+            {
+                _view.panelRoot.SetAsLastSibling();
+            }
         }
 
         private void SetupOverlayClose()
         {
-            // 优先使用显式配置的关闭按钮
-            if (_view.overlayCloseButton != null)
-            {
-                _view.overlayCloseButton.onClick.AddListener(Close);
-                overlayCloseBtnInstance = _view.overlayCloseButton;
-                createdOverlayInstance = false;
-                return;
-            }
-            // 否则尝试在 overlayRoot 上创建 Button 以接收点击
-            if (_view.overlayRoot != null)
-            {
-                // Avoid mutating external scene objects: if overlayRoot is part of the instantiated menu
-                // instance, it's safe to add a Button directly. Otherwise create a sibling overlay under
-                // the instantiated root so cleanup is straightforward and we don't leave buttons behind.
-                Button btn = _view.overlayRoot.GetComponent<Button>();
-                bool overlayRootIsInstanceChild = _rootInstance != null && _view.overlayRoot != null && _view.overlayRoot.IsChildOf(_rootInstance.transform);
-                if (btn == null && !overlayRootIsInstanceChild)
-                {
-                    // Create a transparent overlay under our rootInstance to capture clicks.
-                    var newGo = new GameObject("OverlayAutoClose", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                    newGo.transform.SetParent(_rootInstance.transform, false);
-                    var rt = newGo.GetComponent<RectTransform>();
-                    rt.anchorMin = Vector2.zero;
-                    rt.anchorMax = Vector2.one;
-                    rt.sizeDelta = Vector2.zero;
-                    var img = newGo.GetComponent<Image>();
-                    img.color = new Color(0f, 0f, 0f, 0f);
-                    img.raycastTarget = true;
-                    btn = newGo.AddComponent<Button>();
-                    btn.transition = Selectable.Transition.None;
-                    btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(Close);
-                    overlayCloseBtnInstance = btn;
-                    createdOverlayInstance = true;
-                }
-                else
-                {
-                    if (btn == null)
-                    {
-                        // add to overlayRoot which is inside our instantiated menu
-                        btn = _view.overlayRoot.gameObject.AddComponent<Button>();
-                    }
-                    btn.transition = Selectable.Transition.None;
-                    btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(Close);
-                    // Ensure overlayRoot has a Graphic so the Button can receive clicks
-                    var graphic = _view.overlayRoot.GetComponent<Graphic>();
-                    if (graphic == null)
-                    {
-                        var img = _view.overlayRoot.gameObject.AddComponent<Image>();
-                        img.color = new Color(0, 0, 0, 0);
-                        img.raycastTarget = true;
-                    }
-                    overlayCloseBtnInstance = btn;
-                    createdOverlayInstance = overlayRootIsInstanceChild ? false : false; // explicit: not created by us
-                }
-            }
-            else
-            {
-                // 没有 overlayRoot 则在根节点上添加一个按钮作为兜底
-                var rt = _view.GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    // Add the overlay button under our root instance to avoid mutating external objects
-                    var btnGo = _view.gameObject.GetComponent<Button>() ? _view.gameObject : null;
-                    var btn = _view.GetComponent<Button>() ?? _view.gameObject.AddComponent<Button>();
-                    btn.transition = Selectable.Transition.None;
-                    btn.onClick.RemoveAllListeners();
-                    btn.onClick.AddListener(Close);
-                    var graphic = _view.GetComponent<Graphic>();
-                    if (graphic == null)
-                    {
-                        var img = _view.gameObject.AddComponent<Image>();
-                        img.color = new Color(0, 0, 0, 0);
-                        img.raycastTarget = true;
-                    }
-                    overlayCloseBtnInstance = btn;
-                    createdOverlayInstance = false;
-                }
-            }
+            // 修复方案：创建一个专用的、位于面板下方的全屏背景遮罩来处理关闭事件，
+            // 而不是在根节点或 overlayRoot 上添加组件，这会意外拦截所有子节点的点击事件。
+
+            // 1. 创建一个新的 GameObject 作为背景遮罩
+            var overlayGo = new GameObject("ContextMenuOverlay", typeof(RectTransform), typeof(Image), typeof(Button));
+            overlayGo.transform.SetParent(_rootInstance.transform, false);
+            // 将其层级设置在最底层，确保它在面板后面
+            overlayGo.transform.SetAsFirstSibling();
+
+            // 2. 设置 RectTransform 使其充满整个父级（Canvas）
+            var overlayRt = overlayGo.GetComponent<RectTransform>();
+            overlayRt.anchorMin = Vector2.zero;
+            overlayRt.anchorMax = Vector2.one;
+            overlayRt.sizeDelta = Vector2.zero;
+            overlayRt.anchoredPosition = Vector2.zero;
+
+            // 3. 设置 Image 为透明但可接收射线
+            var overlayImg = overlayGo.GetComponent<Image>();
+            overlayImg.color = Color.clear; // 完全透明
+            overlayImg.raycastTarget = true;
+
+            // 4. 设置 Button 并绑定 Close 事件
+            var overlayBtn = overlayGo.GetComponent<Button>();
+            overlayBtn.transition = Selectable.Transition.None;
+            overlayBtn.onClick.AddListener(Close);
+
+            // 记录下来，以便在关闭时清理
+            overlayCloseBtnInstance = overlayBtn;
+            createdOverlayInstance = true;
         }
 
         private CharacterEquipment ResolveEquipment()
         {
-            // 优先从 Grid.SourceEquipment 获取
-            var eq = _grid != null ? _grid.SourceEquipment : null;
-            if (eq != null) return eq;
-
-            // 其次：从物品视图向上/下查找
-            if (_itemView != null)
+            // 修复：最可靠的引用是 Grid 上的 SourceEquipment，由 Binder 在顶层注入。
+            // 不再需要复杂的 GetComponentInParent/Children 查找，那会因场景结构变化而出错。
+            if (_grid != null && _grid.SourceEquipment != null)
             {
-                eq = _itemView.GetComponent<CharacterEquipment>()
-                     ?? _itemView.GetComponentInParent<CharacterEquipment>()
-                     ?? _itemView.GetComponentInChildren<CharacterEquipment>(true);
-                if (eq != null) return eq;
+                return _grid.SourceEquipment;
             }
 
-            // 再次：从 Grid 节点上下查找
-            if (_grid != null)
+            // 如果上述方法失败，作为最后的兜底，再进行一次全局查找。
+            // 但在正常流程中，代码不应该执行到这里。
+            Debug.LogWarning("[ItemContextMenu] 无法从 Grid.SourceEquipment 获取装备组件！正在尝试全局查找作为后备。请检查 InventoryUIBinder 是否正确配置。");
+            var eq = FindObjectOfType<CharacterEquipment>();
+            if (eq == null)
             {
-                eq = _grid.GetComponent<CharacterEquipment>()
-                     ?? _grid.GetComponentInParent<CharacterEquipment>()
-                     ?? _grid.GetComponentInChildren<CharacterEquipment>(true);
-                if (eq != null) return eq;
-            }
-
-            // 兜底：从 Canvas 上下查找
-            if (_canvas != null)
-            {
-                eq = _canvas.GetComponent<CharacterEquipment>()
-                     ?? _canvas.GetComponentInParent<CharacterEquipment>()
-                     ?? _canvas.GetComponentInChildren<CharacterEquipment>(true);
+                Debug.LogError("[ItemContextMenu] ResolveEquipment 彻底失败，场景中找不到任何 CharacterEquipment 组件。");
             }
             return eq;
         }
@@ -296,13 +237,32 @@ namespace demo2.DND.InventoryTetris
         private void OnClickEquip()
         {
             var eq = ResolveEquipment();
-            if (eq == null || _item == null || _item.data == null) return;
-            if (!eq.CanEquip(_item)) return;
+            string itemName = _item?.data?.displayName ?? "null";
+            if (eq == null)
+            {
+                Debug.LogError($"[ContextMenu] 装备 '{itemName}' 失败: ResolveEquipment() 返回 null。");
+                Close();
+                return;
+            }
+            if (_item == null || _item.data == null)
+            {
+                Debug.LogError($"[ContextMenu] 装备失败: 物品实例或数据为空。");
+                Close();
+                return;
+            }
+            if (!eq.CanEquip(_item))
+            {
+                Debug.LogWarning($"[ContextMenu] 无法装备 '{itemName}': CanEquip() 返回 false。");
+                Close();
+                return;
+            }
 
+            Debug.Log($"[ContextMenu] 正在尝试装备 '{itemName}'...");
             if (_item.data.isWeapon) eq.EquipMainHand(_item);
             else if (_item.data.isArmor) eq.EquipArmor(_item);
             else if (_item.data.isShield) eq.EquipShield(_item);
 
+            // 刷新UI（GridView会刷新所有物品的标签，更可靠）
             if (_grid != null) _grid.RefreshAllEquipLabels();
             else _itemView?.RefreshEquipLabel();
             Close();
@@ -311,11 +271,28 @@ namespace demo2.DND.InventoryTetris
         private void OnClickUnequip()
         {
             var eq = ResolveEquipment();
-            if (eq == null || _item == null || _item.data == null) return;
+            string itemName = _item?.data?.displayName ?? "null";
+            if (eq == null)
+            {
+                Debug.LogError($"[ContextMenu] 卸下 '{itemName}' 失败: ResolveEquipment() 返回 null。");
+                Close();
+                return;
+            }
+            if (_item == null || _item.data == null)
+            {
+                Debug.LogError($"[ContextMenu] 卸下失败: 物品实例或数据为空。");
+                Close();
+                return;
+            }
 
+            Debug.Log($"[ContextMenu] 正在尝试卸下 '{itemName}'...");
             if (_item.data.isWeapon && ReferenceEquals(eq.mainHand, _item)) eq.UnequipMainHand();
             else if (_item.data.isArmor && ReferenceEquals(eq.armor, _item)) eq.UnequipArmor();
             else if (_item.data.isShield && ReferenceEquals(eq.shield, _item)) eq.UnequipShield();
+            else
+            {
+                Debug.LogWarning($"[ContextMenu] 卸下 '{itemName}' 时发现它并未装备在对应槽位。");
+            }
 
             if (_grid != null) _grid.RefreshAllEquipLabels();
             else _itemView?.RefreshEquipLabel();
