@@ -731,3 +731,43 @@ UpdateArmorClass 等）。
 4. 经济用来反哺角色成长
 5. 角色可以通过消耗玩家生产的资源来强化属性（如锻炼获得属性/技能提升等）
 6. 营地无法获取关卡战斗带来的质变装备和关键资源收集
+
+---
+
+## 架构重构计划：背包与UI系统 (事件总线驱动)
+
+**目标**：为支持未来的营地建造与策略玩法，将现有紧耦合的 `InventoryUIBinder` 拆分为基于“事件总线”的高度解耦架构。
+
+**核心思想**：用 `ScriptableObject` 作为事件通道，让不同系统（UI、背包逻辑、角色管理）通过发布/订阅事件进行通信，而不是直接引用。
+
+### 实施步骤
+
+#### 第 0 步：搭建事件总线基础设施
+1.  **创建通用事件通道脚本**:
+    - `EventChannelSO.cs` (无参数)
+    - `EventChannelSO<T>.cs` (带泛型参数)
+2.  **创建具体事件资产**:
+    - 在项目中创建一系列事件通道资产，如 `RequestEquipItemChannel.asset`, `InventoryChangedChannel.asset`, `ActiveCharacterChangedChannel.asset` 等。
+
+#### 第 1 步：剥离纯粹的“视图”层 (`InventoryView`)
+- **职责**: 严格限定 `InventoryGridView` (可更名为 `InventoryView`) 只负责UI渲染和捕获用户输入。
+- **行为**:
+  - **发布**: 当用户点击UI时，发布“请求”类事件 (如 `RequestEquipItem`)。
+  - **订阅**: 监听“数据变更”类事件 (如 `InventoryChanged`) 来刷新界面。
+
+#### 第 2 步：创建独立的“控制器”层 (`InventoryController`)
+- **职责**: 创建新脚本 `InventoryController.cs`，用于处理所有背包相关的业务逻辑。
+- **行为**:
+  - **订阅**: 监听所有“请求”类事件。
+  - **发布**: 在处理完逻辑并修改数据后，发布“数据变更”类事件。
+- **挂载位置**: 作为全局逻辑处理器，挂载在场景的核心管理器对象上 (如 `IdleGameSystem`)。
+
+#### 第 3 步：创建“当前角色管理器” (`ActiveCharacterManager`)
+- **职责**: 创建新脚本 `ActiveCharacterManager.cs`，作为全局单例，唯一职责是维护当前玩家选中的角色。
+- **行为**:
+  - **发布**: 当玩家切换角色时，发布 `ActiveCharacterChanged` 事件。
+  - **订阅者**: `InventoryController` 和 `InventoryView` 等关心当前角色的系统都将订阅此事件，以切换其操作/显示目标。
+- **挂载位置**: 挂载在核心管理器对象上 (如 `IdleGameSystem`)。
+
+#### 第 4 步：`InventoryUIBinder` 的退役
+- **最终归宿**: 在上述职责被完全分离后，原 `InventoryUIBinder` 脚本将被重构、简化或彻底删除，其功能由新的专用脚本各司其职。

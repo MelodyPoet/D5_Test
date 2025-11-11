@@ -373,6 +373,12 @@ namespace demo2.DND.InventoryTetris
             BoundItem.ToggleRotate();
             rect.sizeDelta = new Vector2(Grid.ItemPixelWidth(BoundItem), Grid.ItemPixelHeight(BoundItem));
             Grid.PositionViewAtGrid(this, curPos.x, curPos.y);
+
+            // 新增：同步旋转图标的视觉表现
+            if (iconImage != null)
+            {
+                iconImage.rectTransform.localRotation = Quaternion.Euler(0, 0, BoundItem.rotated ? -90f : 0f);
+            }
         }
 
         private void BringToFront()
