@@ -736,7 +736,7 @@ UpdateArmorClass 等）。
 
 ### 下一阶段迁移动作（计划）
 1) Binder 去耦与收敛
-- 逐步取消 `InventoryUIBinder` 对 `CharacterInventory.OnInventoryChanged` 的直接订阅，改为仅依赖 `InventoryChangedChannel_SO` + `ActiveCharacterChangedChannel_SO` 驱动刷新（保留短期开关用于回滚）。
+- 逐步取消 `InventoryUIBinder` 对 `CharacterInventory.OnInventoryChanged` 的直接订阅，改为仅依赖 `InventoryChangedChannel` + `ActiveCharacterChangedChannel` 驱动刷新（保留短期开关用于回滚）。
 - 梳理 Binder 的导航/状态职责，确保翻页/显隐统一由 `UITabSwitcher` 持有；Binder 专注“绑定与刷新”。
 
 2) UI 只发布请求，不越权执行业务
@@ -765,3 +765,47 @@ UpdateArmorClass 等）。
 - 已执行旧路径退役：`InventoryUIBinder` 取消直接订阅 `CharacterInventory.OnInventoryChanged`，刷新现由事件通道驱动（`InventoryChangedChannel_SO` / `ActiveCharacterChangedChannel_SO`）。
 - Binder 内部新增在 TryAddNew/Remove 成功后主动 RaiseEvent 逻辑，确保外部不依赖旧订阅即可获得刷新。
 - 下一阶段：观察是否仍需保留 fallback 日志；若运行一段时间未出现遗漏刷新，再移除相关警告与临时变量。
+
+---
+
+物品掉落业务逻辑（精炼）
+
+目标
+- 击败怪物 → 评估掉落 → 通过事件添加到玩家背包 → UI 刷新（单一路径，杜绝重复）。
+
+数据对象
+- ItemDropTableSO（掉落表）
+  - DropEntry: item(ItemBaseSO), dropChance(0-1), minAmount, maxAmount, guaranteed
+  - 评估：guaranteed=true 则必掉；否则按 dropChance 判定；数量为闭区间 [minAmount, maxAmount] 的整数。min=max=1 时只产生 1 件。
+- EnemyDropSource（挂在敌人）
+  - 字段：dropTable, autoEvaluateOnDeath, delegateToManager, requestAddItemChannel(直发), overrideTargetInventory(可空)
+  - 触发：HP≤0 且未发放过 →
+    - 管理器分发（推荐）：调用 LootDropManager.RegisterDeath(this)
+    - 直接分发：逐条 RaiseEvent(InventoryAddItemRequest)
+- LootDropManager（全局唯一）
+  - 聚合：可批量合并时间窗（batchDispatch + batchWindowSeconds）后统一分发
+  - 目标背包解析：preferFormationFirstAlive 优先阵型首个存活角色 → 否则扫描第一个 battleSide=Player 的 CharacterInventory
+  - 输出：对每条掉落调用 RequestAddItemChannel.RaiseEvent(InventoryAddItemRequest)
+- InventoryController（全局唯一）
+  - 订阅 RequestAddItemChannel，实际向数据源添加 ItemInstance，并广播 InventoryChangedChannel 供 UI 刷新
+- InventoryUIBinder（UI）
+  - 默认不处理拾取事件：handleAddItemEvents=false，仅监听 InventoryChangedChannel 做显示刷新；若必须由 UI 直接落地，谨慎开启且确保控制器不重复处理
+
+事件通道
+- RequestAddItemChannel_SO：载荷 InventoryAddItemRequest(inventory, item, amount)
+- InventoryChangedChannel_SO：载荷 CharacterInventory（通知 UI 刷新）
+- ActiveCharacterChangedChannel_SO：可选，用于 UI 切换显示来源背包
+
+配置约束（单一路径，禁止重复）
+- 仅允许：EnemyDropSource →（可选 LootDropManager）→ RequestAddItemChannel → InventoryController
+- 禁止 UI 与控制器同时处理拾取：确保 InventoryUIBinder.handleAddItemEvents 关闭（默认关闭）
+- 场景中 InventoryController、LootDropManager 各仅一份；EnemyDropSource 推荐 delegateToManager=true
+
+故障排查
+- 掉落 1 件却入包 2 件：多订阅同一拾取事件（常见：UI 与控制器同时处理，或“直发+代管”叠加）。处理：关闭 UI handleAddItemEvents，检查是否重复挂载/双路径并用。
+- 未入包：检查 RequestAddItemChannel 是否注入管理器/控制器；确认能解析到目标背包（battleSide=Player）。
+
+验收清单
+- min=max=1 的掉落只产生 1 条 InventoryAddItemRequest
+- 击败敌人时日志仅出现一次“已分发/已添加”记录
+- UI 通过 InventoryChangedChannel 刷新，无重复生成
