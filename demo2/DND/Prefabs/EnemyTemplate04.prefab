@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 5767546844345048700}
   - component: {fileID: 8463529336456925706}
   - component: {fileID: 9088084707522269733}
+  - component: {fileID: 3969729971448876334}
   m_Layer: 0
   m_Name: EnemyTemplate04
   m_TagString: Untagged
@@ -205,17 +206,13 @@ MonoBehaviour:
   characterClass: 0
   characterLevel: 1
   battleSide: 1
-  maxHitPoints: 10
-  currentHitPoints: 10
-  temporaryHitPoints: 0
-  armorClass: 10
-  statusEffects: 
   strength: 10
   dexterity: 10
   constitution: 10
   intelligence: 10
   wisdom: 10
   charisma: 10
+  armorClass: 10
 --- !u!114 &9088084707522269733
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -231,3 +228,20 @@ MonoBehaviour:
   characterStats: {fileID: 8463529336456925706}
   skeletonAnimation: {fileID: 4929413515449217280}
   animationConfig: {fileID: 11400000, guid: 9bc1391b3e9dffd4bac853a5f2f2e826, type: 2}
+--- !u!114 &3969729971448876334
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2121741199564747429}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393e00c05f78484380a6d493ac809246, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dropTable: {fileID: 11400000, guid: 15d9a15782aa8d64594d8b172deb7b12, type: 2}
+  autoEvaluateOnDeath: 1
+  delegateToManager: 1
+  requestAddItemChannel: {fileID: 0}
+  overrideTargetInventory: {fileID: 0}

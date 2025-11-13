@@ -215,15 +215,19 @@ HorizontalCombatRules 战斗规则:
 
 ---使用ScriptableObject存储角色和怪物数据
 ---使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
-+ 事件通道与血条更新 — 关键技术点（简洁，供查阅）
-  - 事件通道（`DamageEventChannel`）职责单一：用于把“谁受到伤害/谁造成伤害/伤害数值”等消息广播到所有关心该事件的系统（动画、伤害计算、视觉特效等），但不应直接由 UI 订阅来做最终显示更新。
-  - UI 更新应依赖实例级的本地事件：`CharacterStats` 在受伤/治疗后应触发 `OnHealthChanged(int currentHp, int maxHp)`，UI（`UI_HealthBar`）在被绑定到具体 `CharacterStats` 实例时直接订阅该本地事件以保证目标明确与低时序窗。
-  - 管理器做为保险：`HealthBarUIManager` 保存 `CharacterStats -> UI_HealthBar` 的映射表，提供 `RefreshBar(CharacterStats)` 接口供 `CharacterStats` 在处理伤害后主动调用，作为对本地事件的二次保障（同一职责的两条可靠路径）。
-  - 避免 UI 直接订阅全局通道：当场景同时存在预制体（编辑器中放置）和运行时实例时，UI 若直接订阅全局通道容易订阅到错误目标或由于时序错过事件。
-  - 单例与容器时序规则：确保 `HealthBarUIManager` 单例在 UI/角色创建前就存在（或在创建时立即同步容器与 prefab），避免在单例为 null 时触发回退销毁逻辑导致血条被误删。
-  - 绝对避免启发式销毁：不得使用基于 Slider.value/maxValue 等启发式规则在不确定的情况下批量销毁血条；销毁条件应为 `owner == null` 且经确认（或超时/显式标记）后才执行。
-  - 预制体配置优先：血条预制体必须在 Inspector 中预先绑定好 `Slider`/`Text` 等组件，减少运行时自动查找带来的不确定性。
-  - 日志和调试接口：保留并使用 `HealthBarUIManager.DumpStatus` / `DumpMapDetails` 等调试方法，在复现问题时先采集映射与容器状态以便定位时序或引用不一致的问题。
++ 使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
++ 发布规范：仅由 `HorizontalCombatRules.ResolveAttack(attacker, target, ...)` 在“命中成立”后统一发布一次伤害事件；AI/动画回调/角色脚本等不得重复发布，避免 UI 重复刷新与日志重复。
++ 获取顺序：事件通道优先从参战者实例上的 `CharacterStats.damageEventChannel` 获取；如未配置，则回退到 `EventChannelManager` 的全局通道（`"DamageEventChannel"`）。若两者皆无，将打印警告日志以便排查。
++ 订阅建议：UI 使用 `CharacterStats.OnHealthChanged` 做最终显示刷新，`DamageEventChannel` 主要用于动画、特效、飘字与日志等跨系统联动，不直接驱动 HP 数值修改。
+  - 事件通道与血条更新 — 关键技术点（简洁，供查阅）
+   - 事件通道（`DamageEventChannel`）职责单一：用于把“谁受到伤害/谁造成伤害/伤害数值”等消息广播到所有关心该事件的系统（动画、伤害计算、视觉特效等），但不应直接由 UI 订阅来做最终显示更新。
+   - UI 更新应依赖实例级的本地事件：`CharacterStats` 在受伤/治疗后应触发 `OnHealthChanged(int currentHp, int maxHp)`，UI（`UI_HealthBar`）在被绑定到具体 `CharacterStats` 实例时直接订阅该本地事件以保证目标明确与低时序窗。
+   - 管理器做为保险：`HealthBarUIManager` 保存 `CharacterStats -> UI_HealthBar` 的映射表，提供 `RefreshBar(CharacterStats)` 接口供 `CharacterStats` 在处理伤害后主动调用，作为对本地事件的二次保障（同一职责的两条可靠路径）。
+   - 避免 UI 直接订阅全局通道：当场景同时存在预制体（编辑器中放置）和运行时实例时，UI 若直接订阅全局通道容易订阅到错误目标或由于时序错过事件。
+   - 单例与容器时序规则：确保 `HealthBarUIManager` 单例在 UI/角色创建前就存在（或在创建时立即同步容器与 prefab），避免在单例为 null 时触发回退销毁逻辑导致血条被误删。
+   - 绝对避免启发式销毁：不得使用基于 Slider.value/maxValue 等启发式规则在不确定的情况下批量销毁血条；销毁条件应为 `owner == null` 且经确认（或超时/显式标记）后才执行。
+   - 预制体配置优先：血条预制体必须在 Inspector 中预先绑定好 `Slider`/`Text` 等组件，减少运行时自动查找带来的不确定性。
+   - 日志和调试接口：保留并使用 `HealthBarUIManager.DumpStatus` / `DumpMapDetails` 等调试方法，在复现问题时先采集映射与容器状态以便定位时序或引用不一致的问题。
 
 受击时候头上冒字的伤害显示系统以及血条受击扣血系统
 - UI_HealthBar更新血条
@@ -427,7 +431,7 @@ XXX_Old.cs           - 旧版本文件
 - 攻击类别与属性选择：
   - 近战武器：默认使用力量；若武器含 Finesse（灵巧），可使用敏捷（或按模板 allowMeleeFinesse 开关，默认关闭）。
   - 远程武器：使用敏捷。
-  - 法术攻击（含默认戏法）：只要角色有法术，命中就使用职业主属性（primarySpellAbility），且伤害仅取法术伤害骰（不叠加主属性）。
+  - 法术攻击（含默认戏法普通攻击）：只要角色有法术，命中就使用职业主属性（primarySpellAbility），且伤害仅取法术伤害骰（不叠加主属性）。
   - 默认普通攻击策略：基于 CharacterTemplate.defaultAttackType 决定。Physical → 走装备/物理；Spell → 使用 defaultCantrip
   （若无则按兜底策略）。
 - 熟练与加值：
@@ -676,62 +680,6 @@ UpdateArmorClass 等）。
   - `CharacterEquipment.cs`：仅“已装备”才生效，负责给 `CharacterStats` 添加/移除装备来源的修饰。
   - `CharacterInventory.cs`：背包变更只会驱动装备槽校正与重新应用，未装备物品不再生效数值。
 
-## 装备 / UI / 暂停 — 快速参考（极简）
-- 主要脚本（最小集）
-  - `EquipmentSO`：配置（slotType, icon, statModifiers）。
-  - `ItemInstance`：运行时条目（so, isEquipped）。
-  - `CharacterInventory`：持物/发起 TryEquip/TryUnequip。
-  - `CharacterEquipment`：槽位管理，应用/撤销 modifiers，触发 `OnEquipmentChanged`。
-  - `CharacterStats`：接收 modifiers 并触发 `OnStatsChanged`。
-  - `InventoryUIBinder`：渲染格子、右键菜单、发起 RequestEquip/RequestUnequip。
-  - `UITabSwitcher`：面板显隐与翻页（不直接改装备/属性）。
-  - `PauseController` + `PauseButtonBinder` + `PreventSpaceSubmit`：Pause 状态管理与避免 Space->UI Submit 的保护。
-
-- 运行时最简调用流程
-  1. 右键物品（InventoryUIBinder）→ 显示菜单（装备/卸下/旋转）。
-  2. 选“装备”→ InventoryUIBinder.RequestEquip -> CharacterInventory.TryEquip -> CharacterEquipment.SetSlot。
-  3. SetSlot 应用 item.so.statModifiers 到 CharacterStats -> 触发 OnEquipmentChanged / OnStatsChanged -> UI 更新槽位 icon 与背包标识。
-  4. 选“卸下”则 ClearSlot -> 移除 modifiers -> 物品回 inventory -> 触发事件并更新 UI。
-
-- 最关键接口（便于对照实现）
-  - `bool CharacterInventory.TryEquip(ItemInstance item, Character target)`
-  - `bool CharacterInventory.TryUnequip(ItemInstance item, Character target)`
-  - `bool CharacterEquipment.SetSlot(SlotType slot, ItemInstance item)`
-  - `ItemInstance CharacterEquipment.ClearSlot(SlotType slot)`
-  - `event Action<Character, SlotType, ItemInstance newItem, ItemInstance oldItem> OnEquipmentChanged`
-  - `void CharacterStats.ApplyModifiers(IEnumerable<StatModifier>)` / `RemoveModifiers(...)`
-  - `void InventoryUIBinder.RequestEquip(ItemInstance item, Character target)` / `RequestUnequip(...)`
-
-- 必须校验的边界（三点）
-  1. 装备前验证 `slotType` 兼容性（否则拒绝）；
-  2. 若槽位被占，替换逻辑需明确（替换时旧物应安全返回 inventory）；
-  3. 装备/卸下通过事件驱动更新 UI 与属性，避免短时显示不一致。
-
-(追加时间：2025-11-04)
-
-未来计划:
-短期内继续完善装备系统功能：
-1. 完善装备系统UI交互细节（拖拽、批量操作等）
-2. 增加战斗掉落与拾取逻辑
-3. 扩展装备属性与特殊效果支持
-4. 优化装备与属性变更的性能表现
-
-长期目标：
-1. 引入装备耐久与修理系统
-2. 实现装备附魔与升级机制
-3. 开发装备交易与拍卖行功能
-4. 深化装备与角色职业/技能的联动效果
-5. 探索装备与游戏经济系统的互动设计
-6. 支持玩家自定义角色外观和属性
-
-战斗局外成长系统:
-1. 战斗局外玩家营地机制
-2. 营地有SLG策略玩法：建造各类建筑/和NPC交互/锻造/生成/交易等
-3. 营地可以种地和发展经济
-4. 经济用来反哺角色成长
-5. 角色可以通过消耗玩家生产的资源来强化属性（如锻炼获得属性/技能提升等）
-6. 营地无法获取关卡战斗带来的质变装备和关键资源收集
-
 ---
 
 ## 架构重构计划：背包与UI系统 (事件总线驱动)
@@ -771,3 +719,49 @@ UpdateArmorClass 等）。
 
 #### 第 4 步：`InventoryUIBinder` 的退役
 - **最终归宿**: 在上述职责被完全分离后，原 `InventoryUIBinder` 脚本将被重构、简化或彻底删除，其功能由新的专用脚本各司其职。
+
+### 事件总线实施进度（背包/角色选择体系）
+- 第0步（基础事件通道脚本）: 已完成。`EventChannelSO` / 泛型版本 已投入使用。
+- 第1步（视图层职责剥离）: 基本完成（2025-11-13）。`InventoryUIBinder` 已接入事件通道：
+  - 订阅 `InventoryChangedChannel_SO`（当前激活来源变更时刷新网格与属性UI）。
+  - 订阅 `ActiveCharacterChangedChannel_SO`（当前角色切换时自动切换至其 `CharacterInventory`）。
+  - 默认启用 `enableEventChannels=true`；兼容保留对 `CharacterInventory.OnInventoryChanged` 的直接订阅作为兜底，避免丢刷新。
+- 第2步（控制器层建立）: 已创建 `InventoryController`，订阅 `RequestEquipItemChannel_SO`，发布 `InventoryChangedChannel_SO`。
+- 第3步（当前角色管理器）: 已创建 `ActiveCharacterManager`，发布 `ActiveCharacterChangedChannel_SO`。
+- 第4步（旧 Binder 退役）: 准备中。待完全迁移到“请求/变更”双向事件模型后，逐步移除 Binder 对数据源的直连订阅与遗留职责。
+
+【进度确认（2025-11-13）】
+- 代码侧闭环已打通：视图（UI）→ 请求通道（装备/卸下）→ 控制器执行业务 → 变更通道广播 → 视图刷新；当前 UI 还保留直连兜底订阅以确保稳定。
+- 需要在 Inspector 中完成资产引用（见下方“快速配置核对”），否则事件化刷新不会生效。
+
+### 下一阶段迁移动作（计划）
+1) Binder 去耦与收敛
+- 逐步取消 `InventoryUIBinder` 对 `CharacterInventory.OnInventoryChanged` 的直接订阅，改为仅依赖 `InventoryChangedChannel_SO` + `ActiveCharacterChangedChannel_SO` 驱动刷新（保留短期开关用于回滚）。
+- 梳理 Binder 的导航/状态职责，确保翻页/显隐统一由 `UITabSwitcher` 持有；Binder 专注“绑定与刷新”。
+
+2) UI 只发布请求，不越权执行业务
+- `InventoryItemView` 的右键菜单/按钮交互统一通过 `RequestEquipItemChannel_SO` 发送 `Equip/Unequip/Toggle`，禁止直接触达 `CharacterEquipment`。
+
+3) 刷新路径统一与抖动优化
+- Grid 刷新触发仅来自 `InventoryChangedChannel` 与 `ActiveCharacterChanged`；减少 `Start()/SetActiveSourceIndex()` 中的强制重建，优先差量更新（必要时保留 `ClearAndRebuild` 作为开关）。
+
+4) 验收用例（必须通过）
+- 切换当前角色 → 背包面板自动切换到该角色的 `CharacterInventory` 且属性面板同步。
+- 装备/卸下任意物品 → 控制器处理 → 广播变更 → 背包网格与“已装备”标签/属性 UI 一致更新（无重复/遗漏）。
+- 在未配置事件资产时，至少不报错且直连兜底路径仍可刷新（打印警告日志提醒配置缺失）。
+
+5) 故障排查最小清单
+- 确认三项资产是否正确引用：`RequestEquipItemChannel.asset` / `InventoryChangedChannel.asset` / `ActiveCharacterChangedChannel.asset`。
+- 确认 `InventoryUIBinder.enableEventChannels=true` 且面板中 Binder 已指向上述两个通道资产。
+- 确认场景存在唯一 `InventoryController` 与 `ActiveCharacterManager`，且其字段已拖拽到对应资产。
+
+【快速配置核对（事件总线）】
+- `InventoryUIBinder`（每个背包UI实例）：勾选 `enableEventChannels`，拖入 `InventoryChangedChannel.asset` 与 `ActiveCharacterChangedChannel.asset`。
+- `InventoryController`（全局）：拖入 `RequestEquipItemChannel.asset` 与 `InventoryChangedChannel.asset`。
+- `ActiveCharacterManager`（全局）：拖入 `ActiveCharacterChangedChannel.asset`。
+- 角色预制体：继续手动挂载 `CharacterStats` / `CharacterEquipment` / `CharacterInventory`。
+
+【追加 - 2025-11-13 完成事项】
+- 已执行旧路径退役：`InventoryUIBinder` 取消直接订阅 `CharacterInventory.OnInventoryChanged`，刷新现由事件通道驱动（`InventoryChangedChannel_SO` / `ActiveCharacterChangedChannel_SO`）。
+- Binder 内部新增在 TryAddNew/Remove 成功后主动 RaiseEvent 逻辑，确保外部不依赖旧订阅即可获得刷新。
+- 下一阶段：观察是否仍需保留 fallback 日志；若运行一段时间未出现遗漏刷新，再移除相关警告与临时变量。

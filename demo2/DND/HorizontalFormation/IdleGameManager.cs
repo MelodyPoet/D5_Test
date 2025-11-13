@@ -25,6 +25,8 @@ namespace demo2.DND.HorizontalFormation
 
         // 私有变量 - 移除协程相关
         private bool isInBattle;
+        // 新增：公开只读访问战斗状态供外部（如 InventoryController）查询
+        public bool IsInBattle => isInBattle;
         private float nextEncounterTime;
         private float teamGenerationTimer;
         private bool isWaitingForTeamGeneration;
@@ -439,6 +441,16 @@ namespace demo2.DND.HorizontalFormation
         private void GiveBattleVictoryRewards()
         {
             Debug.Log("💰 战斗胜利！获得经验和金币");
+            // 示例：胜利后生成掉落并通过 InventoryController 事件化添加
+            try
+            {
+                var controller = FindObjectOfType<demo2.DND.InventoryTetris.InventoryController>();
+                if (controller != null)
+                {
+                    controller.GenerateWaveLootExample();
+                }
+            }
+            catch { }
         }
 
         /// <summary>

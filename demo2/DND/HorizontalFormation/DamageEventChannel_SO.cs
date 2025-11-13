@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
-using UnityEngine.Events;
+using demo2.DND.Core.Events;
+using demo2.DND.Core.Events.Data;
+using System;
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -10,26 +12,24 @@ namespace demo2.DND.HorizontalFormation
     /// 支持暴击信息
     /// </summary>
     [CreateAssetMenu(fileName = "DamageEventChannel", menuName = "DND/Events/Damage Event Channel")]
-    public class DamageEventChannel_SO : ScriptableObject
+    public class DamageEventChannel_SO : EventChannelSO<DamageInfo>
     {
         /// <summary>
-        /// 伤害事件：受伤角色、攻击者、伤害数值、是否暴击
-        /// </summary>
-        public UnityAction<CharacterStats, CharacterStats, int, bool> OnEventRaised;
-
-        /// <summary>
-        /// 触发伤害事件
+        /// [已过时] 触发伤害事件。请改用 RaiseEvent(DamageInfo info)。
+        /// 此方法为保持向后兼容而保留，将在未来移除。
         /// </summary>
         /// <param name="recipient">受伤角色</param>
         /// <param name="dealer">攻击者</param>
         /// <param name="damageAmount">伤害数值</param>
         /// <param name="isCritical">是否暴击</param>
+        [Obsolete("请改用 RaiseEvent(DamageInfo info)")]
         public void RaiseEvent(CharacterStats recipient, CharacterStats dealer, int damageAmount, bool isCritical = false)
         {
-            Debug.Log($"[DamageEventChannel_SO] RaiseEvent: OnEventRaised subscriber count={OnEventRaised?.GetInvocationList().Length ?? 0}");
-            OnEventRaised?.Invoke(recipient, dealer, damageAmount, isCritical);
+            var damageInfo = new DamageInfo(recipient, dealer, damageAmount, isCritical);
+            RaiseEvent(damageInfo); // 调用基类的新方法
 
-            // 输出调试信息
+            // 无法从子类访问基类事件的订阅列表，移除相关日志。
+
             if (damageAmount > 0)
             {
                 string critText = isCritical ? " (暴击!)" : "";
@@ -39,22 +39,6 @@ namespace demo2.DND.HorizontalFormation
             {
                 Debug.Log($"[伤害事件] {dealer.GetDisplayName()} 攻击 {recipient.GetDisplayName()} 未命中");
             }
-        }
-
-        /// <summary>
-        /// 订阅事件
-        /// </summary>
-        public void Subscribe(UnityAction<CharacterStats, CharacterStats, int, bool> callback)
-        {
-            OnEventRaised += callback;
-        }
-
-        /// <summary>
-        /// 取消订阅事件
-        /// </summary>
-        public void Unsubscribe(UnityAction<CharacterStats, CharacterStats, int, bool> callback)
-        {
-            OnEventRaised -= callback;
         }
     }
 }

@@ -15,7 +15,8 @@ namespace demo2.DND.HorizontalFormation
         // ---------- 基础工具 ----------
         private static FinalStatsSnapshot? TryGetSnapshot(CharacterStats c)
         {
-            return c != null ? c.CurrentSnapshot : (FinalStatsSnapshot?)null;
+            // 移除冗余显式转换
+            return c != null ? c.CurrentSnapshot : null;
         }
         private static int GetAbilityModifier(int score) => (score - 10) / 2;
         private static string NormalizeAbilityName(string input)
@@ -71,6 +72,22 @@ namespace demo2.DND.HorizontalFormation
             }
         }
 
+        // 新增：获取伤害事件通道（优先使用实例级通道，失败时回退全局单例）
+        private static DamageEventChannel_SO GetDamageEventChannel(CharacterStats attacker, CharacterStats target)
+        {
+            // 1) 优先：从参与者实例上读取（Inspector 拖拽）
+            if (attacker != null && attacker.damageEventChannel != null) return attacker.damageEventChannel;
+            if (target != null && target.damageEventChannel != null) return target.damageEventChannel;
+
+            // 2) 回退：兼容旧逻辑，尝试从事件管理器获取
+            var channel = EventChannelManager.Instance != null ? EventChannelManager.Instance.GetChannel<DamageEventChannel_SO>("DamageEventChannel") : null;
+            if (channel == null)
+            {
+                Debug.LogWarning("[HorizontalCombatRules] 未找到 DamageEventChannel，请在角色或场景管理器上配置事件通道资产。");
+            }
+            return channel;
+        }
+
         // ---------- 先攻 ----------
         public static List<InitiativeEntry> RollAndSortInitiative(List<CharacterStats> combatants)
         {
@@ -86,7 +103,7 @@ namespace demo2.DND.HorizontalFormation
                 int total = roll + dexMod;
                 list.Add(new InitiativeEntry(c, total));
                 Debug.Log($"{c.GetDisplayName()} 先攻检定: {roll} + {dexMod} = {total}");
-                try { GameLog.LogInitiative(c.GetDisplayName(), roll, dexMod, total); } catch { }
+                try { GameLog.LogInitiative(c.GetDisplayName(), roll, dexMod, total); } catch (System.Exception) { }
             }
 
             return list.OrderByDescending(e => e.initiativeValue).ToList();
@@ -122,10 +139,10 @@ namespace demo2.DND.HorizontalFormation
             r.isCritical = (advantageFlag > 0) ? (roll1 == 20 || roll2 == 20) : (advantageFlag < 0 ? (roll1 == 20 && roll2 == 20) : (d20 == 20));
 
             var tsnap = TryGetSnapshot(target);
-            int targetAc = tsnap.HasValue ? tsnap.Value.armorClass : target.armorClass;
+            int targetAc = tsnap.HasValue ? tsnap.Value.armorClass : target.CurrentArmorClass; // 使用当前AC属性，避免访问过时字段
             r.isHit = r.isCritical || totalAttack >= targetAc;
 
-            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackName, hitAbility, d20, attackBonus, totalAttack, targetAc, r.isHit); } catch { }
+            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackName, hitAbility, d20, attackBonus, totalAttack, targetAc, r.isHit); } catch (System.Exception) { }
 
             if (!r.isHit)
             {
@@ -144,7 +161,8 @@ namespace demo2.DND.HorizontalFormation
             int baseDice = isSpell
                 ? (attacker.template != null && attacker.template.defaultCantrip != null ? attacker.template.defaultCantrip.GetDamageDiceAtCasterLevel(attacker.Level).diceCount : 1)
                 : (weapon != null ? Mathf.Max(1, weapon.weaponDamageDice.diceCount) : (attacker.template != null ? Mathf.Max(1, attacker.template.unarmedDamageDice.diceCount) : 1));
-            string diceExpr = (r.isCritical ? baseDice * 2 : baseDice) + "d" + diceSize + (r.isCritical ? "（暴击）" : "");
+            // 使用插值字符串，避免冗余限定符/拼接警告
+            string diceExpr = $"{(r.isCritical ? baseDice * 2 : baseDice)}d{diceSize}{(r.isCritical ? "（暴击）" : "")}";
 
             try
             {
@@ -153,7 +171,22 @@ namespace demo2.DND.HorizontalFormation
                 else
                     GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), r.damageType.ToString(), diceExpr, rolled, dmgAbilityName, dmgAbilityMod, "未应用抗性/易伤", r.damage);
             }
-            catch { }
+            catch (System.Exception) { }
+
+            // 发布伤害事件（事件总线）：优先实例级通道，失败回退全局
+            try
+            {
+                var channel = GetDamageEventChannel(attacker, target);
+                if (channel != null)
+                {
+                    var info = new demo2.DND.Core.Events.Data.DamageInfo(target, attacker, r.damage, r.isCritical);
+                    channel.RaiseEvent(info);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[HorizontalCombatRules] 发布伤害事件异常: {ex.Message}");
+            }
 
             return r;
         }

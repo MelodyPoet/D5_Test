@@ -64,7 +64,7 @@ namespace demo2.DND.HorizontalFormation
 
             if (allCombatants.Count < 2)
             {
-                Debug.LogWarning($"🎯 参战角色不足，无法开始战斗。当前参战角色数: {allCombatants.Count}");
+                Debug.LogWarning($"🎯 参战角色不足，无法开始战斗。目前参战角色数: {allCombatants.Count}");
                 return;
             }
 
@@ -144,7 +144,7 @@ namespace demo2.DND.HorizontalFormation
 
             if (character != null && character.HasStatusEffect(StatusEffectType.Unconscious))
             {
-                if (showAIThoughts) Debug.Log($"=== {character.GetDisplayName()} 倒地状态 - 执行死豁 (按回合) ===");
+                if (showAIThoughts) Debug.Log($"=== {character.GetDisplayName()} 倒地状态 - 执行死豁免 (按回合) ===");
                 character.PerformDeathSaveTick();
                 currentEntry.MarkAsActed();
                 AdvanceToNextTurn();
@@ -181,7 +181,7 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
-            Debug.Log($"[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
+            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
             Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}");
 
             try
@@ -273,7 +273,7 @@ namespace demo2.DND.HorizontalFormation
                 );
             }
 
-            Debug.Log($"[DEBUG] ========== ExecuteBattleActionEvent 结束 ==========");
+            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 结束 ==========");
         }
 
         private void ProcessAttackHit(CharacterStats attacker, CharacterStats target, bool isMeleeAttack)
@@ -303,14 +303,12 @@ namespace demo2.DND.HorizontalFormation
                 if (target.HasStatusEffect(StatusEffectType.Unconscious))
                 {
                     target.RegisterUnconsciousHit(isCritical);
-                    var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
-                    damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
+                    // 伤害事件已由 HorizontalCombatRules 统一发布
                 }
                 else
                 {
                     target.TakeDamage(damage, DamageType.Bludgeoning, isCritical);
-                    var damageChannel = EventChannelManager.Instance?.GetChannel<DamageEventChannel_SO>("DamageEventChannel");
-                    damageChannel?.RaiseEvent(target, attacker, damage, isCritical);
+                    // 伤害事件已由 HorizontalCombatRules 统一发布
 
                     if (target.CurrentHitPoints > 0 && !target.HasStatusEffect(StatusEffectType.Unconscious))
                     {

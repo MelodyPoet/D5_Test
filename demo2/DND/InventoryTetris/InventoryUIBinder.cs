@@ -5,6 +5,8 @@ using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using demo2.DND.HorizontalFormation;
 using demo2.DND.Utility; // add reference to PauseController namespace
+using demo2.DND.Core.Events.Channels; // added for event channels
+using demo2.DND.Core.Events.Data; // added for InventoryAddItemRequest
 
 namespace demo2.DND.InventoryTetris
 {
@@ -55,6 +57,21 @@ namespace demo2.DND.InventoryTetris
         [Header("调试（可选）")]
         public bool debugLogs;
 
+        [Header("事件通道（可选，事件化绑定刷新）")]
+        [Tooltip("可选：拖入 InventoryChangedChannel 资产；当任意背包通过控制器广播变化时（例如装备变更），若与当前激活来源匹配则刷新 UI。")]
+        [SerializeField] private InventoryChangedChannel_SO inventoryChangedChannel; // simplified qualifier
+        [Tooltip("可选：拖入 ActiveCharacterChangedChannel 资产；当当前角色切换时，若该角色具有可用背包則自動切换激活來源。")]
+        [SerializeField] private ActiveCharacterChangedChannel_SO activeCharacterChangedChannel; // simplified qualifier
+        [Tooltip("是否启用事件通道驱动刷新（为 false 则仅使用直接订阅 CharacterInventory.OnInventoryChanged）。")]
+        [SerializeField] private bool enableEventChannels = true;
+        [Tooltip("当收到 ActiveCharacterChanged 事件且角色对应背包尚未收集时，是否自动收集并添加。")]
+        [SerializeField] private bool autoCollectOnActiveCharacterEvent = true;
+
+        [Header("拾取事件通道（可选）")]
+        [SerializeField] private RequestAddItemChannel_SO requestAddItemChannel; // simplified qualifier
+        [Tooltip("是否由 UI 直接处理拾取事件并尝试落地（一般不需要；由控制器处理以避免重复添加）")]
+        [SerializeField] private bool handleAddItemEvents = false;
+
         // Navigation buttons removed: navigation is now owned by UITabSwitcher (single-responsibility).
         // nextButton/prevButton and acceptExternalNavigation have been removed intentionally.
 
@@ -64,8 +81,6 @@ namespace demo2.DND.InventoryTetris
         public int activeSourceIndex;
 
         private bool autoSwitchConsumed; // prevent repeated auto-switch when multiple inventories become ready at runtime
-
-        private CharacterInventory subscribedSource; // 当前已订阅事件的来源
 
         private CharacterInventory ActiveSource
         {
@@ -83,29 +98,26 @@ namespace demo2.DND.InventoryTetris
 
         private void OnEnable()
         {
-            // Subscribe to formation events first
             HorizontalBattleFormationManager.OnPlayerFormationGenerated += HandlePlayerFormationGenerated;
 
-            // Collect any inventories already in the scene and initialize UI state
-            // Navigation UI is handled by UITabSwitcher; InventoryUIBinder no longer auto-binds Next/Prev buttons.
             CollectExistingInventoriesInScene();
-            SubscribeActive();
             UpdateStatsUI();
-
             TryBindStatsFromExistingFormation();
 
-            // Now subscribe to CharacterInventory runtime events. Doing this after the initial
-            // collection avoids races where OnAnyInventoryReady fires while we're still collecting
-            // and causes duplicate or out-of-order entries.
             CharacterInventory.OnAnyInventoryReady += HandleInventoryReady;
             CharacterInventory.OnAnyInventoryDestroyed += HandleInventoryDestroyed;
 
-            // 初始化用于 UI 光���检测的组件引用（用于调试点击被哪个 UI 元素拦截）
+            // 事件通道订阅（事件化刷新）
+            if (enableEventChannels)
+            {
+                if (inventoryChangedChannel != null) inventoryChangedChannel.OnEventRaised += HandleInventoryChangedChannel;
+                if (activeCharacterChangedChannel != null) activeCharacterChangedChannel.OnEventRaised += HandleActiveCharacterChangedChannel;
+                if (handleAddItemEvents && requestAddItemChannel != null) requestAddItemChannel.OnEventRaised += HandleAddItemRequest;
+            }
+
             debugEventSystem = EventSystem.current;
             debugRaycaster = GetComponentInParent<GraphicRaycaster>() ?? FindObjectOfType<GraphicRaycaster>();
 
-            // 调试：输出本实例信息，便于在控制台追踪具体被绑定的 InventoryUIBinder 实例
-            // Always log a minimal OnEnable summary to help runtime diagnosis (no need to flip debugLogs)
             var goName = gameObject != null ? gameObject.name : "<null>";
             var srcCount = sourceInventories != null ? sourceInventories.Count : 0;
             Debug.Log($"[InventoryUIBinder] OnEnable summary -> GO={goName}, sourcesCount={srcCount}");
@@ -115,7 +127,6 @@ namespace demo2.DND.InventoryTetris
                 Debug.Log($"[InventoryUIBinder] OnEnable -> instanceID={this.GetInstanceID()}, activeInHierarchy={(gameObject!=null?gameObject.activeInHierarchy:false)}, gridView={gridName}, collectedSources={srcCount}");
             }
 
-            // If nothing collected at OnEnable, log what CharacterInventory components actually exist in the scene
             if (sourceInventories == null || sourceInventories.Count == 0)
             {
                 try
@@ -145,7 +156,12 @@ namespace demo2.DND.InventoryTetris
             CharacterInventory.OnAnyInventoryReady -= HandleInventoryReady;
             CharacterInventory.OnAnyInventoryDestroyed -= HandleInventoryDestroyed;
             HorizontalBattleFormationManager.OnPlayerFormationGenerated -= HandlePlayerFormationGenerated;
-            UnsubscribeActive();
+            if (enableEventChannels)
+            {
+                if (inventoryChangedChannel != null) inventoryChangedChannel.OnEventRaised -= HandleInventoryChangedChannel;
+                if (activeCharacterChangedChannel != null) activeCharacterChangedChannel.OnEventRaised -= HandleActiveCharacterChangedChannel;
+                if (handleAddItemEvents && requestAddItemChannel != null) requestAddItemChannel.OnEventRaised -= HandleAddItemRequest;
+            }
         }
 
         private void Start()
@@ -289,7 +305,6 @@ namespace demo2.DND.InventoryTetris
             sourceInventories.RemoveAt(idx);
             if (wasActive)
             {
-                UnsubscribeActive();
                 if (sourceInventories.Count == 0)
                 {
                     activeSourceIndex = 0;
@@ -298,34 +313,8 @@ namespace demo2.DND.InventoryTetris
                 {
                     activeSourceIndex = Mathf.Clamp(activeSourceIndex, 0, sourceInventories.Count - 1);
                 }
-                SubscribeActive();
                 RefreshFromInventory();
                 UpdateStatsUI();
-            }
-        }
-
-        private void SubscribeActive()
-        {
-            var src = ActiveSource;
-            if (src == null) return;
-            if (subscribedSource == src)
-            {
-                if (debugLogs) Debug.Log($"[InventoryUIBinder] SubscribeActive -> already subscribed to '{DescribeInventory(src)}'");
-                return;
-            }
-            UnsubscribeActive();
-            src.OnInventoryChanged += RefreshFromInventory;
-            subscribedSource = src;
-            if (debugLogs) Debug.Log($"[InventoryUIBinder] Subscribed to ActiveSource '{DescribeInventory(src)}'");
-        }
-
-        private void UnsubscribeActive()
-        {
-            if (subscribedSource != null)
-            {
-                if (debugLogs) Debug.Log($"[InventoryUIBinder] Unsubscribing from '{subscribedSource.gameObject.name}'");
-                try { subscribedSource.OnInventoryChanged -= RefreshFromInventory; } catch (System.Exception ex) { if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] Exception while unsubscribing: {ex}"); }
-                subscribedSource = null;
             }
         }
 
@@ -340,20 +329,17 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
-            // 新增调试日志：记录切换请求与当前状态
             if (debugLogs) Debug.Log($"[SetActiveSourceIndex] 切换请求 -> index={index}, currentIndex={activeSourceIndex}, sourcesCount={sourceInventories.Count}");
 
-            if (activeSourceIndex == index && subscribedSource == ActiveSource)
+            if (activeSourceIndex == index)
             {
                 RefreshFromInventory();
                 UpdateStatsUI();
                 return;
             }
 
-            UnsubscribeActive();
             var prevActive = ActiveSource;
             activeSourceIndex = index;
-            SubscribeActive();
 
             if (debugLogs) Debug.Log($"[SetActiveSourceIndex] 切换完成 -> newActive={DescribeInventory(ActiveSource)}");
 
@@ -581,6 +567,15 @@ namespace demo2.DND.InventoryTetris
             if (view == null) return false; // 没有空间
 
             src.AddInstance(inst);
+            // 事件驱动刷新：主动广播变更
+            if (enableEventChannels && inventoryChangedChannel != null)
+            {
+                inventoryChangedChannel.RaiseEvent(src);
+            }
+            else if (debugLogs)
+            {
+                Debug.LogWarning("[InventoryUIBinder] TryAddNew: 未配置 InventoryChangedChannel，已添加物品但无法事件化刷新（依赖兜底路径）。");
+            }
             return true;
         }
 
@@ -592,8 +587,16 @@ namespace demo2.DND.InventoryTetris
             var src = ActiveSource;
             if (inst == null || src == null || gridView == null) return false;
             bool ok = gridView.Remove(inst);
-            ok = src.RemoveInstance(inst) && ok;
-            return ok;
+            bool okData = src.RemoveInstance(inst);
+            if (okData && enableEventChannels && inventoryChangedChannel != null)
+            {
+                inventoryChangedChannel.RaiseEvent(src);
+            }
+            else if (okData && debugLogs && (!enableEventChannels || inventoryChangedChannel == null))
+            {
+                Debug.LogWarning("[InventoryUIBinder] Remove: 未配置 InventoryChangedChannel，已移除物品但无法事件化刷新（依赖兜底路径）。");
+            }
+            return okData && ok;
         }
 
         // 当玩家阵型根据 FormationContainer 生成完毕时触发
@@ -638,6 +641,7 @@ namespace demo2.DND.InventoryTetris
                 if (debugLogs) Debug.Log("[InventoryUIBinder] NextSource: no sources available.");
                 return;
             }
+            if (s == null) return; // extra guard for static analyzer
             int start = activeSourceIndex;
             int candidate = (start + 1) % count;
             // Try to find a candidate with a different GameObject than current ActiveSource
@@ -671,6 +675,7 @@ namespace demo2.DND.InventoryTetris
                 if (debugLogs) Debug.Log("[InventoryUIBinder] PrevSource: no sources available.");
                 return;
             }
+            if (s == null) return; // extra guard for static analyzer
             int start = activeSourceIndex;
             int candidate = (start - 1 + count) % count;
             var cur = ActiveSource != null ? ActiveSource.gameObject : null;
@@ -791,6 +796,103 @@ namespace demo2.DND.InventoryTetris
             if (debugLogs)
             {
                 Debug.Log("InventoryUIBinder: Ignored pause state change.");
+            }
+        }
+
+        // 事件通道：InventoryChanged -> 若是当前激活来源则刷新
+        private void HandleInventoryChangedChannel(CharacterInventory inv)
+        {
+            if (!enableEventChannels || inv == null) return;
+            if (inv == ActiveSource)
+            {
+                if (debugLogs) Debug.Log("[InventoryUIBinder] InventoryChangedChannel 命中当前激活来源，刷新网格与属性 UI。");
+                RefreshFromInventory();
+                UpdateStatsUI();
+            }
+            else if (debugLogs)
+            {
+                // 仅调试输出一次来源描述
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] 收到 InventoryChangedChannel 但非当前激活来源 -> {DescribeInventory(inv)}");
+            }
+        }
+
+        // 事件通道：ActiveCharacterChanged -> 尝试切换到该角色的背包
+        private void HandleActiveCharacterChangedChannel(CharacterStats stats)
+        {
+            if (!enableEventChannels || stats == null) return;
+            var inv = stats.GetComponent<CharacterInventory>();
+            if (inv == null)
+            {
+                if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] ActiveCharacterChanged: 角色 '{stats.characterName}' 未挂载 CharacterInventory。");
+                return;
+            }
+            // 若未收集过该背包并允许自动收集 -> 收集
+            if (!sourceInventories.Contains(inv))
+            {
+                if (autoCollectOnActiveCharacterEvent)
+                {
+                    if (debugLogs) Debug.Log($"[InventoryUIBinder] ActiveCharacterChanged: 自动收集新背包 {DescribeInventory(inv)}");
+                    // 避免重复：执行最小化收集加入
+                    if (inv.gameObject.scene.IsValid()) sourceInventories.Add(inv);
+                }
+                else
+                {
+                    if (debugLogs) Debug.LogWarning("[InventoryUIBinder] ActiveCharacterChanged: 背包未在已收集列表中且未启用自动收集，保持现状。");
+                    return;
+                }
+            }
+            int idx = sourceInventories.IndexOf(inv);
+            if (idx >= 0)
+            {
+                if (debugLogs) Debug.Log($"[InventoryUIBinder] ActiveCharacterChanged: 切换激活背包 -> index={idx}");
+                SetActiveSourceIndex(idx);
+            }
+            else if (debugLogs)
+            {
+                Debug.LogWarning("[InventoryUIBinder] ActiveCharacterChanged: 虽已尝试收集但未能在列表中找到该背包。");
+            }
+        }
+
+        private void HandleAddItemRequest(InventoryAddItemRequest req)
+        {
+            if (!enableEventChannels) return;
+            if (req.item == null)
+            {
+                if (debugLogs) Debug.LogWarning("[InventoryUIBinder] HandleAddItemRequest: item 为 null，忽略。");
+                return;
+            }
+            var target = req.inventory != null ? req.inventory : ActiveSource;
+            if (target == null)
+            {
+                if (debugLogs) Debug.LogWarning("[InventoryUIBinder] HandleAddItemRequest: 无有效背包（ActiveSource 为空且请求未指定）。");
+                return;
+            }
+            // 仅当请求的背包正是当前激活来源才尝试即时落地；否则忽略（可扩展为延迟列表）
+            if (target != ActiveSource)
+            {
+                if (debugLogs) Debug.Log("[InventoryUIBinder] HandleAddItemRequest: 请求目标不是当前激活背包，已忽略（未来可扩展队伍整体同步）。");
+                return;
+            }
+
+            int amount = req.amount <= 0 ? 1 : req.amount;
+            int placed = 0;
+            for (int i = 0; i < amount; i++)
+            {
+                bool ok = TryAddNew(req.item);
+                if (!ok)
+                {
+                    if (debugLogs)
+                    {
+                        Debug.LogWarning("[InventoryUIBinder] HandleAddItemRequest: 背包无空间，停止继续放置后续物品。");
+                    }
+                    break;
+                }
+                placed++;
+            }
+
+            if (debugLogs)
+            {
+                Debug.Log($"[InventoryUIBinder] HandleAddItemRequest: 请求数量={amount}，成功放置={placed}。");
             }
         }
     }
