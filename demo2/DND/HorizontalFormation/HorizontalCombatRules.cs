@@ -257,14 +257,15 @@ namespace demo2.DND.HorizontalFormation
                 int count = isCritical ? dice.diceCount * 2 : dice.diceCount;
                 diceSize = dice.diceSize;
                 for (int i = 0; i < count; i++) rolledTotal += Random.Range(1, diceSize + 1);
-                return Mathf.Max(1, rolledTotal);
+                // 最低伤害改为 0（不再强制至少1）
+                return Mathf.Max(0, rolledTotal);
             }
 
             // 物理
             DiceFormula pdice = (weapon != null && weapon.isWeapon)
-                ? new DiceFormula { diceCount = Mathf.Max(1, weapon.weaponDamageDice.diceCount), diceSize = Mathf.Max(2, weapon.weaponDamageDice.diceSize) }
+                ? new DiceFormula { diceCount = Mathf.Max(1, weapon.weaponDamageDice.diceCount), diceSize = Mathf.Max(1, weapon.weaponDamageDice.diceSize) }
                 : (c.template != null
-                    ? new DiceFormula { diceCount = Mathf.Max(1, c.template.unarmedDamageDice.diceCount), diceSize = Mathf.Max(2, c.template.unarmedDamageDice.diceSize) }
+                    ? new DiceFormula { diceCount = Mathf.Max(1, c.template.unarmedDamageDice.diceCount), diceSize = Mathf.Max(1, c.template.unarmedDamageDice.diceSize) }
                     : new DiceFormula { diceCount = 1, diceSize = 6 });
             int pcount = isCritical ? pdice.diceCount * 2 : pdice.diceCount;
             diceSize = pdice.diceSize;
@@ -310,7 +311,7 @@ namespace demo2.DND.HorizontalFormation
                 }
             }
 
-            return Mathf.Max(1, rolledTotal + abilityModForDmg);
+            return Mathf.Max(0, rolledTotal + abilityModForDmg);
         }
     }
 }

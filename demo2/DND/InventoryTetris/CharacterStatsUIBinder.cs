@@ -61,6 +61,15 @@ namespace demo2.DND.InventoryTetris
         public TMP_Text statusTMP;
 #endif
 
+        [Header("扩展属性（手动拖拽） - UnityEngine.UI.Text 或下方 TMP_Text")]
+        [Tooltip("实际伤害（当前装备武器或徒手的伤害骰 + 能力修正）")] public Text damageText;
+        [Tooltip("耐性/免疫/易伤 + 当前正负状态汇总")] public Text effectsText;
+        [Header("扩展属性（手动拖拽） - TextMeshPro 可选")]
+#if TMP_PRESENT
+        public TMP_Text damageTMP;
+        public TMP_Text effectsTMP;
+#endif
+
         [Header("调试")]
         public bool debugLogs;
 
@@ -201,6 +210,10 @@ namespace demo2.DND.InventoryTetris
                 SetText(statusTMP, string.Empty);
 #endif
             }
+
+            // === 新增：实际伤害值与耐性/状态汇总 ===
+            UpdateDamageDisplay();
+            UpdateEffectsDisplay();
         }
 
         private static string FormatAbility(int score, int mod, string label)
@@ -223,6 +236,8 @@ namespace demo2.DND.InventoryTetris
             SetText(wisText, string.Empty);
             SetText(chaText, string.Empty);
             SetText(statusText, string.Empty);
+            SetText(damageText, string.Empty);
+            SetText(effectsText, string.Empty);
 #if TMP_PRESENT
             SetText(nameTMP, string.Empty);
             SetText(classTMP, string.Empty);
@@ -236,14 +251,16 @@ namespace demo2.DND.InventoryTetris
             SetText(wisTMP, string.Empty);
             SetText(chaTMP, string.Empty);
             SetText(statusTMP, string.Empty);
+            SetText(damageTMP, string.Empty);
+            SetText(effectsTMP, string.Empty);
 #endif
         }
 
         private bool HasAnyTextAssigned()
         {
-            bool any = nameText || classText || levelText || hpText || acText || strText || dexText || conText || intText || wisText || chaText || statusText;
+            bool any = nameText || classText || levelText || hpText || acText || strText || dexText || conText || intText || wisText || chaText || statusText || damageText || effectsText;
 #if TMP_PRESENT
-            any = any || nameTMP || classTMP || levelTMP || hpTMP || acTMP || strTMP || dexTMP || conTMP || intTMP || wisTMP || chaTMP || statusTMP;
+            any = any || nameTMP || classTMP || levelTMP || hpTMP || acTMP || strTMP || dexTMP || conTMP || intTMP || wisTMP || chaTMP || statusTMP || damageTMP || effectsTMP;
 #endif
             return any;
         }
@@ -259,5 +276,139 @@ namespace demo2.DND.InventoryTetris
             if (tmp != null) tmp.text = value;
         }
 #endif
+
+        private void UpdateDamageDisplay()
+        {
+            if (damageText == null &&
+#if TMP_PRESENT
+                damageTMP == null &&
+#endif
+                !debugLogs) return;
+            if (bound == null)
+            {
+                SetText(damageText, string.Empty);
+#if TMP_PRESENT
+                SetText(damageTMP, string.Empty);
+#endif
+                return;
+            }
+            var eq = bound.GetComponent<CharacterEquipment>()
+                     ?? bound.GetComponentInParent<CharacterEquipment>()
+                     ?? bound.GetComponentInChildren<CharacterEquipment>(true);
+
+            string dmgStr;
+            if (eq != null && eq.mainHand != null && eq.mainHand.data != null && eq.mainHand.data.isWeapon)
+            {
+                var d = eq.mainHand.data;
+                var dice = d.weaponDamageDice;
+                int abilityMod = 0; string abilityLabel = "";
+                switch (d.weaponHitAbilityMode)
+                {
+                    case PhysicalHitAbilityMode.Strength: abilityMod = bound.StrMod; abilityLabel = "STR"; break;
+                    case PhysicalHitAbilityMode.Dexterity: abilityMod = bound.DexMod; abilityLabel = "DEX"; break;
+                    case PhysicalHitAbilityMode.BestOfStrDex:
+                        abilityMod = bound.StrMod >= bound.DexMod ? bound.StrMod : bound.DexMod;
+                        abilityLabel = bound.StrMod >= bound.DexMod ? "STR" : "DEX"; break;
+                }
+                string modPart = abilityMod != 0 ? (abilityMod > 0 ? $"+{abilityMod}" : abilityMod.ToString()) : "";
+                dmgStr = $"{dice.diceCount}d{dice.diceSize}{modPart} ({abilityLabel})";
+            }
+            else
+            {
+                // 使用角色模板上的徒手配置（严格使用原始数值，不做 UI 层面的强制修正）
+                var tpl = bound.template;
+                DiceFormula dice = new DiceFormula { diceCount = 1, diceSize = 4 }; // 模板缺失时的兜底
+                PhysicalHitAbilityMode mode = PhysicalHitAbilityMode.Strength;
+                if (tpl != null)
+                {
+                    dice = tpl.unarmedDamageDice; // 不再修改 diceCount / diceSize，下层如需校验请在数据侧处理
+                    mode = tpl.unarmedDamageAbilityMode;
+                }
+                int abilityMod = 0; string abilityLabel = "";
+                switch (mode)
+                {
+                    case PhysicalHitAbilityMode.Strength: abilityMod = bound.StrMod; abilityLabel = "STR"; break;
+                    case PhysicalHitAbilityMode.Dexterity: abilityMod = bound.DexMod; abilityLabel = "DEX"; break;
+                    case PhysicalHitAbilityMode.BestOfStrDex:
+                        abilityMod = bound.StrMod >= bound.DexMod ? bound.StrMod : bound.DexMod;
+                        abilityLabel = bound.StrMod >= bound.DexMod ? "STR" : "DEX"; break;
+                }
+                string modPart = abilityMod != 0 ? (abilityMod > 0 ? $"+{abilityMod}" : abilityMod.ToString()) : "";
+                dmgStr = $"{dice.diceCount}d{dice.diceSize}{modPart} (Unarmed {abilityLabel})";
+            }
+            SetText(damageText, "实际伤害: " + dmgStr);
+#if TMP_PRESENT
+            SetText(damageTMP, "实际伤害: " + dmgStr);
+#endif
+        }
+
+        private void UpdateEffectsDisplay()
+        {
+            if (effectsText == null &&
+#if TMP_PRESENT
+                effectsTMP == null &&
+#endif
+                !debugLogs) return;
+            if (bound == null)
+            {
+                SetText(effectsText, string.Empty);
+#if TMP_PRESENT
+                SetText(effectsTMP, string.Empty);
+#endif
+                return;
+            }
+
+            // 汇总：免疫/抗性/易伤（从模板 + 运行时快照可扩展）+ 当前状态效果
+            var tpl = bound.template;
+            var sb = new StringBuilder();
+            // 免疫
+            if (tpl != null && tpl.immunities != null && tpl.immunities.Count > 0)
+            {
+                sb.Append("免疫:");
+                for (int i = 0; i < tpl.immunities.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(tpl.immunities[i]);
+                }
+                sb.Append("  ");
+            }
+            // 抗性
+            if (tpl != null && tpl.resistances != null && tpl.resistances.Count > 0)
+            {
+                sb.Append("抗性:");
+                for (int i = 0; i < tpl.resistances.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(tpl.resistances[i]);
+                }
+                sb.Append("  ");
+            }
+            // 易伤
+            if (tpl != null && tpl.vulnerabilities != null && tpl.vulnerabilities.Count > 0)
+            {
+                sb.Append("易伤:");
+                for (int i = 0; i < tpl.vulnerabilities.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(tpl.vulnerabilities[i]);
+                }
+                sb.Append("  ");
+            }
+            // 当前状态
+            if (bound.StatusEffects != null && bound.StatusEffects.Count > 0)
+            {
+                sb.Append("状态:");
+                for (int i = 0; i < bound.StatusEffects.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(bound.StatusEffects[i]);
+                }
+            }
+            string effectsStr = sb.ToString();
+            SetText(effectsText, string.IsNullOrEmpty(effectsStr) ? "" : effectsStr);
+#if TMP_PRESENT
+            SetText(effectsTMP, string.IsNullOrEmpty(effectsStr) ? "" : effectsStr);
+#endif
+        }
     }
 }

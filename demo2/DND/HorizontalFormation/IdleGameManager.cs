@@ -12,6 +12,11 @@ namespace demo2.DND.HorizontalFormation
         public bool idleModeEnabled;
         public float encounterInterval = 10f;
         public float battleSpeed = 1f;
+        [Header("奖励示例开关")]
+        [Tooltip("关闭后不再调用示例 GenerateWaveLootExample，避免额外随机物品。")]
+        public bool enableExampleVictoryLoot = false;
+        [Header("掉落管理")]
+        [Tooltip("场景中的 LootDropManager (可为空则自动查找)")] public demo2.DND.Loot.LootDropManager lootDropManager;
 
         [Header("队伍生成设置")]
         [Tooltip("是否使用阵型管理器生成队伍（推荐开启）")]
@@ -66,6 +71,14 @@ namespace demo2.DND.HorizontalFormation
         private void InitializeIdleSystem()
         {
             Debug.Log("=== 开始初始化挂机系统 ===");
+            if (lootDropManager == null)
+            {
+                lootDropManager = FindObjectOfType<demo2.DND.Loot.LootDropManager>();
+                if (lootDropManager == null)
+                {
+                    Debug.LogWarning("[IdleGameManager] 场景中未找到 LootDropManager，掉落分发功能将不可用。");
+                }
+            }
 
             // 自动查找组件引用
             if (formationManager == null)
@@ -289,6 +302,17 @@ namespace demo2.DND.HorizontalFormation
 
             if (playerVictory)
             {
+                // 在波次递增前先结算本波掉落（统一接口）
+                if (lootDropManager == null) lootDropManager = FindObjectOfType<demo2.DND.Loot.LootDropManager>();
+                if (lootDropManager != null)
+                {
+                    lootDropManager.FinalizeWave(currentEnemyWave);
+                }
+                else
+                {
+                    Debug.LogWarning("[IdleGameManager] 未找到 LootDropManager，跳过波次 FinalizeWave 掉落分发");
+                }
+
                 // 实时日志：当前波次完成
                 try
                 {
@@ -297,31 +321,33 @@ namespace demo2.DND.HorizontalFormation
                 }
                 catch { }
 
-                GiveBattleVictoryRewards();
+                GiveBattleVictoryRewards(); // 保留示例奖励（可关闭）
 
-                // 延迟清理敌人阵型，确保死亡动画（3s）可以完整播放
                 float corpseDelay = 3.1f;
                 Debug.Log($"[IdleGameManager] 延迟 {corpseDelay}s 清理敌人阵型以确保死亡动画播放完成");
                 Invoke(nameof(DelayedClearEnemyFormation), corpseDelay);
 
                 // 战斗胜利，准备返回探索模式
                 currentEnemyWave++;
-                if (currentEnemyWave >= formationManager.GetEnemyWaveCount())
+                if (formationManager != null && currentEnemyWave >= formationManager.GetEnemyWaveCount())
                 {
                     Debug.Log("所有敌人波次已循环一遍，重置波次计数器。");
-                    currentEnemyWave = 0; // 所有波次打完后，从头开始循环
+                    currentEnemyWave = 0;
                 }
 
-                // 重置下一次遭遇计时
                 nextEncounterTime = Time.time + encounterInterval;
-
-                // 恢复探索状态
                 Invoke(nameof(RestoreExplorationState), 1f);
             }
             else
             {
+                // 战斗失败不发放奖励，清空缓冲
+                if (lootDropManager == null) lootDropManager = FindObjectOfType<demo2.DND.Loot.LootDropManager>();
+                if (lootDropManager != null)
+                {
+                    lootDropManager.ClearWaveBuffer();
+                }
                 HandleBattleDefeat();
-                currentEnemyWave = 0; // 战斗失败，重置波次
+                currentEnemyWave = 0;
             }
         }
 
@@ -442,15 +468,18 @@ namespace demo2.DND.HorizontalFormation
         {
             Debug.Log("💰 战斗胜利！获得经验和金币");
             // 示例：胜利后生成掉落并通过 InventoryController 事件化添加
-            try
+            if (enableExampleVictoryLoot)
             {
-                var controller = FindObjectOfType<demo2.DND.InventoryTetris.InventoryController>();
-                if (controller != null)
+                try
                 {
-                    controller.GenerateWaveLootExample();
+                    var controller = FindObjectOfType<demo2.DND.InventoryTetris.InventoryController>();
+                    if (controller != null)
+                    {
+                        controller.GenerateWaveLootExample();
+                    }
                 }
+                catch { }
             }
-            catch { }
         }
 
         /// <summary>

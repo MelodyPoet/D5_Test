@@ -193,26 +193,26 @@ namespace demo2.DND
                     return;
                 }
                 if (template.resistances.Contains(damageType)) {
-                    damage = Mathf.Max(1, damage / 2);
-                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性!");
+                    // 抗性减半，允许结果为0（不再强制至少1）
+                    damage = Mathf.Max(0, damage / 2);
+                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有抗性! 最终伤害(减半后): {damage}");
                 }
                 else if (template.vulnerabilities.Contains(damageType)) {
                     damage *= 2;
-                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有弱点!");
+                    Debug.Log($"{GetDisplayName()} 对 {damageType} 伤害有弱点! 翻倍后伤害: {damage}");
                 }
             }
 
-            // 移除：暴击加倍在规则层已计算（并仅翻倍骰），此处不再重复处理
-            // if (isCritical) {
-            //     damage *= 2;
-            //     Debug.Log($"{GetDisplayName()} 受到暴击! 伤害翻倍: {damage}");
-            // }
+            // 暴击翻倍逻辑已在规则层处理，这里不重复
+
+            // 负伤害视为0（不产生治疗效果）
+            if (damage < 0) damage = 0;
 
             // 先扣除临时生命值
             if (temporaryHitPoints > 0) {
                 if (temporaryHitPoints >= damage) {
                     temporaryHitPoints -= damage;
-                    damage = 0;
+                    damage = 0; // 全部被临时生命吸收
                 }
                 else {
                     damage -= temporaryHitPoints;
