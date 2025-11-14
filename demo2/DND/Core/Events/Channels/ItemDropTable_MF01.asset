@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3e7133b5ab2d4a059cec1f4156f054ba, type: 3}
-  m_Name: ItemDropTable_Goblin
+  m_Name: ItemDropTable_MF01
   m_EditorClassIdentifier: 
   entries:
   - item: {fileID: 11400000, guid: 217af54a108079e429e8ff5b1213dbb2, type: 2}
