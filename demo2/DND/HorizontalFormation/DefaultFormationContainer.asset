@@ -27,7 +27,7 @@ MonoBehaviour:
     - {fileID: 0}
     - {fileID: 2121741199564747429, guid: 3894cd3c9d59b464785666c045db2b54, type: 3}
     - {fileID: 0}
-    - {fileID: 0}
+    - {fileID: 5992248824920210409, guid: bba1c48f3214dfd4e8860826e6fdac0d, type: 3}
     - {fileID: 0}
     - {fileID: 0}
   - enemyFormationPrefabs:

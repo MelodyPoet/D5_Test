@@ -1799,6 +1799,8 @@ MonoBehaviour:
   idleModeEnabled: 1
   encounterInterval: 10
   battleSpeed: 1
+  enableExampleVictoryLoot: 0
+  lootDropManager: {fileID: 1474897938}
   useFormationManager: 1
   playerPartySize: 3
   formationManager: {fileID: 1410913447}
@@ -3675,6 +3677,9 @@ MonoBehaviour:
   batchDispatch: 1
   batchWindowSeconds: 0.15
   debugLogs: 1
+  accumulateUntilWaveEnd: 1
+  waveBonusTable: {fileID: 0}
+  mergeDuplicatesOnWaveFinalize: 1
 --- !u!1 &1484244904
 GameObject:
   m_ObjectHideFlags: 0

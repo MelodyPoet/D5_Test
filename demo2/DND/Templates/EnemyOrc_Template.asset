@@ -27,6 +27,11 @@ MonoBehaviour:
   charisma: 10
   baseArmorClass: 13
   hitDie: 8
+  unarmedDamageDice:
+    diceCount: 1
+    diceSize: 6
+  unarmedDamageAbilityMode: 0
+  unarmedProficient: 1
   resistances: 
   immunities: 
   vulnerabilities: 
@@ -36,5 +41,9 @@ MonoBehaviour:
   proficientSpellAttacks: 0
   proficientMelee: 1
   proficientRanged: 0
+  proficientLightArmor: 1
+  proficientMediumArmor: 1
+  proficientHeavyArmor: 1
+  proficientShield: 1
   proficientWeaponClasses: []
   proficientWeaponTypes: []
