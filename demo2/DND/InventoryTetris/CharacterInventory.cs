@@ -25,7 +25,7 @@ namespace demo2.DND.InventoryTetris
         // 运行时实例集合
         private readonly List<ItemInstance> items = new List<ItemInstance>();
 
-        private demo2.DND.CharacterStats cachedStats;
+        private CharacterStats cachedStats;
 
         public event Action OnInventoryChanged;
         public static event Action<CharacterInventory> OnAnyInventoryReady;
@@ -98,24 +98,39 @@ namespace demo2.DND.InventoryTetris
             Debug.Log($"[CharacterInventory] AutoEquipInitialItems: 找到 Equipment on {eq.gameObject.name}. itemsCount={items?.Count ?? 0}");
 
             // 清理陈旧的装备槽（若槽位引用的实例不在当前背包中，视为过期并卸下）
-            if (eq.mainHand != null && !items.Contains(eq.mainHand))
+            var mhInst = eq.GetEquipped(EquipmentSlot.MainHand);
+            if (mhInst != null)
             {
-                Debug.Log($"[CharacterInventory] Detected stale mainHand reference ({(eq.mainHand.data!=null?eq.mainHand.data.displayName:eq.mainHand.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                eq.UnequipMainHand();
+                if (!items.Contains(mhInst))
+                {
+                    Debug.Log($"[CharacterInventory] Detected stale mainHand reference ({(mhInst?.data != null ? mhInst.data.displayName : mhInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
+                    eq.UnequipSlot(EquipmentSlot.MainHand);
+                }
             }
-            if (eq.armor != null && !items.Contains(eq.armor))
+            var arInst = eq.GetEquipped(EquipmentSlot.Armor);
+            if (arInst != null)
             {
-                Debug.Log($"[CharacterInventory] Detected stale armor reference ({(eq.armor.data!=null?eq.armor.data.displayName:eq.armor.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                eq.UnequipArmor();
+                if (!items.Contains(arInst))
+                {
+                    Debug.Log($"[CharacterInventory] Detected stale armor reference ({(arInst?.data != null ? arInst.data.displayName : arInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
+                    eq.UnequipSlot(EquipmentSlot.Armor);
+                }
             }
-            if (eq.shield != null && !items.Contains(eq.shield))
+            var shInst = eq.GetEquipped(EquipmentSlot.OffHand);
+            if (shInst != null)
             {
-                Debug.Log($"[CharacterInventory] Detected stale shield reference ({(eq.shield.data!=null?eq.shield.data.displayName:eq.shield.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                eq.UnequipShield();
+                if (!items.Contains(shInst))
+                {
+                    Debug.Log($"[CharacterInventory] Detected stale shield reference ({(shInst?.data != null ? shInst.data.displayName : shInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
+                    eq.UnequipSlot(EquipmentSlot.OffHand);
+                }
             }
 
-            // 新增：打印当前装备槽状态，帮助诊断为何未自动装备
-            Debug.Log($"[CharacterInventory] Equipment slots at AutoEquip start: mainHand={(eq.mainHand != null ? (eq.mainHand.data != null ? eq.mainHand.data.displayName : eq.mainHand.instanceId) : "null")}, armor={(eq.armor != null ? (eq.armor.data != null ? eq.armor.data.displayName : eq.armor.instanceId) : "null")}, shield={(eq.shield != null ? (eq.shield.data != null ? eq.shield.data.displayName : eq.shield.instanceId) : "null")} on GameObject={eq.gameObject.name}");
+            // 新增：打印当前装备槽状态，帮助诊断为何未自动装备（使用 null-safe 访问以避免分析器警告）
+            string mhNameStr = mhInst != null ? (mhInst.data != null ? mhInst.data.displayName : mhInst.instanceId ?? "<no-id>") : "null";
+            string arNameStr = arInst != null ? (arInst.data != null ? arInst.data.displayName : arInst.instanceId ?? "<no-id>") : "null";
+            string shNameStr = shInst != null ? (shInst.data != null ? shInst.data.displayName : shInst.instanceId ?? "<no-id>") : "null";
+            Debug.Log($"[CharacterInventory] Equipment slots at AutoEquip start: mainHand={mhNameStr}, armor={arNameStr}, shield={shNameStr} on GameObject={eq.gameObject.name}");
 
             ItemInstance firstWeapon = null;
             ItemInstance firstArmor = null;
@@ -148,10 +163,10 @@ namespace demo2.DND.InventoryTetris
             }
 
             // 若槽位为空则装备；若已有人为预设的起始装备则尊重现状不覆盖
-            if (eq.mainHand == null && firstWeapon != null)
+            if (mhInst == null && firstWeapon != null)
             {
                 Debug.Log($"[CharacterInventory] Auto-equipping weapon {firstWeapon.data.displayName} to {eq.gameObject.name}");
-                eq.EquipMainHand(firstWeapon);
+                eq.EquipToSlot(EquipmentSlot.MainHand, firstWeapon);
             }
             else
             {
@@ -159,16 +174,16 @@ namespace demo2.DND.InventoryTetris
                 {
                     Debug.Log("[CharacterInventory] No candidate weapon found to auto-equip.");
                 }
-                else if (eq.mainHand != null)
+                else if (mhInst != null)
                 {
-                    var mhName = eq.mainHand?.data != null ? eq.mainHand.data.displayName : eq.mainHand?.instanceId ?? "<no-id>";
+                    var mhName = mhInst?.data != null ? mhInst.data.displayName : mhInst?.instanceId ?? "<no-id>";
                     Debug.Log($"[CharacterInventory] Skipping auto-equip weapon because mainHand is already occupied by {mhName} on {eq.gameObject.name}");
                 }
             }
-            if (eq.armor == null && firstArmor != null)
+            if (arInst == null && firstArmor != null)
             {
                 Debug.Log($"[CharacterInventory] Auto-equipping armor {firstArmor.data.displayName} to {eq.gameObject.name}");
-                eq.EquipArmor(firstArmor);
+                eq.EquipToSlot(EquipmentSlot.Armor, firstArmor);
             }
             else
             {
@@ -176,16 +191,16 @@ namespace demo2.DND.InventoryTetris
                 {
                     Debug.Log("[CharacterInventory] No candidate armor found to auto-equip.");
                 }
-                else if (eq.armor != null)
+                else if (arInst != null)
                 {
-                    var arName = eq.armor?.data != null ? eq.armor.data.displayName : eq.armor?.instanceId ?? "<no-id>";
+                    var arName = arInst?.data != null ? arInst.data.displayName : arInst?.instanceId ?? "<no-id>";
                     Debug.Log($"[CharacterInventory] Skipping auto-equip armor because armor slot is already occupied by {arName} on {eq.gameObject.name}");
                 }
             }
-            if (eq.shield == null && firstShield != null)
+            if (shInst == null && firstShield != null)
             {
                 Debug.Log($"[CharacterInventory] Auto-equipping shield {firstShield.data.displayName} to {eq.gameObject.name}");
-                eq.EquipShield(firstShield);
+                eq.EquipToSlot(EquipmentSlot.OffHand, firstShield);
             }
             else
             {
@@ -193,9 +208,9 @@ namespace demo2.DND.InventoryTetris
                 {
                     Debug.Log("[CharacterInventory] No candidate shield found to auto-equip.");
                 }
-                else if (eq.shield != null)
+                else if (shInst != null)
                 {
-                    var shName = eq.shield?.data != null ? eq.shield.data.displayName : eq.shield?.instanceId ?? "<no-id>";
+                    var shName = shInst?.data != null ? shInst.data.displayName : shInst?.instanceId ?? "<no-id>";
                     Debug.Log($"[CharacterInventory] Skipping auto-equip shield because shield slot is already occupied by {shName} on {eq.gameObject.name}");
                 }
             }
@@ -216,9 +231,21 @@ namespace demo2.DND.InventoryTetris
             if (eq != null)
             {
                 // 背包变更时，同步校正装备槽（物品移出则卸下）
-                if (eq.mainHand != null && !items.Contains(eq.mainHand)) eq.UnequipMainHand();
-                if (eq.armor != null && !items.Contains(eq.armor)) eq.UnequipArmor();
-                if (eq.shield != null && !items.Contains(eq.shield)) eq.UnequipShield();
+                var mh = eq.GetEquipped(EquipmentSlot.MainHand);
+                if (mh != null)
+                {
+                    if (!items.Contains(mh)) eq.UnequipSlot(EquipmentSlot.MainHand);
+                }
+                var ar = eq.GetEquipped(EquipmentSlot.Armor);
+                if (ar != null)
+                {
+                    if (!items.Contains(ar)) eq.UnequipSlot(EquipmentSlot.Armor);
+                }
+                var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+                if (sh != null)
+                {
+                    if (!items.Contains(sh)) eq.UnequipSlot(EquipmentSlot.OffHand);
+                }
 
                 // 仅装备槽里的条目生效
                 eq.ReapplyEquippedModifiers();
@@ -239,42 +266,37 @@ namespace demo2.DND.InventoryTetris
         public bool RemoveInstance(ItemInstance inst)
         {
             if (inst == null) return false;
-            bool ok = items.Remove(inst);
-            if (ok) OnInventoryChanged?.Invoke();
-            return ok;
+            bool removed = items.Remove(inst);
+            if (removed) OnInventoryChanged?.Invoke();
+            return removed;
         }
 
-        public void ClearAll()
+        private CharacterStats GetOrFindStats()
         {
-            if (items.Count == 0) return;
-            items.Clear();
-            OnInventoryChanged?.Invoke();
+            if (cachedStats != null) return cachedStats;
+
+            // 尝试从自身或父级查找 CharacterStats
+            cachedStats = GetComponent<CharacterStats>();
+            if (cachedStats == null)
+            {
+                cachedStats = GetComponentInParent<CharacterStats>();
+            }
+
+            if (cachedStats == null)
+            {
+                Debug.LogWarning($"[CharacterInventory] 在 {gameObject.name} 的自身或父级未找到 CharacterStats 组件。某些功能可能无法正常工作.");
+            }
+
+            return cachedStats;
         }
 
         private void OnDestroy()
         {
-            var stats = GetOrFindStats();
-            if (stats != null)
-            {
-                stats.RemoveModifiersBySource(this);
-            }
+            // 取消订阅
+            OnInventoryChanged -= ApplyEquipmentModifiers;
+
+            // 广播：背包被销毁
             OnAnyInventoryDestroyed?.Invoke(this);
-        }
-
-        public static ItemInstance CreateInstance(ItemBaseSO so)
-        {
-            if (so == null) return null;
-            return new ItemInstance(so);
-        }
-
-        private demo2.DND.CharacterStats GetOrFindStats()
-        {
-            if (cachedStats != null) return cachedStats;
-            var s = GetComponent<demo2.DND.CharacterStats>();
-            if (s == null) s = GetComponentInParent<demo2.DND.CharacterStats>();
-            if (s == null) s = GetComponentInChildren<demo2.DND.CharacterStats>(true);
-            cachedStats = s;
-            return cachedStats;
         }
     }
 }

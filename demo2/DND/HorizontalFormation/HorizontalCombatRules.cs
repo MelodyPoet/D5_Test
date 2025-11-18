@@ -3,6 +3,8 @@ using System.Linq;
 using UnityEngine;
 using demo2.DND.InventoryTetris;
 using demo2.DND.Stats;
+using System;
+using demo2.DND.Core.Events.Data;
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -99,11 +101,11 @@ namespace demo2.DND.HorizontalFormation
                 if (c == null) continue;
                 var snap = TryGetSnapshot(c);
                 int dexMod = snap.HasValue ? snap.Value.DexMod : GetAbilityModifier(c.dexterity);
-                int roll = Random.Range(1, 21);
+                int roll = UnityEngine.Random.Range(1, 21);
                 int total = roll + dexMod;
                 list.Add(new InitiativeEntry(c, total));
                 Debug.Log($"{c.GetDisplayName()} 先攻检定: {roll} + {dexMod} = {total}");
-                try { GameLog.LogInitiative(c.GetDisplayName(), roll, dexMod, total); } catch (System.Exception) { }
+                try { GameLog.LogInitiative(c.GetDisplayName(), roll, dexMod, total); } catch (Exception ex) { Debug.LogWarning($"[HorizontalCombatRules] GameLog.LogInitiative threw: {ex.Message}"); }
             }
 
             return list.OrderByDescending(e => e.initiativeValue).ToList();
@@ -131,8 +133,8 @@ namespace demo2.DND.HorizontalFormation
             string attackName;
             int attackBonus = GetAttackBonus(attacker, isMeleeAttack, out hitAbility, out attackName, weapon);
 
-            int roll1 = Random.Range(1, 21);
-            int roll2 = Random.Range(1, 21);
+            int roll1 = UnityEngine.Random.Range(1, 21);
+            int roll2 = UnityEngine.Random.Range(1, 21);
             int d20 = (advantageFlag > 0) ? Mathf.Max(roll1, roll2) : (advantageFlag < 0 ? Mathf.Min(roll1, roll2) : roll1);
             int totalAttack = d20 + attackBonus;
 
@@ -142,7 +144,7 @@ namespace demo2.DND.HorizontalFormation
             int targetAc = tsnap.HasValue ? tsnap.Value.armorClass : target.CurrentArmorClass; // 使用当前AC属性，避免访问过时字段
             r.isHit = r.isCritical || totalAttack >= targetAc;
 
-            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackName, hitAbility, d20, attackBonus, totalAttack, targetAc, r.isHit); } catch (System.Exception) { }
+            try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), attackName, hitAbility, d20, attackBonus, totalAttack, targetAc, r.isHit); } catch (Exception ex) { Debug.LogWarning($"[HorizontalCombatRules] GameLog.LogHit threw: {ex.Message}"); }
 
             if (!r.isHit)
             {
@@ -171,7 +173,7 @@ namespace demo2.DND.HorizontalFormation
                 else
                     GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), r.damageType.ToString(), diceExpr, rolled, dmgAbilityName, dmgAbilityMod, "未应用抗性/易伤", r.damage);
             }
-            catch (System.Exception) { }
+            catch (Exception ex) { Debug.LogWarning($"[HorizontalCombatRules] GameLog.LogDamage threw: {ex.Message}"); }
 
             // 发布伤害事件（事件总线）：优先实例级通道，失败回退全局
             try
@@ -179,11 +181,11 @@ namespace demo2.DND.HorizontalFormation
                 var channel = GetDamageEventChannel(attacker, target);
                 if (channel != null)
                 {
-                    var info = new demo2.DND.Core.Events.Data.DamageInfo(target, attacker, r.damage, r.isCritical);
+                    var info = new DamageInfo(target, attacker, r.damage, r.isCritical);
                     channel.RaiseEvent(info);
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogWarning($"[HorizontalCombatRules] 发布伤害事件异常: {ex.Message}");
             }
@@ -198,8 +200,12 @@ namespace demo2.DND.HorizontalFormation
             var eq = c.GetComponent<CharacterEquipment>()
                      ?? c.GetComponentInParent<CharacterEquipment>()
                      ?? c.GetComponentInChildren<CharacterEquipment>(true);
-            if (eq != null && eq.mainHand != null && eq.mainHand.data != null && eq.mainHand.data.isWeapon)
-                return eq.mainHand.data;
+            if (eq != null)
+            {
+                var mhInst = eq.GetEquipped(EquipmentSlot.MainHand);
+                if (mhInst != null && mhInst.data != null && mhInst.data.isWeapon)
+                    return mhInst.data;
+            }
             return null;
         }
 
@@ -256,7 +262,7 @@ namespace demo2.DND.HorizontalFormation
                 DiceFormula dice = (c.template != null && c.template.defaultCantrip != null) ? c.template.defaultCantrip.GetDamageDiceAtCasterLevel(c.Level) : new DiceFormula { diceCount = 1, diceSize = 8 };
                 int count = isCritical ? dice.diceCount * 2 : dice.diceCount;
                 diceSize = dice.diceSize;
-                for (int i = 0; i < count; i++) rolledTotal += Random.Range(1, diceSize + 1);
+                for (int i = 0; i < count; i++) rolledTotal += UnityEngine.Random.Range(1, diceSize + 1);
                 // 最低伤害改为 0（不再强制至少1）
                 return Mathf.Max(0, rolledTotal);
             }
@@ -269,7 +275,7 @@ namespace demo2.DND.HorizontalFormation
                     : new DiceFormula { diceCount = 1, diceSize = 6 });
             int pcount = isCritical ? pdice.diceCount * 2 : pdice.diceCount;
             diceSize = pdice.diceSize;
-            for (int i = 0; i < pcount; i++) rolledTotal += Random.Range(1, diceSize + 1);
+            for (int i = 0; i < pcount; i++) rolledTotal += UnityEngine.Random.Range(1, diceSize + 1);
 
             var snap = TryGetSnapshot(c);
             int str = GetAbilityModifierFromSnapshot(snap, c, "strength");

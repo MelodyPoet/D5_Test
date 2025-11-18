@@ -161,13 +161,15 @@ namespace demo2.DND.Stats
                      ?? owner.GetComponentInChildren<CharacterEquipment>(true);
             if (eq != null)
             {
-                if (eq.armor != null && eq.armor.data != null && eq.armor.data.isArmor)
+                var armInst = eq.GetEquipped(EquipmentSlot.Armor);
+                if (armInst != null && armInst.data != null && armInst.data.isArmor)
                 {
-                    armor = eq.armor.data;
+                    armor = armInst.data;
                 }
-                if (eq.shield != null && eq.shield.data != null && eq.shield.data.isShield)
+                var shInst = eq.GetEquipped(EquipmentSlot.OffHand);
+                if (shInst != null && shInst.data != null && shInst.data.isShield)
                 {
-                    shield = eq.shield.data;
+                    shield = shInst.data;
                 }
             }
 

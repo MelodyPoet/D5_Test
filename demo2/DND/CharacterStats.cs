@@ -73,11 +73,45 @@ namespace demo2.DND
         public int ProficiencyBonus => template != null ? template.GetProficiencyBonusByLevel(Level) : 2;
         public int CurrentArmorClass {
             get {
-                // 优先使用最终快照；若还未初始化，则用基础未着甲AC + DexMod 兜底
+                // 优先使用最终快照；若还未初始化，则优先使用装备（护甲/盾牌）计算AC，再回退到模板/字段
                 int snapAc = CurrentSnapshot.armorClass;
                 if (snapAc > 0) return snapAc;
+
+                // 尝试从装备栏获取护甲/盾牌影响
                 int baseAc = template != null ? template.baseArmorClass : armorClass;
-                return baseAc + DexMod;
+                int dexContribution = DexMod;
+                int shieldBonus = 0;
+
+                var eq = GetComponent<CharacterEquipment>()
+                         ?? GetComponentInParent<CharacterEquipment>()
+                         ?? GetComponentInChildren<CharacterEquipment>(true);
+                if (eq != null)
+                {
+                    var armInst = eq.GetEquipped(EquipmentSlot.Armor);
+                    if (armInst != null && armInst.data != null && armInst.data.isArmor)
+                    {
+                        baseAc = armInst.data.armorBaseAC;
+                        switch (armInst.data.armorType)
+                        {
+                            case ArmorType.Light:
+                                dexContribution = DexMod; break;
+                            case ArmorType.Medium:
+                                dexContribution = Mathf.Min(DexMod, 2); break;
+                            case ArmorType.Heavy:
+                                dexContribution = 0; break;
+                            default:
+                                dexContribution = DexMod; break;
+                        }
+                    }
+
+                    var shInst = eq.GetEquipped(EquipmentSlot.OffHand);
+                    if (shInst != null && shInst.data != null && shInst.data.isShield)
+                    {
+                        shieldBonus = shInst.data.shieldACBonus;
+                    }
+                }
+
+                return baseAc + dexContribution + shieldBonus;
             }
         }
 

@@ -7,6 +7,7 @@ using demo2.DND.HorizontalFormation;
 using demo2.DND.Utility; // add reference to PauseController namespace
 using demo2.DND.Core.Events.Channels; // added for event channels
 using demo2.DND.Core.Events.Data; // added for InventoryAddItemRequest
+using System; // added for Exception and other system types
 
 namespace demo2.DND.InventoryTetris
 {
@@ -70,7 +71,7 @@ namespace demo2.DND.InventoryTetris
         [Header("拾取事件通道（可选）")]
         [SerializeField] private RequestAddItemChannel_SO requestAddItemChannel; // simplified qualifier
         [Tooltip("是否由 UI 直接处理拾取事件并尝试落地（一般不需要；由控制器处理以避免重复添加）")]
-        [SerializeField] private bool handleAddItemEvents = false;
+        [SerializeField] private bool handleAddItemEvents;
 
         // Navigation buttons removed: navigation is now owned by UITabSwitcher (single-responsibility).
         // nextButton/prevButton and acceptExternalNavigation have been removed intentionally.
@@ -144,7 +145,7 @@ namespace demo2.DND.InventoryTetris
                         }
                     }
                 }
-                catch (System.Exception ex)
+                catch (Exception ex)
                 {
                     Debug.LogWarning($"[InventoryUIBinder] OnEnable scan exception: {ex}");
                 }
@@ -560,8 +561,15 @@ namespace demo2.DND.InventoryTetris
         {
             var src = ActiveSource;
             if (so == null || src == null || gridView == null) return false;
-            var inst = CharacterInventory.CreateInstance(so);
-            if (inst == null) return false;
+            // 创建 ItemInstance（构造函数不会返回 null，但可能抛异常），因此用 try/catch 包裹以防止运行时崩溃
+            ItemInstance inst;
+            try {
+                inst = new ItemInstance(so);
+            }
+            catch (Exception ex) {
+                if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] TryAddNew: 创建 ItemInstance 失败: {ex.Message}");
+                return false;
+            }
 
             var view = gridView.SpawnInstance(inst);
             if (view == null) return false; // 没有空间
@@ -744,7 +752,7 @@ namespace demo2.DND.InventoryTetris
             {
                 CollectExistingInventoriesInScene();
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 if (debugLogs) Debug.LogWarning($"[InventoryUIBinder] EnsureCollected failed: {ex}");
             }
@@ -761,30 +769,34 @@ namespace demo2.DND.InventoryTetris
             if (items == null || items.Count == 0) return;
 
             // 主手武器
-            if (eq.mainHand == null)
+            var mh = eq.GetEquipped(EquipmentSlot.MainHand);
+            var ar = eq.GetEquipped(EquipmentSlot.Armor);
+            var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+
+            if (mh == null)
             {
                 for (int i = 0; i < items.Count; i++)
                 {
                     var it = items[i];
-                    if (it?.data != null && it.data.isWeapon && eq.CanEquip(it)) { eq.EquipMainHand(it); break; }
+                    if (it?.data != null && it.data.isWeapon && eq.CanEquip(it)) { eq.EquipToSlot(EquipmentSlot.MainHand, it); break; }
                 }
             }
             // 护甲
-            if (eq.armor == null)
+            if (ar == null)
             {
                 for (int i = 0; i < items.Count; i++)
                 {
                     var it = items[i];
-                    if (it?.data != null && it.data.isArmor && eq.CanEquip(it)) { eq.EquipArmor(it); break; }
+                    if (it?.data != null && it.data.isArmor && eq.CanEquip(it)) { eq.EquipToSlot(EquipmentSlot.Armor, it); break; }
                 }
             }
             // 盾牌
-            if (eq.shield == null)
+            if (sh == null)
             {
                 for (int i = 0; i < items.Count; i++)
                 {
                     var it = items[i];
-                    if (it?.data != null && it.data.isShield && eq.CanEquip(it)) { eq.EquipShield(it); break; }
+                    if (it?.data != null && it.data.isShield && eq.CanEquip(it)) { eq.EquipToSlot(EquipmentSlot.OffHand, it); break; }
                 }
             }
         }

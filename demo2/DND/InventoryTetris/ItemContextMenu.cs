@@ -258,9 +258,9 @@ namespace demo2.DND.InventoryTetris
             }
 
             Debug.Log($"[ContextMenu] 正在尝试装备 '{itemName}'...");
-            if (_item.data.isWeapon) eq.EquipMainHand(_item);
-            else if (_item.data.isArmor) eq.EquipArmor(_item);
-            else if (_item.data.isShield) eq.EquipShield(_item);
+            if (_item.data.isWeapon) eq.EquipToSlot(EquipmentSlot.MainHand, _item);
+            else if (_item.data.isArmor) eq.EquipToSlot(EquipmentSlot.Armor, _item);
+            else if (_item.data.isShield) eq.EquipToSlot(EquipmentSlot.OffHand, _item);
 
             // 刷新UI（GridView会刷新所有物品的标签，更可靠）
             if (_grid != null) _grid.RefreshAllEquipLabels();
@@ -286,9 +286,12 @@ namespace demo2.DND.InventoryTetris
             }
 
             Debug.Log($"[ContextMenu] 正在尝试卸下 '{itemName}'...");
-            if (_item.data.isWeapon && ReferenceEquals(eq.mainHand, _item)) eq.UnequipMainHand();
-            else if (_item.data.isArmor && ReferenceEquals(eq.armor, _item)) eq.UnequipArmor();
-            else if (_item.data.isShield && ReferenceEquals(eq.shield, _item)) eq.UnequipShield();
+            var mh = eq.GetEquipped(EquipmentSlot.MainHand);
+            var ar = eq.GetEquipped(EquipmentSlot.Armor);
+            var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+            if (_item.data.isWeapon && ReferenceEquals(mh, _item)) eq.UnequipSlot(EquipmentSlot.MainHand);
+            else if (_item.data.isArmor && ReferenceEquals(ar, _item)) eq.UnequipSlot(EquipmentSlot.Armor);
+            else if (_item.data.isShield && ReferenceEquals(sh, _item)) eq.UnequipSlot(EquipmentSlot.OffHand);
             else
             {
                 Debug.LogWarning($"[ContextMenu] 卸下 '{itemName}' 时发现它并未装备在对应槽位。");

@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace demo2.DND.InventoryTetris
 {
+#pragma warning disable 618 // allow using obsolete compatibility properties inside this file without noisy warnings
     /// <summary>
     /// 角色装备栏（最小实现）：仅允许一把主手武器 + 一件护甲 + 一面盾牌。
     /// - 仅“已装备”的物品修饰生效；与 CharacterInventory 的“背包”区分。
@@ -10,10 +12,23 @@ namespace demo2.DND.InventoryTetris
     /// </summary>
     public class CharacterEquipment : MonoBehaviour
     {
-        [Header("当前装备（运行时）")]
-        [HideInInspector] public ItemInstance mainHand;
-        [HideInInspector] public ItemInstance armor;
-        [HideInInspector] public ItemInstance shield;
+        // 使用集中定义的 EquipmentSlot（在 GameEnums.cs 中定义）
+
+        // 新：字典存储槽位到实例的映射
+        private readonly Dictionary<EquipmentSlot, ItemInstance> slotMap = new Dictionary<EquipmentSlot, ItemInstance>();
+
+        // 为兼容旧代码，保留原小写公开成员名作为 Obsolete 包装，鼓励使用 PascalCase 属性
+        [Obsolete("Use MainHand/Armor/Shield or GetEquipped/EquipToSlot/UneqiupSlot instead.")]
+        public ItemInstance mainHand { get => GetSlot(EquipmentSlot.MainHand); set => SetSlot(EquipmentSlot.MainHand, value); }
+        [Obsolete("Use MainHand/Armor/Shield or GetEquipped/EquipToSlot/UneqiupSlot instead.")]
+        public ItemInstance armor { get => GetSlot(EquipmentSlot.Armor); set => SetSlot(EquipmentSlot.Armor, value); }
+        [Obsolete("Use MainHand/Armor/Shield or GetEquipped/EquipToSlot/UneqiupSlot instead.")]
+        public ItemInstance shield { get => GetSlot(EquipmentSlot.OffHand); set => SetSlot(EquipmentSlot.OffHand, value); }
+
+        // 推荐的 PascalCase 属性（符合代码风格）
+        public ItemInstance MainHand { get => GetSlot(EquipmentSlot.MainHand); set => SetSlot(EquipmentSlot.MainHand, value); }
+        public ItemInstance Armor { get => GetSlot(EquipmentSlot.Armor); set => SetSlot(EquipmentSlot.Armor, value); }
+        public ItemInstance Shield { get => GetSlot(EquipmentSlot.OffHand); set => SetSlot(EquipmentSlot.OffHand, value); }
 
         public event Action OnEquipmentChanged;
 
@@ -34,12 +49,41 @@ namespace demo2.DND.InventoryTetris
             RaiseChanged();
         }
 
+        // Helper: safe getter for a slot (returns null if not set)
+        private ItemInstance GetSlot(EquipmentSlot slot)
+        {
+            if (slotMap.TryGetValue(slot, out var inst)) return inst;
+            return null;
+        }
+
+        // Helper: setter for a slot; setting null removes the slot entry
+        private void SetSlot(EquipmentSlot slot, ItemInstance inst)
+        {
+            if (inst == null)
+            {
+                if (slotMap.ContainsKey(slot)) slotMap.Remove(slot);
+            }
+            else
+            {
+                slotMap[slot] = inst;
+            }
+            // Note: callers will usually call ReapplyEquippedModifiers/RaiseChanged explicitly; we avoid side-effects here to keep behavior explicit.
+        }
+
         public bool IsEquipped(ItemInstance inst)
         {
             if (inst == null) return false;
-            bool res = ReferenceEquals(inst, mainHand) || ReferenceEquals(inst, armor) || ReferenceEquals(inst, shield);
-            Debug.Log($"[CharacterEquipment] IsEquipped check -> item={InstanceName(inst)}, mainHand={InstanceName(mainHand)}, armor={InstanceName(armor)}, shield={InstanceName(shield)}, result={res}, componentGameObject={gameObject.name}");
-            return res;
+            // Check dictionary values for the same reference
+            foreach (var kv in slotMap)
+            {
+                if (ReferenceEquals(kv.Value, inst))
+                {
+                    Debug.Log($"[CharacterEquipment] IsEquipped -> item={InstanceName(inst)} found in slot={kv.Key} on {gameObject.name}");
+                    return true;
+                }
+            }
+            Debug.Log($"[CharacterEquipment] IsEquipped check -> item={InstanceName(inst)} not equipped on {gameObject.name}");
+            return false;
         }
 
         // 返回实例的可显示名称（安全访问，避免 null-conditional 警告）
@@ -86,115 +130,103 @@ namespace demo2.DND.InventoryTetris
             if (inst == null || inst.data == null) return false;
             if (!CanEquip(inst)) return false;
 
-            if (IsEquipped(inst))
+            // If already equipped in any slot, unequip that slot
+            foreach (var kv in new List<KeyValuePair<EquipmentSlot, ItemInstance>>(slotMap))
             {
-                // 已装备 → 卸下
-                if (inst.data.isWeapon && ReferenceEquals(mainHand, inst))
+                if (ReferenceEquals(kv.Value, inst))
                 {
-                    RemoveModifiers(inst);
-                    bool result = UnequipMainHand();
-                    RefreshEquipLabel(inst);
-                    return result;
+                    return UnequipSlot(kv.Key);
                 }
-                if (inst.data.isShield && ReferenceEquals(shield, inst))
-                {
-                    RemoveModifiers(inst);
-                    bool result = UnequipShield();
-                    RefreshEquipLabel(inst);
-                    return result;
-                }
-                if (inst.data.isArmor && ReferenceEquals(armor, inst))
-                {
-                    RemoveModifiers(inst);
-                    bool result = UnequipArmor();
-                    RefreshEquipLabel(inst);
-                    return result;
-                }
-                return false;
             }
-            else
+
+            // Not equipped: equip to an appropriate slot
+            if (inst.data.isWeapon)
             {
-                // 未装备 → 装备到对应槽位（替换同槽旧物）
-                if (inst.data.isWeapon)
-                {
-                    bool result = EquipMainHand(inst);
-                    if (result) ApplyModifiers(inst);
-                    RefreshEquipLabel(inst);
-                    return result;
-                }
-                if (inst.data.isShield)
-                {
-                    bool result = EquipShield(inst);
-                    if (result) ApplyModifiers(inst);
-                    RefreshEquipLabel(inst);
-                    return result;
-                }
-                if (inst.data.isArmor)
-                {
-                    bool result = EquipArmor(inst);
-                    if (result) ApplyModifiers(inst);
-                    RefreshEquipLabel(inst);
-                    return result;
-                }
-                return false;
+                return EquipToSlot(EquipmentSlot.MainHand, inst);
             }
+            if (inst.data.isShield)
+            {
+                return EquipToSlot(EquipmentSlot.OffHand, inst);
+            }
+            if (inst.data.isArmor)
+            {
+                return EquipToSlot(EquipmentSlot.Armor, inst);
+            }
+
+            // Generic: place into first available non-core slot
+            foreach (EquipmentSlot s in Enum.GetValues(typeof(EquipmentSlot)))
+            {
+                if (s == EquipmentSlot.MainHand || s == EquipmentSlot.Armor || s == EquipmentSlot.OffHand) continue;
+                if (!slotMap.ContainsKey(s))
+                {
+                    return EquipToSlot(s, inst);
+                }
+            }
+
+            return false;
         }
 
+        [Obsolete("Use EquipToSlot(EquipmentSlot.MainHand, item) instead.")]
         public bool EquipMainHand(ItemInstance inst)
         {
             if (inst == null || inst.data == null || !inst.data.isWeapon) return false;
-            mainHand = inst;
+            MainHand = inst;
             Debug.Log($"[CharacterEquipment] EquipMainHand -> {inst.data.displayName} on {gameObject.name}");
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
         }
 
+        [Obsolete("Use EquipToSlot(EquipmentSlot.Armor, item) instead.")]
         public bool EquipArmor(ItemInstance inst)
         {
             if (inst == null || inst.data == null || !inst.data.isArmor) return false;
-            armor = inst;
+            Armor = inst;
             Debug.Log($"[CharacterEquipment] EquipArmor -> {inst.data.displayName} on {gameObject.name}");
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
         }
 
+        [Obsolete("Use EquipToSlot(EquipmentSlot.OffHand, item) instead.")]
         public bool EquipShield(ItemInstance inst)
         {
             if (inst == null || inst.data == null || !inst.data.isShield) return false;
-            shield = inst;
+            Shield = inst;
             Debug.Log($"[CharacterEquipment] EquipShield -> {inst.data.displayName} on {gameObject.name}");
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
         }
 
+        [Obsolete("Use UnequipSlot(EquipmentSlot.MainHand) instead.")]
         public bool UnequipMainHand()
         {
-            if (mainHand == null) return false;
-            Debug.Log($"[CharacterEquipment] UnequipMainHand -> {mainHand?.data?.displayName ?? mainHand?.instanceId} on {gameObject.name}");
-            mainHand = null;
+            if (MainHand == null) return false;
+            Debug.Log($"[CharacterEquipment] UnequipMainHand -> {MainHand?.data?.displayName ?? MainHand?.instanceId} on {gameObject.name}");
+            MainHand = null;
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
         }
 
+        [Obsolete("Use UnequipSlot(EquipmentSlot.Armor) instead.")]
         public bool UnequipArmor()
         {
-            if (armor == null) return false;
-            Debug.Log($"[CharacterEquipment] UnequipArmor -> {armor?.data?.displayName ?? armor?.instanceId} on {gameObject.name}");
-            armor = null;
+            if (Armor == null) return false;
+            Debug.Log($"[CharacterEquipment] UnequipArmor -> {Armor?.data?.displayName ?? Armor?.instanceId} on {gameObject.name}");
+            Armor = null;
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
         }
 
+        [Obsolete("Use UnequipSlot(EquipmentSlot.OffHand) instead.")]
         public bool UnequipShield()
         {
-            if (shield == null) return false;
-            Debug.Log($"[CharacterEquipment] UnequipShield -> {shield?.data?.displayName ?? shield?.instanceId} on {gameObject.name}");
-            shield = null;
+            if (Shield == null) return false;
+            Debug.Log($"[CharacterEquipment] UnequipShield -> {Shield?.data?.displayName ?? Shield?.instanceId} on {gameObject.name}");
+            Shield = null;
             ReapplyEquippedModifiers();
             RaiseChanged();
             return true;
@@ -206,7 +238,13 @@ namespace demo2.DND.InventoryTetris
         public void ReapplyEquippedModifiers()
         {
             if (stats == null) return;
-            Debug.Log($"[CharacterEquipment] ReapplyEquippedModifiers called on {gameObject.name}. mainHand={(mainHand?.data?.displayName ?? "null")}, armor={(armor?.data?.displayName ?? "null")}, shield={(shield?.data?.displayName ?? "null")} ");
+            // 构造当前装备概览字符串用于调试
+            var entries = new List<string>();
+            foreach (var kv in slotMap)
+            {
+                entries.Add($"{kv.Key}={(kv.Value?.data?.displayName ?? kv.Value?.instanceId ?? "null")}");
+            }
+            Debug.Log($"[CharacterEquipment] ReapplyEquippedModifiers called on {gameObject.name}. slots=[{string.Join(",", entries)}]");
             // 移除本组件来源的所有修饰
             stats.RemoveModifiersBySource(this);
 
@@ -219,9 +257,19 @@ namespace demo2.DND.InventoryTetris
                     stats.AddModifier(mod);
                 }
             }
-            AddFor(mainHand);
-            AddFor(armor);
-            AddFor(shield);
+
+            // Add main slots via properties (these fetch from slotMap)
+            AddFor(MainHand);
+            AddFor(Armor);
+            AddFor(Shield);
+
+            // Add generic slots
+            foreach (var kv in slotMap)
+            {
+                // Skip the main slots already processed
+                if (kv.Key == EquipmentSlot.MainHand || kv.Key == EquipmentSlot.Armor || kv.Key == EquipmentSlot.OffHand) continue;
+                AddFor(kv.Value);
+            }
 
             stats.RequestRecalculateStats();
         }
@@ -252,5 +300,67 @@ namespace demo2.DND.InventoryTetris
             if (inst == null || inst.view == null) return;
             inst.view.RefreshEquipLabel();
         }
+
+        // Public slot-based API for new enum/dictionary model
+        public ItemInstance GetEquipped(EquipmentSlot slot)
+        {
+            return GetSlot(slot);
+        }
+
+        /// <summary>
+        /// Equip an ItemInstance into the given slot. For MainHand/Armor/Shield this will use the existing
+        /// EquipMainHand/EquipArmor/EquipShield methods to preserve validation and modifier application.
+        /// For other slots the instance will be placed into the slotMap and modifiers reapplied.
+        /// Returns true if equip succeeded.
+        /// </summary>
+        public bool EquipToSlot(EquipmentSlot slot, ItemInstance inst)
+        {
+            if (inst == null || inst.data == null) return false;
+            switch (slot)
+            {
+                case EquipmentSlot.MainHand:
+                    return EquipMainHand(inst);
+                case EquipmentSlot.Armor:
+                    return EquipArmor(inst);
+                case EquipmentSlot.OffHand:
+                    return EquipShield(inst);
+                default:
+                    // Generic slot: just assign and reapply modifiers
+                    SetSlot(slot, inst);
+                    ReapplyEquippedModifiers();
+                    RaiseChanged();
+                    return true;
+            }
+        }
+
+        /// <summary>
+        /// Unequip the given slot. For main slots uses existing Unequip* helpers; for generic slots removes mapping.
+        /// Returns true if something was unequipped.
+        /// </summary>
+        public bool UnequipSlot(EquipmentSlot slot)
+        {
+            switch (slot)
+            {
+                case EquipmentSlot.MainHand:
+                    return UnequipMainHand();
+                case EquipmentSlot.Armor:
+                    return UnequipArmor();
+                case EquipmentSlot.OffHand:
+                    return UnequipShield();
+                default:
+                    if (slotMap.ContainsKey(slot))
+                    {
+                        var inst = slotMap[slot];
+                        RemoveModifiers(inst);
+                        slotMap.Remove(slot);
+                        ReapplyEquippedModifiers();
+                        RaiseChanged();
+                        RefreshEquipLabel(inst);
+                        return true;
+                    }
+                    return false;
+            }
+        }
     }
+#pragma warning restore 618
 }

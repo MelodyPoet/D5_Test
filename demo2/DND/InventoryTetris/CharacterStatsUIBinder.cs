@@ -297,9 +297,10 @@ namespace demo2.DND.InventoryTetris
                      ?? bound.GetComponentInChildren<CharacterEquipment>(true);
 
             string dmgStr;
-            if (eq != null && eq.mainHand != null && eq.mainHand.data != null && eq.mainHand.data.isWeapon)
+            var mh = eq != null ? eq.GetEquipped(EquipmentSlot.MainHand) : null;
+            if (mh != null && mh.data != null && mh.data.isWeapon)
             {
-                var d = eq.mainHand.data;
+                var d = mh.data;
                 var dice = d.weaponDamageDice;
                 int abilityMod = 0; string abilityLabel = "";
                 switch (d.weaponHitAbilityMode)

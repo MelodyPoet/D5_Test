@@ -3,6 +3,7 @@ using demo2.DND.Core.Events.Channels;
 using demo2.DND.Core.Events.Data; // 重新加入以解析 InventoryEquipRequest / InventoryEquipAction
 using System.Linq; // 为 IReadOnlyList<T>.Contains 提供扩展
 using demo2.DND.HorizontalFormation; // 添加：用于 IdleGameManager / HorizontalBattleFormationManager / HorizontalFormation 相关类型
+using System; // 添加以解析 Enum 等类型
 
 namespace demo2.DND.InventoryTetris
 {
@@ -94,16 +95,23 @@ namespace demo2.DND.InventoryTetris
                     result = eq.ToggleEquip(req.item);
                     break;
                 case InventoryEquipAction.Equip:
-                    if (req.item.data.isWeapon) result = eq.EquipMainHand(req.item);
-                    else if (req.item.data.isArmor) result = eq.EquipArmor(req.item);
-                    else if (req.item.data.isShield) result = eq.EquipShield(req.item);
+                    if (req.item.data.isWeapon) result = eq.EquipToSlot(EquipmentSlot.MainHand, req.item);
+                    else if (req.item.data.isArmor) result = eq.EquipToSlot(EquipmentSlot.Armor, req.item);
+                    else if (req.item.data.isShield) result = eq.EquipToSlot(EquipmentSlot.OffHand, req.item);
                     break;
                 case InventoryEquipAction.Unequip:
                     if (eq.IsEquipped(req.item))
                     {
-                        if (req.item.data.isWeapon) result = eq.UnequipMainHand();
-                        else if (req.item.data.isArmor) result = eq.UnequipArmor();
-                        else if (req.item.data.isShield) result = eq.UnequipShield();
+                        // Attempt to find the slot where the instance is equipped and unequip that slot.
+                        foreach (EquipmentSlot s in Enum.GetValues(typeof(EquipmentSlot)))
+                        {
+                            var inst = eq.GetEquipped(s);
+                            if (ReferenceEquals(inst, req.item))
+                            {
+                                result = eq.UnequipSlot(s);
+                                break;
+                            }
+                        }
                     }
                     break;
             }
@@ -132,10 +140,13 @@ namespace demo2.DND.InventoryTetris
             int added = 0;
             for (int i = 0; i < amount; i++)
             {
-                var inst = CharacterInventory.CreateInstance(req.item);
-                if (inst == null)
-                {
-                    Debug.LogWarning("[InventoryController] 创建物品实例失败：" + req.item.name);
+                // 构造实例时捕获异常（构造函数不会返回 null，移除恒为 false 的 null 检查）
+                ItemInstance inst;
+                try {
+                    inst = new ItemInstance(req.item);
+                }
+                catch (Exception ex) {
+                    Debug.LogWarning("[InventoryController] 创建物品实例失败：" + req.item.name + " -> " + ex.Message);
                     continue;
                 }
                 req.inventory.AddInstance(inst);
