@@ -210,8 +210,8 @@ HorizontalCombatRules 战斗规则:
 - 战斗日志: 记录每次攻击和伤害结果（后续扩展）
 - 怪物死亡：怪物血量扣到0以下，播放死亡动画并且执行消失流程
 - 玩家和队友死亡：角色血量扣到0以下，播放昏迷动画并且执行昏迷流程，昏迷状态下无法行动，执行3回合的普通d20骰死豁免判断，3点失败则死亡，
-3点成功则恢复1点血量并且脱离昏迷状态，恢复行动能力,DC=10，队友可以用治疗法术直接恢复该角色；此时怪物也有可能攻击该角色，此时受到伤害计一次死豁免失败,重击计两次死豁免失败，三次失败则死亡
-- 玩家和队友倒地期间，如战斗结束进入探索模式，则该角色自动脱离昏迷状态，恢复1点血量并且恢复行动能力（探索期间不存在玩家方昏迷状态）
+3点成功则恢复1点血量并且脱离昏迷状态，恢复行动能力,DC=10，队友可以用治疗法术直接恢复该角色；此时怪物也有可能攻击该角色，此时受到伤害计一次死豁免失败,重击计两次死豁免失败，三次失败則死亡
+- 玩家和队友倒地期间，如战斗结束进入探索模式，则该角色自动脱离昏迷状态，恢复1点血量並且恢复行动能力（探索期间不存在玩家方昏迷状态）
 
 ---使用ScriptableObject存储角色和怪物数据
 ---使用ScriptableObject实现战斗事件通道DamageEventChannel,用于解耦伤害计算和UI显示,动画播放等逻辑,使其更易于扩展
@@ -809,3 +809,83 @@ UpdateArmorClass 等）。
 - min=max=1 的掉落只产生 1 条 InventoryAddItemRequest
 - 击败敌人时日志仅出现一次“已分发/已添加”记录
 - UI 通过 InventoryChangedChannel 刷新，无重复生成
+
+背包和槽位系统 — 战斗集成规范（简版）
+- 角色槽位定义：每个槽位只能被一件装备占用，且每个装备只能占用特定槽位
+  - 主手（MainHand）：单手武器/双手武器
+  物品标签 TwoHanded 标记为双手武器，此时将占用主手和副手槽位
+  - 副手（OffHand）：单手武器/盾牌
+  物品标签 Shield 标记为盾牌，只能装备在副手槽位且与副手单手武器互斥，如果主手装备双手武器，则副手槽位无效，
+  如主手装备单手武器，则副手槽位可以装备另一把单手轻型武器（但副手武器攻击的伤害不获得角色的属性加值，且无法使用双持专长进行额外攻击）
+  - 护甲（Armor）：轻甲/中甲/重甲
+  - 头盔（Helmet）
+  - 护手（Gauntlets）
+  - 靴子（Boots）
+  - 项链（Necklace）
+  - 戒指（Ring）
+  - 腰带（Belt）
+  - 披风（Cloak）
+
+### 装备槽位编码范式重构方案
+
+#### 修改目标
+- 统一装备槽位的管理方式，提升代码的可维护性和扩展性。
+- 避免硬编码装备槽位，减少潜在的逻辑错误。
+
+#### 修改步骤
+
+1. **新增枚举类型 `EquipmentSlot`**
+   - 在 `GameEnums` 中新增 `EquipmentSlot` 枚举，定义所有标准装备槽位，例如：
+     ```csharp
+     // Centralized enum (authoritative) — defined in Assets/demo2/DND/GameEnums.cs
+     public enum EquipmentSlot {
+         MainHand,   // Weapon (primary hand)
+         OffHand,    // Secondary hand / Shield
+         Armor,      // Chest
+         Helmet,     // Head
+         Gauntlets,  // Hands
+         Boots,      // Feet
+         Necklace,
+         Ring,
+         Belt,
+         Cloak
+     }
+     ```
+
+2. **修改角色装备管理逻辑**
+     - 在角色管理类（如 `CharacterStats` 或 `InventoryManager`）中：
+         - 替换原有的装备槽字段（如 `headItem`, `chestItem` 等）为 `Dictionary<EquipmentSlot, ItemInstance>`。
+         - 示例：
+           ```csharp
+           private Dictionary<EquipmentSlot, ItemInstance> equippedItems = new Dictionary<EquipmentSlot, ItemInstance>();
+           ```
+
+3. **实现装备槽操作方法**
+   - 在角色管理类中新增以下方法：
+     - 装备物品：`EquipItem(EquipmentSlot slot, ItemInstance item)`
+     - 卸下物品：`UnequipItem(EquipmentSlot slot)`
+     - 获取当前装备：`GetEquippedItem(EquipmentSlot slot)`
+
+4. **更新装备判定规则**
+   - 修改所有依赖装备槽位的逻辑，确保使用 `EquipmentSlot` 枚举进行判断。
+   - 示例：
+     ```csharp
+     if (equippedItems.ContainsKey(EquipmentSlot.Weapon)) {
+         // 执行武器相关逻辑
+     }
+     ```
+ 
+
+#### 注意事项
+- **最小改动原则**：所有修改必须在不破坏当前逻辑的基础上进行。
+- **系统一致性**：确保新增功能与现有系统风格一致。
+- **代码质量**：所有改动必须通过全项目编译检查，确保无任何报错。
+- **需求对齐**：严格按照用户需求执行，避免自行扩展或修改需求。
+
+#### 需求清单
+- 修改 `DND_CharacterAdapter` 和 `SkeletonAnimationController`，支持新功能。
+- 调整 `GameManager` 的业务调用链，集成新功能。
+- 编写单元测试并验证功能。
+- 更新本文档，记录新功能的技术描述。
+
+---
