@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemId: Sword01
   displayName: "\u77ED\u5251"
-  icon: {fileID: 21300000, guid: 8079344a2fc5841e3af7cf6cf6db169d, type: 3}
+  icon: {fileID: 21300000, guid: 5b12a7802f87a054f82ab149b53e2c73, type: 3}
   slotWidth: 2
   slotHeight: 2
   canRotate: 1

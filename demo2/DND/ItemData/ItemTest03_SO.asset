@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemId: Wand01
   displayName: "\u6CD5\u6756"
-  icon: {fileID: 21300000, guid: 0166e72a4eff97e419362ba72853b723, type: 3}
+  icon: {fileID: 21300000, guid: 2286c05d2057015419d03332afd1ee5c, type: 3}
   slotWidth: 2
   slotHeight: 4
   canRotate: 1

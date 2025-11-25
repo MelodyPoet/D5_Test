@@ -6,22 +6,21 @@ namespace demo2.DND.Utility
     /// <summary>
     /// 将一个 UI Button 与 PauseController 绑定：
     /// - 点击按钮 => 切换暂停/继续；
-    /// - 按钮文字随暂停状态自动显示（未暂停显示 "暂停"，已暂停显示 "继续"）。
+    /// - 按钮图标随暂停状态自动显示（未暂停显示播放图标，已暂停显示暂停图标）。
     /// </summary>
     [RequireComponent(typeof(Button))]
     public class PauseButtonBinder : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private Button button;
-        [SerializeField] private Text label;
 
-        [Header("Texts")]
-        [Tooltip("游戏未暂停时按钮上显示的文字（点击后会进入暂停）")]
-        [SerializeField] private string runningText = "暂停";
-        [Tooltip("游戏已暂停时按钮上显示的文字（点击后会恢复运行）")]
-        [SerializeField] private string pausedText = "继续";
+        [Header("Icons")]
+        [Tooltip("游戏未暂停时按钮上显示的图标（点击后会进入暂停）")]
+        [SerializeField] private Sprite runningImage;
+        [Tooltip("游戏已暂停时按钮上显示的图标（点击后会恢复运行）")]
+        [SerializeField] private Sprite pausedImage;
 
-        [Tooltip("在脚本启用时立即刷新一次按钮文字")]
+        [Tooltip("在脚本启用时立即刷新一次按钮图标")]
         [SerializeField] private bool reflectStateOnEnable = true;
 
         private bool lastKnownPaused;
@@ -55,7 +54,7 @@ namespace demo2.DND.Utility
             {
                 bool isPaused = PauseController.Instance != null && PauseController.Instance.IsPaused;
                 lastKnownPaused = isPaused;
-                UpdateLabel(isPaused);
+                UpdateIcon(isPaused);
             }
         }
 
@@ -74,7 +73,7 @@ namespace demo2.DND.Utility
                 if (isPaused != lastKnownPaused)
                 {
                     lastKnownPaused = isPaused;
-                    UpdateLabel(isPaused);
+                    UpdateIcon(isPaused);
                 }
             }
         }
@@ -87,24 +86,23 @@ namespace demo2.DND.Utility
                 return;
             }
             PauseController.Instance.Toggle();
-            // Update label immediately to reflect the action we just triggered
+            // Update icon immediately to reflect the action we just triggered
             bool isPaused = PauseController.Instance != null && PauseController.Instance.IsPaused;
             lastKnownPaused = isPaused;
-            UpdateLabel(isPaused);
+            UpdateIcon(isPaused);
         }
 
-        private void UpdateLabel(bool isPaused)
+        private void UpdateIcon(bool isPaused)
         {
-            if (label != null)
+            if (button != null && button.image != null)
             {
-                label.text = isPaused ? pausedText : runningText;
+                button.image.sprite = isPaused ? pausedImage : runningImage;
             }
         }
 
         private void AutoFindRefs()
         {
             if (button == null) button = GetComponent<Button>();
-            if (label == null) label = GetComponentInChildren<Text>(true);
         }
     }
 }
