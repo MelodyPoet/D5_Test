@@ -893,6 +893,6 @@ UpdateArmorClass 等）。
 - 修改 `DND_CharacterAdapter` 和 `SkeletonAnimationController`，支持新功能。
 - 调整 `GameManager` 的业务调用链，集成新功能。
 - 编写单元测试并验证功能。
-- 更新本文档，记录新功能的技术描述。
 
----
+
+
