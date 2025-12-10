@@ -29,12 +29,14 @@ MonoBehaviour:
   vulnerabilities: 
   primarySpellAbility: intelligence
   defaultAttackType: 1
-  defaultCantrip: {fileID: 11400000, guid: a21aa3e025517044b94ffaa692f50303, type: 2}
+  defaultCantrip: {fileID: 11400000, guid: 7bd706a546a148b49bb5844776421dae, type: 2}
   unarmedDamageDice:
     diceCount: 1
     diceSize: 1
+    modifier: 0
   unarmedDamageAbilityMode: 0
   unarmedProficient: 1
+  unarmedDamageType: 0
   proficientSkills: 0500000008000000
   proficientSaves:
   - intelligence

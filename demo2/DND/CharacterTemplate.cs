@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace demo2.DND {
@@ -41,11 +41,13 @@ public class CharacterTemplate : ScriptableObject {
     public SpellData defaultCantrip;
 
     [Tooltip("徒手伤害骰（如 1d4）")]
-    public DiceFormula unarmedDamageDice = new DiceFormula { diceCount = 1, diceSize = 4 };
+    public DiceFormula unarmedDamageDice = new DiceFormula(1, 4);
     [Tooltip("徒手伤害使用的能力来源（Strength/Dex/BestOf）")]
     public PhysicalHitAbilityMode unarmedDamageAbilityMode = PhysicalHitAbilityMode.Strength;
     [Tooltip("是否将徒手攻击视为熟练（影响是否加熟练加值）")]
     public bool unarmedProficient = true;
+    [Tooltip("徒手攻击的伤害类型（钝击/挥砍/穿刺等，如爪子怪物配置为挥砍）")]
+    public DamageType unarmedDamageType = DamageType.Bludgeoning;
 
         /// <summary>
         /// 获取技能对应的属性调整值

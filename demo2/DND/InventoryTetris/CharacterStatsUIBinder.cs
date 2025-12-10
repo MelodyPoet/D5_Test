@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Text;
 using demo2.DND.Stats; // use FinalStatsSnapshot
@@ -318,7 +318,7 @@ namespace demo2.DND.InventoryTetris
             {
                 // 使用角色模板上的徒手配置（严格使用原始数值，不做 UI 层面的强制修正）
                 var tpl = bound.template;
-                DiceFormula dice = new DiceFormula { diceCount = 1, diceSize = 4 }; // 模板缺失时的兜底
+                DiceFormula dice = new DiceFormula(1, 4); // 模板缺失时的兜底
                 PhysicalHitAbilityMode mode = PhysicalHitAbilityMode.Strength;
                 if (tpl != null)
                 {

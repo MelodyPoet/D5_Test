@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 using System.Collections.Generic;
 using System;
 using demo2.DND.Stats;
@@ -28,7 +28,7 @@ namespace demo2.DND.InventoryTetris
         [Tooltip("物理普通攻击的命中能力选择模式：力量/敏捷/两者择优（仅当 isWeapon=true 时生效；若 isFinesse=true，此项将被视为 BestOfStrDex)")]
         public PhysicalHitAbilityMode weaponHitAbilityMode = PhysicalHitAbilityMode.BestOfStrDex;
         [Tooltip("武器伤害骰（例如 1d8、2d6）；暴击时仅翻倍骰子数量，不翻倍属性加值（当前实现沿用STR/DEX加值）")]
-        public DiceFormula weaponDamageDice = new DiceFormula { diceCount = 1, diceSize = 6 };
+        public DiceFormula weaponDamageDice = new DiceFormula(1, 6);
         [Tooltip("武器伤害类型（用于日志与抗性结算）；未勾选 isWeapon 或不使用时可忽略")]
         public DamageType weaponDamageType = DamageType.Bludgeoning;
         [Header("武器高级（特殊场景，可选）")]

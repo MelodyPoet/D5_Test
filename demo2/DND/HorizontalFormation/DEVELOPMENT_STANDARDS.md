@@ -3,8 +3,8 @@ DND5E 系统 - 工程编码规范
 严禁违反的核心规则
 
 文档管理铁律
-- 唯一技术文档: 本文档是项目唯一的技术规范文档
-- 绝对禁止创建: 任何 markdown 指南、对比文档、debug 记录、纠错文档等
+- 唯一技术文档: 本文档是项目唯一的技术规范文档.md文件
+- 绝对禁止创建: 任何指南、对比文档、debug 记录、纠错文档等.md文件
 - 所有技术描述: 必须直接更新本文档的相应章节
 - 保持项目简洁: 违反此规则将被视为严重错误
 
@@ -198,8 +198,12 @@ CharacterStats 属性系统:
 HorizontalCombatRules 战斗规则:
 - （力量武器）根据当前装备的近战力量武器时攻击检定: 1d20 + 力量调整值 + 熟练加值 vs AC
 - （敏捷武器）根据当前装备的远程武器或者近战灵巧武器时攻击检定: 1d20 + 敏捷调整值 + 熟练加值 vs AC
-- (远程法术攻击包括默认的戏法普通攻击)法术攻击检定: 1d20 + 职业主属性调整值 + 熟练加值 vs AC
-- 伤害计算: 武器伤害骰 + 属性调整值（部分后续扩展职业特殊说明）
+- （法术攻击）根据 CharacterTemplate.defaultAttackType = Spell 时执行法术普通攻击：
+  - 攻击检定: 1d20 + 主施法属性调整值(由 template.primarySpellAbility 配置，默认 intelligence) + 熟练加值 vs AC
+  - 伤害计算: 仅取法术伤害骰(由 template.defaultCantrip.GetDamageDiceAtCasterLevel() 提供，随等级增长)，不叠加属性调整值
+  - 暴击机制: 攻击检定=20 时触发暴击，伤害骰翻倍
+  - 伤害类型: 由 template.defaultCantrip.damageType 决定（如 Force、Psychic 等）
+- 物理伤害计算: 武器伤害骰 + 不同武器对应的属性调整值（部分后续扩展职业特殊说明）
 - 暴击机制: 攻击检定=20时触发暴击，伤害骰翻倍
 - 距离判断: 近战/远程攻击距离限制
 - 先攻检定: 1d20 + Dexterity调整值，决定回合顺序
@@ -368,6 +372,29 @@ HorizontalBattleFormationManager 配置
 - CharacterStats           // 角色属性数据组件
 - DND_CharacterAdapter     // 统一动画管理组件
 - SkeletonAnimation        // Spine动画播放组件
+
+CharacterTemplate (SO 配置) 标准项：
+- characterName / characterClass / level - 基础信息
+- 六维属性 (strength/dexterity/constitution/intelligence/wisdom/charisma)
+- hitDie - 生命骰
+- baseArmorClass - 未着甲时的基础AC
+- 【攻击方式】
+  - defaultAttackType - 默认攻击方式（Physical=物理 / Spell=法术）
+  - 物理模式：使用装备武器或徒手攻击
+  - 法术模式：使用 defaultCantrip 进行法术普通攻击（戏法）
+- 【法术配置】（仅在 defaultAttackType=Spell 时有效）
+  - primarySpellAbility - 法术攻击检定使用的属性（intelligence/wisdom/charisma 等，默认 intelligence）
+  - defaultCantrip - 法术普通攻击（戏法），必须拖入一个 SpellData SO
+    - 该 SpellData 包含伤害骰、伤害类型、等级升级规则等
+    - 通过菜单创建：右键 → Create → DND → Spell Data
+- 【徒手参数】（未装备武器时）
+  - unarmedDamageDice - 徒手伤害骰（如 1d4 / 1d6 / 1d8 等，支持自由配置）
+  - unarmedDamageAbilityMode - 徒手能力模式（Strength / Dexterity / BestOfStrDex）
+  - unarmedProficient - 徒手是否有熟练加值（bool，true=有，false=无）
+  - unarmedDamageType - 徒手伤害类型（Bludgeoning/Slashing/Piercing 等，可按角色特性定制）
+- proficientWeaponClasses / proficientWeaponTypes - 武器熟练
+- proficientArmorTypes - 护甲熟练
+- 抗性/免疫/易伤配置
 
 DND_CharacterAdapter配置:
 - characterStats: 自动获取同对象上的CharacterStats组件
@@ -656,33 +683,136 @@ UpdateArmorClass 等）。
 
 ## 徒手伤害可配置
 
-在 `CharacterTemplate` 上新增了徒手配置，用于当未装备武器时的伤害骰与能力修正：
+在 `CharacterTemplate` 上配置徒手相关参数，用于当未装备武器时的伤害骰、能力修正、熟练与伤害类型：
 
-- `unarmedDamageDice: DiceFormula`
-- `unarmedDamageAbilityMode: PhysicalHitAbilityMode`
-  - `Strength`（默认）
-  - `Dexterity`
-  - `BestOfStrDex`（在 STR/DEX 中取较优）
+- `unarmedDamageDice: DiceFormula` - 徒手攻击伤害骰（如 1d4、1d6 等）
+- `unarmedDamageAbilityMode: PhysicalHitAbilityMode` - 徒手伤害与命中使用的能力类型
+  - `Strength`（默认）- 仅使用力量
+  - `Dexterity` - 仅使用敏捷
+  - `BestOfStrDex` - 在 STR/DEX 中取较优
+- `unarmedProficient: bool` - 徒手攻击是否具有熟练加值（true 时命中和伤害均加熟练加值，false 时无加值）
+- `unarmedDamageType: DamageType` - 徒手攻击的伤害类型（Bludgeoning/Slashing/Piercing/等，支持灵活配置）
+  - `Bludgeoning`（默认）- 钝击（普通拳击）
+  - `Slashing` - 挥砍（爪子、利刃）
+  - `Piercing` - 穿刺（尖刺、獠牙）
+  - 其他类型 - 如需特殊伤害类型（Force/Psychic/等）
 
 说明：
-- 法术普通攻击依旧按模板 `defaultCantrip` 与主法术属性（`primarySpellAbility`）处理。
-- 物理普通攻击（有武器）按武器的 `isFinesse / weaponHitAbilityMode / weaponDamageDice` 与模板熟练计算。
-- 武器伤害类型如果有isFinesse,且当前持握的角色选择使用力量则是Slashing伤害类型，选择敏捷则是Piercing伤害类型
+- 该配置对所有角色（玩家、队友、敌人）均适用，支持不同角色有不同的徒手规则
+- 爪子怪物可配置 `unarmedDamageType = Slashing`；獠牙怪物可配置 `Piercing`；标准拳击保持 `Bludgeoning`
+- 法术普通攻击依旧按模板 `defaultCantrip` 与主法术属性（`primarySpellAbility`）处理，与徒手配置无关
+- 物理普通攻击（有武器）按武器的 `isFinesse / weaponHitAbilityMode / weaponDamageDice / weaponDamageType` 与模板熟练计算，不受徒手配置影响
 
+
+## 法术与骰子系统
+
+
+### SpellData - 法术数据 SO（Assets/demo2/DND/SpellData.cs）
+
+**用途**：定义普通法术/戏法的伤害骰、伤害类型、等级升级规则等，在 CharacterTemplate.defaultCantrip 中引用
+
+**关键字段**：
+- `spellName` - 法术名称（如 "Fire Bolt"）
+- `baseDamageDice` - 基础伤害骰（diceCount/diceSize，如 1d10）
+- `damageType` - 伤害类型（Force/Fire/Cold/Psychic 等）
+- `upgradeAtCantriplevel` - 是否按施法者等级升级伤害骰（勾选）
+- `upgradeEntries[]` - 升级规则数组：
+  - [0] characterLevel=1, upgradedDice=1d10
+  - [1] characterLevel=5, upgradedDice=2d10
+  - [2] characterLevel=11, upgradedDice=3d10
+  - [3] characterLevel=17, upgradedDice=4d10
+
+**配置步骤**：
+1. 右键 Create → DND → Spell Data
+2. 配置基本信息（spellName、baseDamageDice、damageType）
+3. 勾选 upgradeAtCantriplevel，填充升级规则
+
+### DiceFormula - 骰子公式（Assets/demo2/DND/DiceFormula.cs）
+
+为补完现有代码中被广泛使用但之前缺失的定义：ItemBaseSO 中 `weaponDamageDice`、CharacterTemplate 中 `unarmedDamageDice`、HorizontalCombatRules 中伤害骰计算均使用此类型。
+
+Serializable class，用于表示 DND5E 中的伤害骰数（如 1d6、2d8+3）。支持在 Inspector 中编辑。
+
+---
 
 ## 相关实现位置
 
 - 普通攻击/伤害结算：`HorizontalCombatRules.cs`
-  - 仅读取装备槽；徒手时读取 `CharacterTemplate.unarmedDamage*`。
+  - `ResolveAttack()` - 主攻击流程，调用 GetAttackBonus 和 CalculateDamageUnified；伤害类型分配逻辑：
+    ```csharp
+    r.damageType = isSpell
+        ? ((attacker.template != null && attacker.template.defaultCantrip != null) ? attacker.template.defaultCantrip.damageType : DamageType.Force)
+        : (weapon != null ? weapon.weaponDamageType : (attacker.template != null ? attacker.template.unarmedDamageType : DamageType.Bludgeoning));
+    // 徒手时：读取 template.unarmedDamageType，若无模板则默认 Bludgeoning
+    ```
+  - `GetAttackBonus()` - 计算命中加值，徒手情况下根据 `unarmedDamageAbilityMode` 选择能力：
+    ```csharp
+    var mode = c.template.unarmedDamageAbilityMode;  // Strength / Dexterity / BestOfStrDex
+    switch (mode)
+    {
+        case Dexterity: abilityNameForHit = "dexterity"; break;
+        case BestOfStrDex: abilityNameForHit = (dex > str) ? "dexterity" : "strength"; break;
+        default: abilityNameForHit = "strength"; break;
+    }
+    int mod = (abilityNameForHit == "dexterity") ? dex : str;
+    int prof = c.template.unarmedProficient ? 熟练加值 : 0;
+    return mod + prof;
+    ```
+  - `CalculateDamageUnified()` - 计算伤害，徒手时读取 `unarmedDamageDice` 骰数和 `unarmedDamageAbilityMode` 能力修正
+  - 特点：仅读取装备槽；未装备时完全由 `CharacterTemplate` 四个参数驱动（unarmedDamageDice / unarmedDamageAbilityMode / unarmedProficient / unarmedDamageType）
+  - 确保：命中、伤害、伤害类型逻辑完全一致，不同角色可配置不同徒手规则
 - AC 计算：`ModifierAggregator.cs`
-  - 仅读取装备槽中的护甲/盾牌；未穿甲按未着甲规则。
+  - 仅读取装备槽中的护甲/盾牌
+  - 未穿甲按未着甲规则：AC = baseArmorClass(来自模板) + DexMod
+
+- 法术攻击系统：`HorizontalCombatRules.cs` - `GetAttackBonus()` 和 `CalculateDamageUnified()`
+  - 攻击检定：读取 `template.primarySpellAbility` 决定使用哪个属性修正（默认 intelligence）
+    ```csharp
+    abilityNameForHit = NormalizeAbilityName(c.template != null ? c.template.primarySpellAbility : "intelligence");
+    int mod = GetAbilityModifierFromSnapshot(snap, c, abilityNameForHit);
+    ```
+  - 伤害计算：读取 `template.defaultCantrip` 获取伤害骰，按等级返回升级后的骰数；伤害**仅为纯骰子结果**（不加属性修正）
+    ```csharp
+    DiceFormula dice = c.template.defaultCantrip.GetDamageDiceAtCasterLevel(c.Level);
+    // 返回 rolledTotal，不做任何属性修正
+    ```
+  - 伤害类型：由 `template.defaultCantrip.damageType` 决定
+  - 熟练：由 `template.IsProficientForAttack(true, isMelee)` 决定是否加熟练加值
+
 - 背包与装备：
-  - `CharacterEquipment.cs`：仅“已装备”才生效，负责给 `CharacterStats` 添加/移除装备来源的修饰。
-  - `CharacterInventory.cs`：背包变更只会驱动装备槽校正与重新应用，未装备物品不再生效数值。
+  - `CharacterEquipment.cs`：仅"已装备"才生效，负责给 `CharacterStats` 添加/移除装备来源的修饰
+  - `CharacterInventory.cs`：背包变更只会驱动装备槽校正与重新应用，未装备物品不参与战斗数值
 
 ---
 
 ## 架构重构计划：背包与UI系统 (事件总线驱动)
+
+| 文档 | 位置 | 内容 | 何时查看 |
+|------|------|------|---------|
+| **法术SO配置流程** | `法术SO配置流程.md` | 详细的6步配置指南 + 检查清单 | 首次创建法术SO |
+| **法术系统可视化流程** | `法术系统可视化流程.md` | 系统架构图、数据流追踪、错误排查 | 深入理解系统 / 调试问题 |
+| **本文（规范）** | `DEVELOPMENT_STANDARDS.md` | 快速配置 + 技术实现细节 | 日常参考 |
+
+---
+
+## 🔗 快速导航
+
+### 我想要...
+
+#### 快速上手法术系统（3分钟）
+→ 查看本文的"快速配置流程（3分钟上手）"部分
+
+#### 完整、逐步的配置教程
+→ 打开 `法术SO配置流程.md`
+
+#### 理解法术系统的数据流
+→ 打开 `法术系统可视化流程.md` → 查看"数据流向跟踪"部分
+
+#### 排查法术攻击不生效的问题
+→ 打开 `法术系统可视化流程.md` → 查看"常见错误和排查"部分
+
+#### 知道某个字段的具体作用
+→ 本文的"法术与骰子系统"部分有详细字段说明
 
 **目标**：为支持未来的营地建造与策略玩法，将现有紧耦合的 `InventoryUIBinder` 拆分为基于“事件总线”的高度解耦架构。
 

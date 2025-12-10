@@ -158,7 +158,7 @@ namespace demo2.DND.HorizontalFormation
             r.description = r.isCritical ? $"暴击命中！伤害: {r.damage}" : $"命中！伤害: {r.damage}";
             r.damageType = isSpell
                 ? ((attacker.template != null && attacker.template.defaultCantrip != null) ? attacker.template.defaultCantrip.damageType : DamageType.Force)
-                : (weapon != null ? weapon.weaponDamageType : DamageType.Bludgeoning);
+                : (weapon != null ? weapon.weaponDamageType : (attacker.template != null ? attacker.template.unarmedDamageType : DamageType.Bludgeoning));
 
             int baseDice = isSpell
                 ? (attacker.template != null && attacker.template.defaultCantrip != null ? attacker.template.defaultCantrip.GetDamageDiceAtCasterLevel(attacker.Level).diceCount : 1)
@@ -243,9 +243,21 @@ namespace demo2.DND.HorizontalFormation
             }
             else
             {
-                // 徒手命中：取 STR/DEX 较大者；是否加熟练由模板 unarmedProficient 决定（5e：默认加熟练）
-                abilityNameForHit = (dex > str) ? "dexterity" : "strength";
-                int mod = (dex > str) ? dex : str;
+                // 徒手命中：按模板配置的徒手能力模式；是否加熟练由模板 unarmedProficient 决定
+                var mode = c.template != null ? c.template.unarmedDamageAbilityMode : PhysicalHitAbilityMode.Strength;
+                switch (mode)
+                {
+                    case PhysicalHitAbilityMode.Dexterity:
+                        abilityNameForHit = "dexterity";
+                        break;
+                    case PhysicalHitAbilityMode.BestOfStrDex:
+                        abilityNameForHit = (dex > str) ? "dexterity" : "strength";
+                        break;
+                    default: // Strength
+                        abilityNameForHit = "strength";
+                        break;
+                }
+                int mod = (abilityNameForHit == "dexterity") ? dex : str;
                 int prof = (c.template != null && c.template.unarmedProficient) ? c.template.GetProficiencyBonusByLevel(c.Level) : 0;
                 return mod + prof;
             }
@@ -259,7 +271,7 @@ namespace demo2.DND.HorizontalFormation
 
             if (isSpell)
             {
-                DiceFormula dice = (c.template != null && c.template.defaultCantrip != null) ? c.template.defaultCantrip.GetDamageDiceAtCasterLevel(c.Level) : new DiceFormula { diceCount = 1, diceSize = 8 };
+                DiceFormula dice = (c.template != null && c.template.defaultCantrip != null) ? c.template.defaultCantrip.GetDamageDiceAtCasterLevel(c.Level) : new DiceFormula(1, 8);
                 int count = isCritical ? dice.diceCount * 2 : dice.diceCount;
                 diceSize = dice.diceSize;
                 for (int i = 0; i < count; i++) rolledTotal += UnityEngine.Random.Range(1, diceSize + 1);
@@ -269,10 +281,10 @@ namespace demo2.DND.HorizontalFormation
 
             // 物理
             DiceFormula pdice = (weapon != null && weapon.isWeapon)
-                ? new DiceFormula { diceCount = Mathf.Max(1, weapon.weaponDamageDice.diceCount), diceSize = Mathf.Max(1, weapon.weaponDamageDice.diceSize) }
+                ? new DiceFormula(Mathf.Max(1, weapon.weaponDamageDice.diceCount), Mathf.Max(1, weapon.weaponDamageDice.diceSize))
                 : (c.template != null
-                    ? new DiceFormula { diceCount = Mathf.Max(1, c.template.unarmedDamageDice.diceCount), diceSize = Mathf.Max(1, c.template.unarmedDamageDice.diceSize) }
-                    : new DiceFormula { diceCount = 1, diceSize = 6 });
+                    ? new DiceFormula(Mathf.Max(1, c.template.unarmedDamageDice.diceCount), Mathf.Max(1, c.template.unarmedDamageDice.diceSize))
+                    : new DiceFormula(1, 6));
             int pcount = isCritical ? pdice.diceCount * 2 : pdice.diceCount;
             diceSize = pdice.diceSize;
             for (int i = 0; i < pcount; i++) rolledTotal += UnityEngine.Random.Range(1, diceSize + 1);
