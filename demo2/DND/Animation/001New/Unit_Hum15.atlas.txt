@@ -1,0 +1,405 @@
+
+Unit_Hum15.png
+size: 1086,110
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+BC_Hair1
+  rotate: true
+  xy: 813, 52
+  size: 56, 129
+  orig: 56, 129
+  offset: 0, 0
+  index: -1
+BL_Hair1
+  rotate: true
+  xy: 374, 28
+  size: 80, 133
+  orig: 80, 133
+  offset: 0, 0
+  index: -1
+BR_Hair1
+  rotate: true
+  xy: 187, 16
+  size: 92, 135
+  orig: 92, 135
+  offset: 0, 0
+  index: -1
+B_Mant
+  rotate: false
+  xy: 505, 6
+  size: 35, 20
+  orig: 35, 20
+  offset: 0, 0
+  index: -1
+Eff_002
+  rotate: false
+  xy: 549, 36
+  size: 42, 72
+  orig: 51, 102
+  offset: 4, 10
+  index: -1
+Eff_003
+  rotate: false
+  xy: 324, 20
+  size: 48, 88
+  orig: 51, 102
+  offset: 2, 7
+  index: -1
+Emt_Chick1
+  rotate: true
+  xy: 1004, 73
+  size: 35, 29
+  orig: 35, 29
+  offset: 0, 0
+  index: -1
+Emt_Chick2
+  rotate: true
+  xy: 637, 2
+  size: 34, 29
+  orig: 34, 29
+  offset: 0, 0
+  index: -1
+Emt_Chick3
+  rotate: false
+  xy: 975, 2
+  size: 31, 30
+  orig: 31, 30
+  offset: 0, 0
+  index: -1
+Emt_Star
+  rotate: false
+  xy: 457, 3
+  size: 23, 23
+  orig: 23, 23
+  offset: 0, 0
+  index: -1
+Emt_WaiWai1
+  rotate: false
+  xy: 482, 4
+  size: 21, 22
+  orig: 22, 22
+  offset: 1, 0
+  index: -1
+Emt_WaiWai2
+  rotate: false
+  xy: 938, 10
+  size: 35, 40
+  orig: 35, 40
+  offset: 0, 0
+  index: -1
+Emt_WaiWai3
+  rotate: false
+  xy: 218, 2
+  size: 17, 12
+  orig: 17, 12
+  offset: 0, 0
+  index: -1
+Emt_WaiWai4
+  rotate: false
+  xy: 975, 34
+  size: 32, 35
+  orig: 32, 35
+  offset: 0, 0
+  index: -1
+Emt_WaiWai5
+  rotate: false
+  xy: 1064, 88
+  size: 20, 20
+  orig: 20, 20
+  offset: 0, 0
+  index: -1
+Emt_WaiWai6
+  rotate: false
+  xy: 1039, 51
+  size: 26, 26
+  orig: 26, 26
+  offset: 0, 0
+  index: -1
+Eye1
+  rotate: false
+  xy: 401, 3
+  size: 54, 23
+  orig: 54, 23
+  offset: 0, 0
+  index: -1
+Eye2
+  rotate: false
+  xy: 292, 4
+  size: 48, 10
+  orig: 48, 10
+  offset: 0, 0
+  index: -1
+Eye3
+  rotate: true
+  xy: 917, 6
+  size: 44, 19
+  orig: 44, 19
+  offset: 0, 0
+  index: -1
+Eye4
+  rotate: false
+  xy: 542, 2
+  size: 44, 30
+  orig: 44, 30
+  offset: 0, 0
+  index: -1
+EyeBrow
+  rotate: false
+  xy: 818, 40
+  size: 48, 10
+  orig: 48, 10
+  offset: 0, 0
+  index: -1
+EyeBrow2
+  rotate: true
+  xy: 868, 2
+  size: 48, 9
+  orig: 48, 9
+  offset: 0, 0
+  index: -1
+EyeBrow3
+  rotate: false
+  xy: 767, 40
+  size: 49, 8
+  orig: 49, 8
+  offset: 0, 0
+  index: -1
+EyeBrow4
+  rotate: false
+  xy: 100, 2
+  size: 48, 11
+  orig: 48, 11
+  offset: 0, 0
+  index: -1
+F_Body
+  rotate: false
+  xy: 720, 48
+  size: 45, 60
+  orig: 45, 60
+  offset: 0, 0
+  index: -1
+F_Hair
+  rotate: false
+  xy: 2, 6
+  size: 96, 102
+  orig: 96, 102
+  offset: 0, 0
+  index: -1
+F_Mant
+  rotate: true
+  xy: 879, 6
+  size: 44, 36
+  orig: 44, 36
+  offset: 0, 0
+  index: -1
+F_Skirt
+  rotate: true
+  xy: 509, 34
+  size: 74, 38
+  orig: 74, 38
+  offset: 0, 0
+  index: -1
+Head
+  rotate: false
+  xy: 100, 15
+  size: 85, 93
+  orig: 85, 93
+  offset: 0, 0
+  index: -1
+L_Arm
+  rotate: true
+  xy: 1035, 79
+  size: 29, 27
+  orig: 29, 27
+  offset: 0, 0
+  index: -1
+L_Hair
+  rotate: true
+  xy: 767, 50
+  size: 58, 44
+  orig: 58, 44
+  offset: 0, 0
+  index: -1
+L_Hand1
+  rotate: true
+  xy: 150, 2
+  size: 11, 10
+  orig: 11, 10
+  offset: 0, 0
+  index: -1
+L_Hand2
+  rotate: false
+  xy: 162, 2
+  size: 10, 11
+  orig: 10, 11
+  offset: 0, 0
+  index: -1
+L_Hand3
+  rotate: true
+  xy: 174, 2
+  size: 11, 10
+  orig: 11, 10
+  offset: 0, 0
+  index: -1
+L_Hand4
+  rotate: false
+  xy: 280, 2
+  size: 10, 12
+  orig: 10, 12
+  offset: 0, 0
+  index: -1
+L_Harm
+  rotate: false
+  xy: 1063, 30
+  size: 19, 19
+  orig: 19, 19
+  offset: 0, 0
+  index: -1
+L_Hleg
+  rotate: false
+  xy: 944, 68
+  size: 26, 40
+  orig: 26, 40
+  offset: 0, 0
+  index: -1
+L_Leg
+  rotate: false
+  xy: 1036, 6
+  size: 25, 31
+  orig: 25, 31
+  offset: 0, 0
+  index: -1
+Mouth1
+  rotate: false
+  xy: 509, 28
+  size: 10, 4
+  orig: 10, 4
+  offset: 0, 0
+  index: -1
+Mouth2
+  rotate: false
+  xy: 198, 2
+  size: 18, 12
+  orig: 18, 12
+  offset: 0, 0
+  index: -1
+Mouth3
+  rotate: true
+  xy: 342, 2
+  size: 16, 13
+  orig: 16, 13
+  offset: 0, 0
+  index: -1
+Mouth4
+  rotate: false
+  xy: 944, 56
+  size: 20, 10
+  orig: 20, 10
+  offset: 0, 0
+  index: -1
+Opt_Ribbon
+  rotate: true
+  xy: 357, 4
+  size: 14, 22
+  orig: 14, 22
+  offset: 0, 0
+  index: -1
+R_Arm
+  rotate: false
+  xy: 1008, 2
+  size: 26, 30
+  orig: 26, 30
+  offset: 0, 0
+  index: -1
+R_Hair
+  rotate: true
+  xy: 593, 38
+  size: 70, 56
+  orig: 70, 56
+  offset: 0, 0
+  index: -1
+R_Hand1
+  rotate: false
+  xy: 252, 2
+  size: 12, 12
+  orig: 12, 12
+  offset: 0, 0
+  index: -1
+R_Hand2
+  rotate: false
+  xy: 266, 2
+  size: 12, 12
+  orig: 12, 12
+  offset: 0, 0
+  index: -1
+R_Hand3
+  rotate: false
+  xy: 186, 2
+  size: 10, 11
+  orig: 10, 11
+  offset: 0, 0
+  index: -1
+R_Hand4
+  rotate: true
+  xy: 237, 2
+  size: 12, 13
+  orig: 12, 13
+  offset: 0, 0
+  index: -1
+R_Harm
+  rotate: false
+  xy: 381, 2
+  size: 18, 24
+  orig: 18, 24
+  offset: 0, 0
+  index: -1
+R_Hleg
+  rotate: false
+  xy: 972, 71
+  size: 30, 37
+  orig: 30, 37
+  offset: 0, 0
+  index: -1
+R_Leg
+  rotate: false
+  xy: 1009, 39
+  size: 28, 32
+  orig: 28, 32
+  offset: 0, 0
+  index: -1
+Separater
+  rotate: false
+  xy: 720, 40
+  size: 6, 6
+  orig: 6, 6
+  offset: 0, 0
+  index: -1
+Shadow
+  rotate: true
+  xy: 651, 40
+  size: 68, 67
+  orig: 96, 96
+  offset: 14, 14
+  index: -1
+T_Hair
+  rotate: false
+  xy: 588, 2
+  size: 47, 32
+  orig: 47, 32
+  offset: 0, 0
+  index: -1
+Wep_SrtSwd000001_1
+  rotate: true
+  xy: 668, 2
+  size: 36, 161
+  orig: 36, 161
+  offset: 0, 0
+  index: -1
+Wep_SrtSwd000001_2
+  rotate: false
+  xy: 831, 3
+  size: 35, 35
+  orig: 35, 35
+  offset: 0, 0
+  index: -1

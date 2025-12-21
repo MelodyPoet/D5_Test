@@ -186,7 +186,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d247ba06193faa74d9335f5481b2b56c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  skeletonDataAsset: {fileID: 11400000, guid: 64a721ed570d5ac40a05e93949e196d0, type: 2}
+  skeletonDataAsset: {fileID: 11400000, guid: f1b2b17030a282b4a9bd25bf12a5ba04, type: 2}
   initialSkinName: 
   initialFlipX: 0
   initialFlipY: 0
@@ -280,15 +280,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a867f4e59d3b405ea6ae81ebded743d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainHand:
-    instanceId: 
-    data: {fileID: 0}
-    rotated: 0
-  armor:
-    instanceId: 
-    data: {fileID: 0}
-    rotated: 0
-  shield:
-    instanceId: 
-    data: {fileID: 0}
-    rotated: 0
