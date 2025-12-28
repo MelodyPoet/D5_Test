@@ -26,7 +26,7 @@ MonoBehaviour:
   attackHitEvent: atk_E
   footstepEvent: footstep
   stateChangeEvent: state_change
-  moveSpeed: 2
+  moveSpeed: 5
   attackDistance: 1.5
   moveEase: 9
   animations: []

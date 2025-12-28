@@ -24,11 +24,9 @@ MonoBehaviour:
   dodgeAnimation: dodge
   unconsciousAnimation: unconscious
   attackHitEvent: atk_E
-  deathCompleteEvent: death_complete
-  unconsciousStartEvent: unconscious_start
   footstepEvent: footstep
   stateChangeEvent: state_change
-  moveSpeed: 2
+  moveSpeed: 5
   attackDistance: 1.5
   moveEase: 9
   animations: []
