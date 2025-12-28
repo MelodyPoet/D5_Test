@@ -1024,5 +1024,7 @@ Serializable class，用于表示 DND5E 中的伤害骰数（如 1d6、2d8+3）�
 - 调整 `GameManager` 的业务调用链，集成新功能。
 - 编写单元测试并验证功能。
 
-
+角色换装设计思路:
+不同种族设计成不同archetype, archetype的spine里的皮肤配置不同的装备槽位。
+    
 
