@@ -1031,6 +1031,8 @@ Serializable class，用于表示 DND5E 中的伤害骰数（如 1d6、2d8+3）�
      2.一套符合Spine里使用的皮肤和attachment素材导入unity生成的SkeletonAnimation的对应属性使用的换装系统
 (素材使用的是Spine示例工程中的Mix-and-match角色,素材做好了一套骨架和多个皮肤部件)
 Spine骨骼动画系统支持动态替换骨骼的附件（Attachment），可以利用这一特性实现角色的换装功能。
+当前为根据Spine素材样式测试，所以先设置以下的部位槽位(和游戏最终要实现的DND规则战斗机制下的物品槽位有区别)
+先参考下面临时槽位实现，之后确认跑通后再替换成实际游戏机制所需
 
 具体设计代码实现思路如下：
 --Spine中每一个皮肤代表一个部件,每个皮肤都会对应在unity中的SkeletonData一个Skin
