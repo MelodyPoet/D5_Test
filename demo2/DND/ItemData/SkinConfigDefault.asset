@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4472c074635842448ebe3de17f59b999, type: 3}
+  m_Name: SkinConfigDefault
+  m_EditorClassIdentifier: 
+  skinParts:
+  - skinID: accessories/backpack
+    partType: 7
+    displayName: Accessories/backpack
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/bag
+    partType: 7
+    displayName: Accessories/bag
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: hair/blue
+    partType: 1
+    displayName: Hair/blue
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: legs/boots-pink
+    partType: 3
+    displayName: Legs/boots-pink
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: legs/boots-red
+    partType: 3
+    displayName: Legs/boots-red
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: full-skins/boy
+    partType: 8
+    displayName: Full-skins/boy
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: hair/brown
+    partType: 1
+    displayName: Hair/brown
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/cape-blue
+    partType: 7
+    displayName: Accessories/cape-blue
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/cape-red
+    partType: 7
+    displayName: Accessories/cape-red
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: clothes/dress-blue
+    partType: 2
+    displayName: Clothes/dress-blue
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: clothes/dress-green
+    partType: 2
+    displayName: Clothes/dress-green
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyes/eyes-blue
+    partType: 4
+    displayName: Eyes/eyes-blue
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: full-skins/girl
+    partType: 8
+    displayName: Full-skins/girl
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: full-skins/girl-blue-cape
+    partType: 8
+    displayName: Full-skins/girl-blue-cape
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: full-skins/girl-spring-dress
+    partType: 8
+    displayName: Full-skins/girl-spring-dress
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyelids/girly
+    partType: 5
+    displayName: Eyelids/girly
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyes/green
+    partType: 4
+    displayName: Eyes/green
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/hat-pointy-blue-yellow
+    partType: 7
+    displayName: Accessories/hat-pointy-blue-yellow
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/hat-red-yellow
+    partType: 7
+    displayName: Accessories/hat-red-yellow
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: clothes/hoodie-blue-and-scarf
+    partType: 2
+    displayName: Clothes/hoodie-blue-and-scarf
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: clothes/hoodie-orange
+    partType: 2
+    displayName: Clothes/hoodie-orange
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: nose/long
+    partType: 6
+    displayName: Nose/long
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: hair/long-blue-with-scarf
+    partType: 1
+    displayName: Hair/long-blue-with-scarf
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: legs/pants-green
+    partType: 3
+    displayName: Legs/pants-green
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: legs/pants-jeans
+    partType: 3
+    displayName: Legs/pants-jeans
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: hair/pink
+    partType: 1
+    displayName: Hair/pink
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: accessories/scarf
+    partType: 7
+    displayName: Accessories/scarf
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyelids/semiclosed
+    partType: 5
+    displayName: Eyelids/semiclosed
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: nose/short
+    partType: 6
+    displayName: Nose/short
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: hair/short-red
+    partType: 1
+    displayName: Hair/short-red
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: skin-base
+    partType: 0
+    displayName: Skin-base
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyes/violet
+    partType: 4
+    displayName: Eyes/violet
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}
+  - skinID: eyes/yellow
+    partType: 4
+    displayName: Eyes/yellow
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 0}

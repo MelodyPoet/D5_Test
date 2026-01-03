@@ -919,6 +919,21 @@ namespace demo2.DND
         {
             Debug.Log($"[{gameObject.name}] ========== PlayAnimation 调用 ==========");
             Debug.Log($"[{gameObject.name}] 动画名称: '{animationName}', 循环: {loop}");
+
+            // 第4步：皮肤检查钩子 - 确保在播放动画前，Spine骨架与当前皮肤保持一致
+            try
+            {
+                var appearance = GetComponent<CharacterAppearance>();
+                if (appearance != null)
+                {
+                    appearance.EnsureSkinApplied();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[{gameObject.name}] 皮肤同步检查失败: {ex.Message}");
+            }
+
             Debug.Log($"[{gameObject.name}] >>> 开始组件状态检查 <<<");
 
             if (skeletonAnimation == null)

@@ -11,6 +11,7 @@ DND5E 系统 - 工程编码规范
 AI 助手工作规范
 - 正文对话绝对不要使用英语：除非代码变量名/方法名/类名/技术名等必须使用英语，否则所有对话必须使用中文
 - 只修改现有文档: 永远不创建新的 markdown 文件
+- 不要每开发新的功能或者一修改代码，就创建大量的总结/升级完成/汇总/操作说明/问题解决报告等等.md文件，对话框中阐述最重要的操作步骤流程和修改点即可
 - 整合而非分离: 新功能描述直接添加到现有章节
 - 简洁优于详细: 记录核心要点，避免冗长描述
 - 文档核心用于和用户需求对齐：永远不要更改当前文档字体或者添加注释，导致用户无法编辑当前文档
@@ -605,7 +606,7 @@ UpdateArmorClass 等）。
 4. AC（基础/护甲覆盖/盾牌/姿态/临时）
 5. 抗性/免疫/易伤集合合并
 6. 命中/伤害参数：从 ICombatSource 取（能力类型/熟练/伤害骰/标签），结合最终六维/熟练得出命中加值与伤害修正
-7. 旗标：Advantage/Disadvantage/不可行动/隐形/集中等
+7. 旗标：Advantage/Disadvantage/不可行动/隐形/集中等布尔值
 
 五）实时更新（事件驱动）
 - 触发重算：LevelUp、Feat 选择、ASI、装备变化、效果增减/到期、姿态切换、专注失败等。
@@ -1031,7 +1032,7 @@ Serializable class，用于表示 DND5E 中的伤害骰数（如 1d6、2d8+3）�
      2.一套符合Spine里使用的皮肤和attachment素材导入unity生成的SkeletonAnimation的对应属性使用的换装系统
 (素材使用的是Spine示例工程中的Mix-and-match角色,素材做好了一套骨架和多个皮肤部件)
 Spine骨骼动画系统支持动态替换骨骼的附件（Attachment），可以利用这一特性实现角色的换装功能。
-当前为根据Spine素材样式测试，所以先设置以下的部位槽位(和游戏最终要实现的DND规则战斗机制下的物品槽位有区别)
+当前为根据Spine素材样式测试，所以先设置以下的部位槽位(和游戏最终要实现的DND规则战斗机制所需的物品槽位有区别)
 先参考下面临时槽位实现，之后确认跑通后再替换成实际游戏机制所需
 
 具体设计代码实现思路如下：
@@ -1056,28 +1057,7 @@ Spine骨骼动画系统支持动态替换骨骼的附件（Attachment），可�
         动画的名字
         类型
         此处要结合工程中专门负责读取动画的DND_CharacterAdapter.cs来进行对应调整，因为目前游戏的状态机是自己定义的。
-目标是希望换装界面完成后可以兼容现有的角色动画系统,并且可以通过换装界面来更换角色的外观.并且实时换装后不影响当前的战斗动画的
-调用业务链逻辑
---Spine中换装功能主要依赖于其皮肤(Skin)以及附件(Attachment)替换机制
-其核心思想是通过控制插槽(Slot)上所挂载的附件(通常是贴图),来实现角色外观的变化
---可以通过扩展一个编辑器文件，将spine源文件的皮肤全部读取到SO配置文件中对应起来(不然要手动一个个配置)
---用一个ClothesPanel的类来控制Spine
-    创建2个新的Skin用于添加不同部位的slot
-        new一个新的皮肤(根据是否是套装来判断分支)
-            成套的套装使用FullSkin(无需不同部件组合在一起)
-            零散的不同组件拼接组合在一起(遮挡关系沿用Spine里素材的层级关系)
-                baseSkin(只有非遮挡区域的人体)作为打底，因为所有组件都需要附加在人体之上
-                combineSkin(通过字典获取配置对应的槽位组件来组装到baseSkin上)
-                    skeleton.SetSkin(combineSkin)
-                    skeleton.SetSlotsToSetupPose()把不同的单独组件槽位设置到初始位置
-    Awake里面初始化皮肤InitSpine
-        通过skinID来找到对应的部位Slot
-        定义一个字典，部件对应皮肤的插槽
-            将素材中部位的皮肤设置到一个map上面
-                用这个map来进行动态的替换UpdateCustomSkin
-                    获取skeletonGraphic.skeleton
-初步设计方案，根据实际情况补正，目标是实现一个可用的换装系统，并且能兼容现有的战斗动画调用逻辑。开局建立角色时候可以通过UI界面来
-选择不同的服装部件进行搭配.游戏中获得新的武器服装配饰等也可以通过这个系统来更换角色外观.
+目标是希望换装界面完成后可以兼容现有的角色动画系统,并且可以通过换装界面来更换角色的外观.游戏中获得新的武器服装配饰等也可以通过这个系统来更换角色外观.
 
 ---
 
@@ -1115,75 +1095,18 @@ public enum SkinBodyPartType {
 
 **文件位置**：`Assets/demo2/DND/Character/SkinConfig.cs`
 
-**完整代码**：
+**职责**：定义皮肤部件的配置表SO，包含SkinPartEntry序列化类和查询接口
 
-```csharp
-using System.Collections.Generic;
-using UnityEngine;
+**设计要点**：
+- SkinPartEntry包含：skinID、partType、displayName、overlayColor、previewIcon
+- SkinConfig作为ScriptableObject存储所有部件列表
+- 提供按ID和按类型的查询接口
 
-namespace demo2.DND {
-    /// <summary>
-    /// 单个皮肤部件的配置条目
-    /// </summary>
-    [System.Serializable]
-    public class SkinPartEntry {
-        [SerializeField] public string skinID;                // 唯一ID（对应Spine皮肤名）
-        [SerializeField] public SkinBodyPartType partType;   // 部件类型
-        [SerializeField] public string displayName;           // UI显示名称
-        [SerializeField] public Color overlayColor = Color.white;  // 叠加染色（可选）
-        [SerializeField] public Texture2D previewIcon;        // UI预览图标（可选）
-    }
-
-    /// <summary>
-    /// 角色换装系统配置 - 定义所有可用皮肤部件
-    /// 创建方式：右键 → Create → DND → Skin Config
-    /// </summary>
-    [CreateAssetMenu(fileName = "SkinConfig", menuName = "DND/Skin Config", order = 100)]
-    public class SkinConfig : ScriptableObject {
-        [SerializeField] private List<SkinPartEntry> skinParts = new List<SkinPartEntry>();
-
-        /// <summary>
-        /// 根据skinID查找部件
-        /// </summary>
-        public SkinPartEntry GetPartBySkinID(string skinID) {
-            foreach (var part in skinParts) {
-                if (part.skinID == skinID) {
-                    return part;
-                }
-            }
-            Debug.LogWarning($"[SkinConfig] SkinID '{skinID}' not found");
-            return null;
-        }
-
-        /// <summary>
-        /// 获取指定类型的所有部件
-        /// </summary>
-        public List<SkinPartEntry> GetPartsByType(SkinBodyPartType partType) {
-            var result = new List<SkinPartEntry>();
-            foreach (var part in skinParts) {
-                if (part.partType == partType) {
-                    result.Add(part);
-                }
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// 获取所有部件
-        /// </summary>
-        public List<SkinPartEntry> GetAllParts() {
-            return new List<SkinPartEntry>(skinParts);
-        }
-
-        /// <summary>
-        /// 编辑器用：获取内部列表（用于Inspector编辑）
-        /// </summary>
-        public List<SkinPartEntry> GetSkinParts() => skinParts;
-    }
-}
-```
-
-**编译检查**：保存后检查是否有错误。
+**关键接口**：
+- GetPartBySkinID(skinID) - 按ID查找部件
+- GetPartsByType(partType) - 按类型查询所有部件
+- GetAllParts() - 获取全部部件列表
+- GetSkinParts() - 编辑器用接口（用于Inspector编辑）
 
 ---
 
@@ -1191,551 +1114,150 @@ namespace demo2.DND {
 
 **文件位置**：`Assets/demo2/DND/Character/CharacterAppearance.cs`
 
-**完整代码**：
+**职责**：管理角色的部件组合状态，维护当前皮肤配置
 
-```csharp
-using System;
-using System.Collections.Generic;
-using UnityEngine;
+**设计要点**：
+- 维护Dictionary<SkinBodyPartType, skinID>存储当前部件组合
+- 监听SetPart请求，动态更新Spine皮肤
+- 不清理Animation轨道（保持动画连贯）
+- 仅修改皮肤，不涉及动画状态
+- baseSkin作为打底（包含非遮挡区域的人体）
+- combinedSkin动态创建（baseSkin + 各部件皮肤）
 
-namespace demo2.DND {
-    /// <summary>
-    /// 角色外观管理 - 管理当前角色的部件组合状态
-    /// 职责：
-    /// 1. 维护当前部件组合（Dictionary<SkinBodyPartType, skinID>）
-    /// 2. 提供SetPart接口修改部件
-    /// 3. 发布OnAppearanceChanged事件供SkeletonAppearanceManager订阅
-    /// </summary>
-    public class CharacterAppearance : MonoBehaviour {
-        [SerializeField] private SkinConfig skinConfig;
+**关键方法**：
+- SetPart(partType, skinID) - 修改指定部位皮肤，发布OnAppearanceChanged事件
+- GetCurrentPart(partType) - 获取当前部位皮肤ID
+- ApplyAppearanceToSkeleton() - 应用外观配置到Spine
 
-        /// <summary>
-        /// 当前部件组合 - Key: 部件类型，Value: 选中的皮肤ID
-        /// </summary>
-        private Dictionary<SkinBodyPartType, string> currentParts = new Dictionary<SkinBodyPartType, string>();
-
-        /// <summary>
-        /// 外观变化事件 - SkeletonAppearanceManager订阅此事件
-        /// </summary>
-        public event Action OnAppearanceChanged;
-
-        /// <summary>
-        /// 初始化 - 尝试获取同对象的SkeletonAppearanceManager
-        /// </summary>
-        void Awake() {
-            if (skinConfig == null) {
-                Debug.LogError("[CharacterAppearance] SkinConfig is not assigned in Inspector");
-            }
-        }
-
-        /// <summary>
-        /// 从角色模板初始化外观
-        /// </summary>
-        public void InitializeFromTemplate(CharacterTemplate template) {
-            if (template == null) {
-                Debug.LogWarning("[CharacterAppearance] Template is null, skipping initialization");
-                return;
-            }
-
-            // TODO：如果CharacterTemplate中添加了defaultAppearanceProfile字段，在此读取
-            // 当前先使用空初始化（所有部件使用默认值）
-            Debug.Log($"[CharacterAppearance] Initialized from template: {template.characterName}");
-        }
-
-        /// <summary>
-        /// 设置指定类型的部件
-        /// </summary>
-        public void SetPart(SkinBodyPartType partType, string skinID) {
-            if (skinConfig.GetPartBySkinID(skinID) == null) {
-                Debug.LogWarning($"[CharacterAppearance] Invalid skinID: {skinID}");
-                return;
-            }
-
-            currentParts[partType] = skinID;
-            Debug.Log($"[CharacterAppearance] Set {partType} to {skinID}");
-            OnAppearanceChanged?.Invoke();  // 触发事件，SkeletonAppearanceManager订阅此事件
-        }
-
-        /// <summary>
-        /// 获取指定类型的当前部件ID
-        /// </summary>
-        public string GetPart(SkinBodyPartType partType) {
-            return currentParts.ContainsKey(partType) ? currentParts[partType] : null;
-        }
-
-        /// <summary>
-        /// 获取当前部件组合副本
-        /// </summary>
-        public Dictionary<SkinBodyPartType, string> GetCurrentParts() {
-            return new Dictionary<SkinBodyPartType, string>(currentParts);
-        }
-
-        /// <summary>
-        /// 清除所有部件（用于重置）
-        /// </summary>
-        public void ClearAllParts() {
-            currentParts.Clear();
-            OnAppearanceChanged?.Invoke();
-        }
-
-        /// <summary>
-        /// 获取SkinConfig引用
-        /// </summary>
-        public SkinConfig GetSkinConfig() => skinConfig;
-    }
-}
-```
-
-**编译检查**：保存后检查IDE，确保无错误。
+**事件**：
+- OnAppearanceChanged - 外观改变事件
 
 ---
 
-### 第4步：创建SkeletonAppearanceManager.cs（新文件）
-
-**文件位置**：`Assets/demo2/DND/Character/SkeletonAppearanceManager.cs`
-
-**完整代码**：
-
-```csharp
-using Spine.Unity;
-using UnityEngine;
-
-namespace demo2.DND {
-    /// <summary>
-    /// Spine皮肤动态管理 - 处理运行时皮肤替换与组合
-    /// 职责：
-    /// 1. 监听CharacterAppearance的OnAppearanceChanged事件
-    /// 2. 根据部件组合动态创建或切换Spine皮肤
-    /// 3. 确保皮肤与动画骨架对齐（SetSlotsToSetupPose）
-    /// 
-    /// 关键原则：
-    /// - 不清理Animation轨道（保持动画连贯）
-    /// - 仅修改皮肤，不涉及动画状态
-    /// - baseSkin作为打底（包含非遮挡区域的人体）
-    /// - combinedSkin动态创建（baseSkin + 各部件皮肤）
-    /// </summary>
-    public class SkeletonAppearanceManager : MonoBehaviour {
-        private SkeletonAnimation skeletonAnimation;
-        private CharacterAppearance characterAppearance;
-        private Spine.Skeleton skeleton;
-        private Spine.SkeletonData skeletonData;
-
-        /// <summary>
-        /// Awake - 初始化引用，订阅事件
-        /// </summary>
-        void Awake() {
-            // 获取同对象的组件
-            skeletonAnimation = GetComponent<SkeletonAnimation>();
-            characterAppearance = GetComponent<CharacterAppearance>();
-
-            if (skeletonAnimation == null) {
-                Debug.LogError("[SkeletonAppearanceManager] SkeletonAnimation not found on this GameObject");
-                return;
-            }
-
-            if (characterAppearance == null) {
-                Debug.LogError("[SkeletonAppearanceManager] CharacterAppearance not found on this GameObject");
-                return;
-            }
-
-            skeleton = skeletonAnimation.skeleton;
-            skeletonData = skeletonAnimation.skeletonDataAsset.GetSkeletonData(false);
-
-            // 订阅外观变化事件
-            characterAppearance.OnAppearanceChanged += UpdateSpineSkin;
-
-            Debug.Log($"[SkeletonAppearanceManager] Initialized for {gameObject.name}");
-        }
-
-        /// <summary>
-        /// 更新Spine皮肤 - 根据CharacterAppearance中的部件组合创建新皮肤
-        /// </summary>
-        public void UpdateSpineSkin() {
-            if (skeleton == null || skeletonData == null) {
-                Debug.LogWarning("[SkeletonAppearanceManager] Skeleton or SkeletonData is null");
-                return;
-            }
-
-            var parts = characterAppearance.GetCurrentParts();
-
-            // 方案A：组合皮肤（推荐）
-            // 步骤1：获取baseSkin（人体底图，非遮挡部位）
-            var baseSkin = skeletonData.FindSkin("base");
-            if (baseSkin == null) {
-                Debug.LogWarning("[SkeletonAppearanceManager] Base skin not found in SkeletonData");
-                return;
-            }
-
-            // 步骤2：创建新的组合皮肤
-            var combinedSkin = new Spine.Skin("combined");
-            combinedSkin.AddSkin(baseSkin);  // 先添加底图
-
-            // 步骤3：逐个添加部件皮肤
-            foreach (var kvp in parts) {
-                var partType = kvp.Key;
-                var skinID = kvp.Value;
-
-                if (string.IsNullOrEmpty(skinID)) {
-                    continue;
-                }
-
-                var partSkin = skeletonData.FindSkin(skinID);
-                if (partSkin != null) {
-                    combinedSkin.AddSkin(partSkin);
-                    Debug.Log($"[SkeletonAppearanceManager] Added {partType}: {skinID}");
-                } else {
-                    Debug.LogWarning($"[SkeletonAppearanceManager] Skin not found: {skinID}");
-                }
-            }
-
-            // 步骤4：应用皮肤到骨架
-            skeleton.SetSkin(combinedSkin);
-            skeleton.SetSlotsToSetupPose();  // 重置插槽与新皮肤对齐
-
-            Debug.Log("[SkeletonAppearanceManager] Skin updated successfully");
-        }
-
-        /// <summary>
-        /// 手动确保皮肤已应用（可选，在PlayAnimation前调用）
-        /// </summary>
-        public void EnsureSkinApplied() {
-            if (skeleton != null && skeleton.GetSkin() == null) {
-                UpdateSpineSkin();
-            }
-        }
-
-        /// <summary>
-        /// OnDestroy - 取消事件订阅，防止内存泄漏
-        /// </summary>
-        void OnDestroy() {
-            if (characterAppearance != null) {
-                characterAppearance.OnAppearanceChanged -= UpdateSpineSkin;
-            }
-        }
-    }
-}
-```
-
-**编译检查**：保存后检查IDE，确保无错误。
-
----
-
-### 第5步：修改DND_CharacterAdapter.cs（极小改动）
+### 第4步：修改DND_CharacterAdapter.cs（极小改动）
 
 **文件位置**：`Assets/demo2/DND/DND_CharacterAdapter.cs`
 
-**操作**：在`PlayAnimation`方法的开始处添加皮肤检查钩子
+**修改点**：在`PlayAnimation`方法的开始处添加皮肤检查钩子
 
-```csharp
-public void PlayAnimation(string animationName, bool loop = false) {
-    // ...existing code...
-    
-    // [新增] 皮肤检查钩子 - 确保Skeleton皮肤已应用
-    var appearanceMgr = GetComponent<SkeletonAppearanceManager>();
-    if (appearanceMgr != null) {
-        appearanceMgr.EnsureSkinApplied();
-    }
-    
-    // ...rest of existing code...
-}
-```
+**目的**：确保在播放动画前，Spine骨架与当前皮肤保持一致，防止皮肤与骨架错位
 
-**说明**：这个修改确保在播放动画前，Spine骨架与当前皮肤保持一致，防止皮肤与骨架错位。
-
-**编译检查**：保存后检查IDE，确保无错误。
+**修改逻辑**：
+- 获取同对象的SkeletonAppearanceManager组件
+- 若存在，调用EnsureSkinApplied()确保皮肤已应用
+- 然后继续原有的动画播放逻辑
 
 ---
 
-### 第6步：创建CharacterCustomizationPanel.cs（新文件）
+### 第5步：创建CharacterCustomizationPanel.cs（新文件）
 
 **文件位置**：`Assets/demo2/DND/UI/CharacterCustomizationPanel.cs`
 
-**完整代码**：
+**职责**：角色换装UI面板 - 显示部件选项，处理用户交互
 
-```csharp
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+**设计要点**：
+- 作为UI层，仅负责显示和输入
+- 遍历SkinConfig中的所有部件，按部件类型（SkinBodyPartType）分类显示
+- 为每个部件创建UI按钮，显示previewIcon和displayName
+- 按类型分组显示UI（Hair、Clothes、Legs等不同区域）
 
-namespace demo2.DND {
-    /// <summary>
-    /// 角色换装UI面板 - 显示部件选项，处理用户交互
-    /// 职责：
-    /// 1. 遍历SkinConfig中的所有部件，分类显示
-    /// 2. 处理用户点击事件
-    /// 3. 调用CharacterAppearance.SetPart()驱动换装
-    /// 4. 提供确认和取消操作
-    /// </summary>
-    public class CharacterCustomizationPanel : MonoBehaviour {
-        [SerializeField] private SkinConfig skinConfig;
-        [SerializeField] private CharacterAppearance targetAppearance;
-        [SerializeField] private Transform partsContainer;  // UI部件容器
-        [SerializeField] private Button confirmButton;      // 确认按钮
-        [SerializeField] private Button cancelButton;       // 取消按钮
+**主要功能**：
+1. PopulateUI() - 遍历SkinConfig，生成分类UI部件列表
+2. CreatePartButton(SkinPartEntry) - 为单个部件创建UI按钮
+3. OnPartSelected(SkinPartEntry) - 用户点击部件时，调用targetAppearance.SetPart()驱动换装
+4. OnConfirmClicked() / OnCancelClicked() - 确认/取消按钮回调
 
-        private PartButtonPrefab partButtonPrefab;  // UI按钮预制体
+**关键字段**：
+- skinConfig: SkinConfig - 皮肤配置资产（需手动拖入）
+- targetAppearance: CharacterAppearance - 目标角色外观组件（需手动拖入）
+- partsContainer: Transform - UI部件容器（存放生成的按钮）
+- confirmButton / cancelButton: Button - 确认/取消按钮
 
-        /// <summary>
-        /// 确认按钮点击事件
-        /// </summary>
-        public event Action OnConfirm;
-
-        /// <summary>
-        /// 取消按钮点击事件
-        /// </summary>
-        public event Action OnCancel;
-
-        void Start() {
-            if (skinConfig == null || targetAppearance == null) {
-                Debug.LogError("[CharacterCustomizationPanel] Missing required references");
-                return;
-            }
-
-            if (confirmButton != null) {
-                confirmButton.onClick.AddListener(OnConfirmClicked);
-            }
-
-            if (cancelButton != null) {
-                cancelButton.onClick.AddListener(OnCancelClicked);
-            }
-
-            PopulateUI();
-        }
-
-        /// <summary>
-        /// 生成UI部件列表
-        /// </summary>
-        void PopulateUI() {
-            // 清空容器中的旧按钮
-            foreach (Transform child in partsContainer) {
-                Destroy(child.gameObject);
-            }
-
-            // 遍历所有部件，分类显示
-            var allParts = skinConfig.GetAllParts();
-            var groupedByType = new Dictionary<SkinBodyPartType, List<SkinPartEntry>>();
-
-            // 分组
-            foreach (var part in allParts) {
-                if (!groupedByType.ContainsKey(part.partType)) {
-                    groupedByType[part.partType] = new List<SkinPartEntry>();
-                }
-                groupedByType[part.partType].Add(part);
-            }
-
-            // 为每个分组创建UI
-            foreach (var kvp in groupedByType) {
-                var partType = kvp.Key;
-                var parts = kvp.Value;
-
-                // 创建分类标题（可选）
-                var titleText = new GameObject($"Title_{partType}");
-                titleText.transform.SetParent(partsContainer, false);
-                var titleComponent = titleText.AddComponent<Text>();
-                titleComponent.text = partType.ToString();
-                titleComponent.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-
-                // 为该分类的每个部件创建按钮
-                foreach (var part in parts) {
-                    var button = CreatePartButton(part);
-                    button.transform.SetParent(partsContainer, false);
-                }
-            }
-
-            Debug.Log("[CharacterCustomizationPanel] UI populated");
-        }
-
-        /// <summary>
-        /// 创建单个部件按钮
-        /// </summary>
-        Button CreatePartButton(SkinPartEntry part) {
-            var buttonGO = new GameObject($"PartButton_{part.skinID}");
-            var button = buttonGO.AddComponent<Button>();
-            var image = buttonGO.AddComponent<Image>();
-
-            if (part.previewIcon != null) {
-                image.sprite = Sprite.Create(part.previewIcon, 
-                    new Rect(0, 0, part.previewIcon.width, part.previewIcon.height), 
-                    new Vector2(0.5f, 0.5f));
-            }
-
-            button.onClick.AddListener(() => OnPartSelected(part));
-
-            // 添加Text显示部件名称（可选）
-            var textGO = new GameObject("Text");
-            textGO.transform.SetParent(buttonGO.transform, false);
-            var text = textGO.AddComponent<Text>();
-            text.text = part.displayName;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-
-            return button;
-        }
-
-        /// <summary>
-        /// 部件选中回调
-        /// </summary>
-        void OnPartSelected(SkinPartEntry part) {
-            targetAppearance.SetPart(part.partType, part.skinID);
-            Debug.Log($"[CharacterCustomizationPanel] Selected: {part.partType} - {part.displayName}");
-        }
-
-        /// <summary>
-        /// 确认按钮点击回调
-        /// </summary>
-        void OnConfirmClicked() {
-            OnConfirm?.Invoke();
-            Debug.Log("[CharacterCustomizationPanel] Confirmed appearance");
-        }
-
-        /// <summary>
-        /// 取消按钮点击回调
-        /// </summary>
-        void OnCancelClicked() {
-            OnCancel?.Invoke();
-            Debug.Log("[CharacterCustomizationPanel] Canceled appearance");
-        }
-    }
-
-    /// <summary>
-    /// UI部件按钮预制体类（可选，用于编辑器脚本创建按钮）
-    /// </summary>
-    public class PartButtonPrefab : MonoBehaviour {
-        // 可根据需要扩展
-    }
-}
-```
-
-**说明**：这个脚本提供了基础的UI交互框架，您可以根据美术风格进一步定制样式。
-
-**编译检查**：保存后检查IDE，确保无错误。
+**事件**：
+- OnConfirm - 确认换装
+- OnCancel - 取消换装
 
 ---
 
-### 第7步：在HorizontalBattleFormationManager中添加初始化调用
-
-**文件位置**：`Assets/demo2/DND/HorizontalFormation/HorizontalBattleFormationManager.cs`
-
-**操作**：在角色实例化后添加外观初始化
-
-找到类似以下的代码：
-```csharp
-// ...existing character spawn code...
-var instance = Instantiate(characterPrefab, spawnPoint);
-var stats = instance.GetComponent<CharacterStats>();
-stats.InitializeFromTemplate(template);
-// ...
-```
-
-修改为：
-```csharp
-// ...existing code...
-var instance = Instantiate(characterPrefab, spawnPoint);
-var stats = instance.GetComponent<CharacterStats>();
-stats.InitializeFromTemplate(template);
-
-// [新增] 初始化角色外观
-var appearance = instance.GetComponent<CharacterAppearance>();
-if (appearance != null) {
-    appearance.InitializeFromTemplate(template);
-}
-
-// ...rest of existing code...
-```
-
-**编译检查**：保存后检查IDE，确保无错误。
-
----
-
-### 第8步：预制体配置（手动操作）
-
-**对每个角色预制体进行以下操作**：
-
-1. **打开角色预制体**（e.g., 玩家、敌人、队友预制体）
-
-2. **挂载新组件**：
-   - 选择预制体 → Inspector → Add Component
-   - 搜索 `CharacterAppearance` → 添加
-   - 搜索 `SkeletonAppearanceManager` → 添加
-
-3. **配置CharacterAppearance**：
-   - 在Inspector找到 `CharacterAppearance` 组件
-   - 在 `Skin Config` 字段拖拽 `SkinConfig.asset`（第9步创建）
-
-4. **验证其他组件**：
-   - 确保预制体上已有 `CharacterStats`, `DND_CharacterAdapter`, `SkeletonAnimation`
-
----
-
-### 第9步：创建SkinConfig资产
+### 第6步：创建SkinConfig资产并配置部件列表
 
 **操作步骤**：
 
 1. 在Project窗口右键 → Create → DND → Skin Config
 2. 命名为 `SkinConfig`（或其他名称）
-3. 在Inspector中配置部件列表：
-   - 在 `Skin Parts` 中添加部件条目
-   - 对每个条目填入：
-     - **Skin ID**：对应Spine皮肤名称（e.g., `hair_001`）
-     - **Part Type**：选择部件类型（e.g., `Hair`）
-     - **Display Name**：UI显示名称（e.g., `红色长发`）
-     - **Overlay Color**：叠加颜色（可选，默认白色）
-     - **Preview Icon**：预览图标（可选）
+3. 在Inspector中展开Skin Parts列表，添加部件条目
+4. 对每个部件条目填入以下信息：
+   - **Skin ID**：对应Spine皮肤名称（必须与Spine工程中的皮肤名完全一致，如 `hair_001`）
+   - **Part Type**：选择该部件的类型（如 `Hair`、`Clothes`、`Eyes`等，来自SkinBodyPartType枚举）
+   - **Display Name**：该部件在UI上的显示名称（如 `红色长发`、`蓝色衣服`）
+   - **Overlay Color**：可选的叠加染色颜色（默认白色表示不染色，可用于动态调整皮肤颜色）
+   - **Preview Icon**：可选的UI预览图标（在换装面板中显示该部件的缩略图）
+5. 完成配置后保存资产
 
-4. 保存资产
+**部件命名规范**：
+- Skin ID应与Spine导出的皮肤名保持一致
+- Display Name用于玩家可读性，支持中文
+- 同一Part Type下可有多个不同的Skin ID（如多种头发样式都属于Hair）
 
 ---
 
-### 第10步：编译与测试
+### 第7步：在角色预制体上挂载换装系统组件
+
+**操作步骤**：
+
+1. 打开角色预制体
+2. 在层级中创建一个UI Canvas用于放置换装面板（或使用现有Canvas）
+3. 在Canvas中创建一个Panel作为换装面板容器
+4. 在该Panel上添加CharacterCustomizationPanel脚本
+5. 在Inspector中配置以下字段：
+   - **Skin Config**：拖入第6步创建的SkinConfig资产
+   - **Target Appearance**：拖入角色身上的CharacterAppearance组件
+   - **Parts Container**：拖入Panel中用于放置部件按钮的Transform容器
+   - **Confirm Button**：拖入确认按钮
+   - **Cancel Button**：拖入取消按钮
+6. 确保角色身上挂载了CharacterAppearance组件（需在CharacterStats同级）
+
+---
+
+### 第8步：编译与功能测试
 
 **编译检查**：
 - 保存所有脚本
 - 在Unity编辑器中查看Console和PROBLEMS面板
+- 使用get_errors检查是否有编译错误
 - 确保无编译错误（Error数 = 0）
 
-**功能测试**：
-1. 在场景中放置角色预制体
+**功能测试流程**：
+1. 在场景中放置配置好的角色预制体
 2. 运行游戏
-3. 验证角色外观是否正确加载
-4. 验证换装面板交互是否正常
-5. 验证换装时动画是否继续播放
+3. 验证项目：
+   - ✅ 角色外观是否正确加载（初始皮肤配置是否显示）
+   - ✅ 换装面板是否正常显示（所有部件分类是否正确）
+   - ✅ 点击部件按钮时角色外观是否改变
+   - ✅ 换装时动画是否继续播放（不被打断）
+   - ✅ 确认/取消按钮是否正常工作
+4. 在运行时Inspector观察CharacterAppearance的部件字典是否正确更新
+5. 检查Console中是否有警告日志（如皮肤未找到等）
 
----
+由于当前Spine素材的制作习惯且通过Spine官方的插件脚本SkeletonAnimation来统一识别，所以需有一套指定的映射规则来确保Spine导出的皮肤和附件
+能正确应用到Unity中的SkeletonAnimation组件上。
+后续会灵活有所调整
+Spine Skin Importer映射规则确认:
+最终目的是玩家在角色捏人换装定制化的Customization UI界面选择不同的部件来更换角色外观时,Spine的SkeletonAnimation组件能正确识别并应用
+对应的皮肤和附件.因此需要确认Spine导出的皮肤和附件名称与Unity中SkeletonData的Skins和Attachments的映射关系.
+以当前示例的Spine骨骼和皮肤文件具体规则如下:
+由于换装的主要目的是有机的组合Spine素材中设置的不同部件的皮肤,因此需要确保每个部件的皮肤名称在Spine和Unity中是一一对应的.
+玩家在UI界面选择时，角色应该保持原骨骼的所有动画正常播放前提下，可以适配所有服装样式
+玩家选择不同部件组合/整套套装时，会激活不同的对应条件(UI界面应该设置不同标签区分开整套和部件组合的选择)
+因此，需要确保以下两者情况:
+1.第一类玩家使用UI界面时候，角色实际上有一个SkinBase(只有人脸和裸手臂)，其他部件都是通过附加的皮肤来覆盖显示.
+ 如这些类别(注意前缀):hair/legs/clothes/eyes/eyelids/nose/accessory通过这些附加导基础SkinBase上,强调玩家自定义组装。
+2.第二类是玩家选择整套FullSkin(全身套装),这种情况下就不需要自定义组装，而是会用素材中默认配置好的一套服装直接替换掉基础SkinBase,不再叠加
+其他部件.   
 
-## 代码修改检查清单
+所以Spine Skin Importer映射规则应该根据这些规则来设置
 
-实现完成后逐项检查：
-
-### 脚本创建检查
-- [ ] GameEnums.cs 已新增 SkinBodyPartType 枚举
-- [ ] SkinConfig.cs 已创建（含SkinPartEntry）
-- [ ] CharacterAppearance.cs 已创建
-- [ ] SkeletonAppearanceManager.cs 已创建
-- [ ] CharacterCustomizationPanel.cs 已创建
-
-### 脚本修改检查
-- [ ] DND_CharacterAdapter.cs 已添加皮肤检查钩子
-- [ ] HorizontalBattleFormationManager.cs 已添加初始化调用
-
-### 预制体配置检查
-- [ ] 所有角色预制体已挂载 CharacterAppearance
-- [ ] 所有角色预制体已挂载 SkeletonAppearanceManager
-- [ ] 所有CharacterAppearance都正确引用了SkinConfig资产
-
-### 资产创建检查
-- [ ] SkinConfig.asset 已创建
-- [ ] SkinConfig中已配置至少一套部件数据
-
-### 编译检查
-- [ ] IDE PROBLEMS面板 = 0 错误
-- [ ] 全项目编译成功
-- [ ] Console无脚本相关的Warning（允许其他Warning）
-
-### 功能验证检查
-- [ ] 角色加载时外观正确显示
-- [ ] 换装面板交互正常
-- [ ] 换装时角色外观改变，动画无中断
-- [ ] CharacterStats属性值无变化（外观与战力分离）
-- [ ] 多角色场景中各角色外观独立
-
----
+UI换装界面需求细则:
+界面左边有一个展示角色正常播放动画的人物界面，且界面下方有不同button可以切换几段素材里的动画，界面右边是不同的标签页，
+不同的标签展示不同的部位分类(如头发/衣服/腿/眼睛/眼皮/鼻子/配饰/整套)，每个单独分类标签下则是不同物品服装的icon，玩家点击icon后，
+角色的对应部位会更换成该部件的外观.

@@ -152,4 +152,19 @@ namespace demo2.DND
     }
 
     // 注：SpellData 已作为独立的 ScriptableObject 定义在 SpellData.cs 中
+
+    /// <summary>
+    /// 角色换装系统 - 身体部件类型枚举
+    /// </summary>
+    public enum SkinBodyPartType {
+        SkinBase,  // 基础皮肤（只有人脸和裸手臂，作为其他部件的基础层）
+        Hair,      // 头发
+        Clothes,   // 衣服
+        Legs,      // 腿部
+        Eyes,      // 眼睛
+        Eyelids,   // 眼皮
+        Nose,      // 鼻子
+        Accessory, // 配饰
+        FullSkin   // 全身套装（整套替换，无需组合）
+    }
 }
