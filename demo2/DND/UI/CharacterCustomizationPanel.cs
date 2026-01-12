@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,7 +27,8 @@ namespace demo2.DND
         [SerializeField] private SkeletonAnimation gameCharacter;  // 游戏中的实际角色，用于最终同步
 
         [Header("UI 容器（通过 Inspector 拖入）")]
-        [SerializeField] private Transform characterDisplayContainer;  // 左侧：角色显示位置
+        [SerializeField] private RawImage characterDisplayImage;      // 左侧：角色显示区域 (使用 RawImage)
+        [SerializeField] private Camera uiCharacterCamera;            // 用于渲染UI角色的专用摄像机
         [SerializeField] private Transform categoryTabsContainer;      // 右侧：标签页容器
         [SerializeField] private Transform iconGridContainer;          // 右侧：icon 列表容器
         [SerializeField] private Transform animationButtonsContainer;  // 下方：动画按钮容器
@@ -40,6 +41,10 @@ namespace demo2.DND
         [Header("确认/取消按钮")]
         [SerializeField] private Button confirmButton;
         [SerializeField] private Button cancelButton;
+
+        [Header("Tuning")]
+        [SerializeField, Tooltip("摄像机自动缩放时的边距，1.0 表示无边距，1.1 表示 10% 的边距。值越小，角色越大。")]
+        private float cameraFitMargin = 1.1f;
 
         // 内部引用
         private SkeletonAnimation uiCharacter;
@@ -147,10 +152,28 @@ namespace demo2.DND
                 Debug.LogError("[CharacterCustomizationPanel] Character Prefab 未设置");
                 return;
             }
+            if (uiCharacterCamera == null)
+            {
+                Debug.LogError("[CharacterCustomizationPanel] UI Character Camera 未设置");
+                return;
+            }
+            if (characterDisplayImage == null)
+            {
+                Debug.LogError("[CharacterCustomizationPanel] Character Display Image 未设置");
+                return;
+            }
 
-            // 实例化角色到左侧容器
-            var charObj = Instantiate(characterPrefab, characterDisplayContainer);
+            // 实例化角色到场景根目录，并设置一个远离主场景的位置，例如 (1000, 1000, 1000)
+            var charObj = Instantiate(characterPrefab);
+            charObj.transform.position = new Vector3(1000, 1000, 1000);
             charObj.name = "UICharacter_Preview";
+
+            // --- 关键步骤：将角色的所有子对象都设置为 "UICharacter" 层 ---
+            // (请确保你已经在 Unity 的 Layer 设置中创建了 "UICharacter" 层)
+            foreach (var t in charObj.GetComponentsInChildren<Transform>())
+            {
+                t.gameObject.layer = LayerMask.NameToLayer("UICharacter");
+            }
 
             // 获取必要的组件
             uiCharacter = charObj.GetComponent<SkeletonAnimation>();
@@ -160,14 +183,36 @@ namespace demo2.DND
             if (uiCharacter == null)
             {
                 Debug.LogError("[CharacterCustomizationPanel] Character Prefab 不包含 SkeletonAnimation 组件");
+                Destroy(charObj);
                 return;
             }
 
             if (uiCharacterAppearance == null)
             {
                 Debug.LogError("[CharacterCustomizationPanel] Character Prefab 不包含 CharacterAppearance 组件");
+                Destroy(charObj);
                 return;
             }
+
+            // --- 关键步骤：设置摄像机和 Render Texture ---
+            // 1. 将摄像机对准角色
+            // uiCharacterCamera.transform.position = charObj.transform.position + new Vector3(0, 0, -5); // 从角色前方观察
+            // uiCharacterCamera.transform.LookAt(charObj.transform.position);
+
+            // 2. 确保摄像机只渲染 "UICharacter" 层
+            uiCharacterCamera.cullingMask = 1 << LayerMask.NameToLayer("UICharacter");
+
+            // 3. 确保 Render Texture 被分配给摄像机和 RawImage
+            if (uiCharacterCamera.targetTexture == null)
+            {
+                Debug.LogError("[CharacterCustomizationPanel] UI Character Camera 没有设置 Target Texture!");
+                return;
+            }
+            characterDisplayImage.texture = uiCharacterCamera.targetTexture;
+            characterDisplayImage.color = Color.white; // 确保 RawImage 是不透明的
+
+            // --- 新增：自动调整摄像机视野以适应角色大小 ---
+            FitCameraToCharacter(uiCharacter, uiCharacterCamera);
 
             if (skinConfig == null)
             {
@@ -184,6 +229,44 @@ namespace demo2.DND
             {
                 Debug.LogError($"[CharacterCustomizationPanel] UI 角色皮肤初始化失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 自动调整摄像机，使其正好能容纳整个角色
+        /// </summary>
+        private void FitCameraToCharacter(SkeletonAnimation character, Camera cam)
+        {
+            if (character == null || cam == null) return;
+
+            // 延迟一帧获取包围盒，确保Spine网格已更新
+            StartCoroutine(DelayedFitCamera(character, cam));
+        }
+
+        private System.Collections.IEnumerator DelayedFitCamera(SkeletonAnimation character, Camera cam)
+        {
+            // 等待一帧，让Spine的Mesh生成和更新完成
+            yield return null;
+
+            var meshRenderer = character.GetComponent<MeshRenderer>();
+            if (meshRenderer == null || meshRenderer.bounds.size == Vector3.zero)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] 无法获取角色有效的包围盒，自动缩放失败。请确保模型可见。");
+                yield break;
+            }
+
+            Bounds bounds = meshRenderer.bounds;
+
+            // 对于正交摄像机，根据模型高度调整 Orthographic Size
+            // 增加指定的边距
+            float verticalSize = bounds.size.y;
+            cam.orthographicSize = verticalSize / 2f * cameraFitMargin;
+
+            // 将摄像机移动到模型中心点，并保持原有的Z轴距离
+            Vector3 newCamPos = bounds.center;
+            newCamPos.z = cam.transform.position.z;
+            cam.transform.position = newCamPos;
+
+            Debug.Log($"[CharacterCustomizationPanel] 自动调整正交摄像机完成。角色高度: {verticalSize}, 新 Orthographic Size: {cam.orthographicSize}");
         }
 
         /// <summary>
