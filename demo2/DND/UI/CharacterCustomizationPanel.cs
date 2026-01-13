@@ -521,6 +521,9 @@ namespace demo2.DND.UI
 
             // 更新 UI 角色的皮肤
             uiCharacterAppearance.SetPart(part.partType, part.skinID);
+
+            // 关键修复：更换部件后，重新调整摄像机以适应新的模型边界
+            FitCameraToCharacter(uiCharacter, uiCharacterCamera);
         }
 
         /// <summary>

@@ -172,6 +172,54 @@ namespace demo2.DND
         }
 
         /// <summary>
+        /// ��用一套默认的散件组合（每个分类的第一个）
+        /// </summary>
+        private void ApplyDefaultParts()
+        {
+            if (skinConfig == null) return;
+
+            currentParts.Clear();
+            var allParts = skinConfig.GetAllParts();
+            foreach (var part in allParts)
+            {
+                // 跳过特殊类型
+                if (part.partType == SkinBodyPartType.FullSkin || part.partType == SkinBodyPartType.SkinBase)
+                {
+                    continue;
+                }
+
+                // 如果该部件类型还未被赋值，就使用这个（作为该分类的第一个）
+                if (!currentParts.ContainsKey(part.partType))
+                {
+                    currentParts[part.partType] = part.skinID;
+                }
+            }
+            Debug.Log($"[CharacterAppearance] 已应用默认散件组合，共 {currentParts.Count} 个部件。");
+        }
+
+        /// <summary>
+        /// 验证皮肤ID是否有效
+        /// </summary>
+        private bool IsSkinValid(SkinBodyPartType partType, string skinID)
+        {
+            if (skinConfig == null) return true; // 如果没有配置，则不进行验证
+
+            var entry = skinConfig.GetPartBySkinID(skinID);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 在SkinConfig中未找到");
+                return false;
+            }
+
+            if (entry.partType != partType)
+            {
+                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 的部件类型不匹配（期望：{partType}，实际：{entry.partType}）");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// 获取指定部位的当前皮肤ID
         /// </summary>
         public string GetCurrentPart(SkinBodyPartType partType)
@@ -214,50 +262,48 @@ namespace demo2.DND
                 var skeleton = skeletonAnimation.Skeleton;
                 var skeletonData = skeletonAnimation.skeletonDataAsset.GetSkeletonData(false);
 
-                // 第1步：从基础皮肤开始
-                skeleton.SetSkin(BASE_SKIN);
+                // 关键修复：在组合皮肤前，将骨架完全重置到“设置姿势”
+                skeleton.SetToSetupPose();
 
-                // 第2步：遍历当前部件组合，叠加部件皮肤的附件
+                // 第1步：创建一个临时的、用于组合的皮肤
+                var combinedSkin = new Spine.Skin("combined-skin");
+
+                // 第2步：首先添加基础皮肤
+                var baseSkin = skeletonData.FindSkin(BASE_SKIN);
+                if (baseSkin != null)
+                {
+                    combinedSkin.AddSkin(baseSkin);
+                }
+                else
+                {
+                    Debug.LogWarning($"[CharacterAppearance] 基础皮肤 '{BASE_SKIN}' 在SkeletonData中未找到");
+                }
+
+                // 第3步：遍历当前部件��合，叠加部件皮肤的附件
                 foreach (var kvp in currentParts)
                 {
-                    var partType = kvp.Key;
                     var skinID = kvp.Value;
-
-                    // 跳过FullSkin类型（它不参与组合）
-                    if (partType == SkinBodyPartType.FullSkin)
+                    var skin = skeletonData.FindSkin(skinID);
+                    if (skin != null)
                     {
-                        continue;
+                        combinedSkin.AddSkin(skin);
                     }
-
-                    try
+                    else
                     {
-                        // 查找该部件的皮肤
-                        var skin = skeletonData.FindSkin(skinID);
-                        if (skin != null)
-                        {
-                            // 将该部件皮肤的所有附件添加到当前皮肤
-                            // 使用 AddSkin 方法将皮肤的附件叠加
-                            if (skeleton.Skin != null)
-                            {
-                                skeleton.Skin.AddSkin(skin);
-                            }
-                        }
-                        else
-                        {
-                            Debug.LogWarning($"[CharacterAppearance] 皮肤 '{skinID}' 在SkeletonData中未找到");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[CharacterAppearance] 叠加皮肤失败 ({skinID}): {ex.Message}");
+                        Debug.LogWarning($"[CharacterAppearance] 皮肤 '{skinID}' 在SkeletonData中未找到");
                     }
                 }
 
-                // 第3步：刷新附件显示（使用新皮肤的附件）
+                // 第4步：将组合好的新皮肤应用到骨架
+                skeleton.SetSkin(combinedSkin);
                 skeleton.SetSlotsToSetupPose();
 
+                // 关键修复：强制刷新骨架状态和网格，以确保更改立即生效
+                skeletonAnimation.Update(0);
+                skeletonAnimation.LateUpdate();
+
                 // 记录当前组合皮肤名称（用于调试）
-                currentCombinedSkinName = currentParts.Count > 0 ? "MultiSkin" : BASE_SKIN;
+                currentCombinedSkinName = "combined-skin";
 
                 Debug.Log($"[CharacterAppearance] 外观已应用到骨架: {currentCombinedSkinName}");
             }
