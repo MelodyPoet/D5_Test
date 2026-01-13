@@ -102,7 +102,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   skeletonDataAsset: {fileID: 11400000, guid: 769e85f2996fb25408d0e0e0ec4a079e, type: 2}
-  initialSkinName: full-skins/girl-spring-dress
+  initialSkinName: full-skins/girl-blue-cape
   initialFlipX: 0
   initialFlipY: 0
   updateWhenInvisible: 3

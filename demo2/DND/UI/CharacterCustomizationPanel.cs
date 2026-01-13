@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Spine.Unity;
 
-namespace demo2.DND
+namespace demo2.DND.UI
 {
     /// <summary>
     /// 角色换装UI面板 - 管理角色皮肤的定制化界面
@@ -225,7 +225,7 @@ namespace demo2.DND
                 uiCharacterAppearance.InitializeAppearance();
                 Debug.Log("[CharacterCustomizationPanel] UI 角色皮肤配置初始化完成");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"[CharacterCustomizationPanel] UI 角色皮肤初始化失败: {ex.Message}");
             }
@@ -296,7 +296,7 @@ namespace demo2.DND
             categoryTabMap.Clear();
 
             // 获取所有部件类型
-            var partTypes = new SkinBodyPartType[]
+            var partTypes = new[]
             {
                 SkinBodyPartType.FullSkin,
                 SkinBodyPartType.Hair,
@@ -423,14 +423,6 @@ namespace demo2.DND
                 result.Add(animationConfig.hitAnimation);
             if (!string.IsNullOrEmpty(animationConfig.deathAnimation))
                 result.Add(animationConfig.deathAnimation);
-            if (!string.IsNullOrEmpty(animationConfig.skillAnimation))
-                result.Add(animationConfig.skillAnimation);
-            if (!string.IsNullOrEmpty(animationConfig.defendAnimation))
-                result.Add(animationConfig.defendAnimation);
-            if (!string.IsNullOrEmpty(animationConfig.dodgeAnimation))
-                result.Add(animationConfig.dodgeAnimation);
-            if (!string.IsNullOrEmpty(animationConfig.unconsciousAnimation))
-                result.Add(animationConfig.unconsciousAnimation);
 
             return result;
         }
@@ -556,9 +548,9 @@ namespace demo2.DND
                 uiCharacter.AnimationState.SetAnimation(0, animationName, true);
                 Debug.Log($"[CharacterCustomizationPanel] 播放动画：{animationName}");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                Debug.LogError($"[CharacterCustomizationPanel] 播放动画失败：{ex.Message}");
+                Debug.LogWarning($"[CharacterCustomizationPanel] 清理资源失败: {ex.Message}");
             }
         }
 
