@@ -113,35 +113,32 @@ namespace demo2.DND
         /// </summary>
         public void SetPart(SkinBodyPartType partType, string skinID)
         {
-            // 验证皮肤ID是否有效
-            if (skinConfig != null)
-            {
-                var entry = skinConfig.GetPartBySkinID(skinID);
-                if (entry == null)
-                {
-                    Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 在SkinConfig中未找到");
-                    return;
-                }
+            // 验证皮肤ID的有效性
+            if (!IsSkinValid(partType, skinID)) return;
 
-                if (entry.partType != partType)
-                {
-                    Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 的部件类型不匹配（期望：{partType}，实际：{entry.partType}）");
-                    return;
-                }
-            }
+            // --- 规则引擎 ---
 
-            // 检查是否是全身套装
+            // 规则 3: 当应用一个 FullSkin 时，它会替换掉所有散件
             if (partType == SkinBodyPartType.FullSkin)
             {
-                // FullSkin不参与组合，直接替换整个皮肤
-                SetFullSkin(skinID);
-                return;
+                currentParts.Clear();
+                currentParts[partType] = skinID;
+            }
+            // 规则 4 (新): 当从 FullSkin 切换回散件时
+            else if (currentParts.ContainsKey(SkinBodyPartType.FullSkin))
+            {
+                // 1. 穿上所有分类的默认部件
+                ApplyDefaultParts();
+                // 2. 再应用玩家选择的那个特定散件
+                currentParts[partType] = skinID;
+            }
+            // 规则 2: 常规散件叠加
+            else
+            {
+                currentParts[partType] = skinID;
             }
 
-            // 更新部件组合
-            currentParts[partType] = skinID;
-
-            // 应用到骨架
+            // 应用最终的外观组合到骨架
             ApplyAppearanceToSkeleton();
 
             // 发布事件
@@ -151,28 +148,7 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 设置全身套装皮肤
-        /// FullSkin会直接替换掉所有部件组合
-        /// </summary>
-        private void SetFullSkin(string fullSkinID)
-        {
-            if (skeletonAnimation == null) return;
-
-            try
-            {
-                skeletonAnimation.Skeleton.SetSkin(fullSkinID);
-                currentCombinedSkinName = fullSkinID;
-                OnAppearanceChanged?.Invoke(SkinBodyPartType.FullSkin, fullSkinID);
-                Debug.Log($"[CharacterAppearance] FullSkin已应用: {fullSkinID}");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[CharacterAppearance] 应用FullSkin失败: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// ��用一套默认的散件组合（每个分类的第一个）
+        /// 应用一套默认的散件组合（每个分类的第一个）
         /// </summary>
         private void ApplyDefaultParts()
         {
@@ -366,4 +342,3 @@ namespace demo2.DND
         }
     }
 }
-
