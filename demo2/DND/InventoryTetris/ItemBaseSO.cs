@@ -13,9 +13,9 @@ namespace demo2.DND.InventoryTetris
         public string displayName;
         public Sprite icon;
 
-        [Header("占用格子尺寸（单位：格）")]
-        [Min(1)] public int slotWidth = 1;
-        [Min(1)] public int slotHeight = 1;
+        [Header("占用格子形状（单位：格）")]
+        [Tooltip("定义物品形状，使用相对坐标列表。原点(0,0)是形状包围盒的左上角。例如，一个T形可以定义为 [(0,0), (1,0), (2,0), (1,1)]")]
+        public List<Vector2Int> shapeCoords = new List<Vector2Int> { new Vector2Int(0, 0) };
 
         [Tooltip("是否允许旋转（90°）")]
         public bool canRotate = true;

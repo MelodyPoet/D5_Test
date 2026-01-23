@@ -15,8 +15,11 @@ MonoBehaviour:
   itemId: Shield01
   displayName: "\u6728\u76FE"
   icon: {fileID: 21300000, guid: 0ae2c580cdbfac341bfe9c6d056206ea, type: 3}
-  slotWidth: 2
-  slotHeight: 2
+  shapeCoords:
+  - {x: 0, y: 0}
+  - {x: 0, y: 1}
+  - {x: 1, y: 0}
+  - {x: 1, y: 1}
   canRotate: 1
   isWeapon: 0
   isFinesse: 0
@@ -24,6 +27,7 @@ MonoBehaviour:
   weaponDamageDice:
     diceCount: 1
     diceSize: 6
+    modifier: 0
   weaponDamageType: 0
   useSeparateDamageAbility: 0
   weaponDamageAbilityMode: 2

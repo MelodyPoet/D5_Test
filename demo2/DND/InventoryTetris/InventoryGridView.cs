@@ -585,7 +585,12 @@ namespace demo2.DND.InventoryTetris
                 Debug.LogError("[InventoryGridView] 无法定位视图：缺少 RectTransform。");
                 return;
             }
-            rt.sizeDelta = new Vector2(ItemPixelWidth(view.BoundItem), ItemPixelHeight(view.BoundItem));
+            // For cell-based system, the root view's size should not be changed.
+            // It acts as an anchor point. The cells inside will define the shape.
+            if (!view.useCellSystem)
+            {
+                rt.sizeDelta = new Vector2(ItemPixelWidth(view.BoundItem), ItemPixelHeight(view.BoundItem));
+            }
             rt.anchoredPosition = GridToLocalTopLeft(x, y);
         }
 

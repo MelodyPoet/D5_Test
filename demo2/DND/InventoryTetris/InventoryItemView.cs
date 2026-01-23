@@ -8,12 +8,23 @@ namespace demo2.DND.InventoryTetris
     [RequireComponent(typeof(CanvasGroup))]
     public class InventoryItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
     {
-        [Header("绑定组件")]
+        [Header("视觉表现模式")]
+        [Tooltip("True: 使用 `shapeCoords` 动态生成单元格来精确显示形状。\nFalse: 使用传统的 `bgImage` 和 `iconImage` 拉伸填充。")]
+        public bool useCellSystem = true;
+
+        [Header("传统视觉组件 (useCellSystem = false)")]
         public Image bgImage;           // 背景（可为九宫格）
         public Image iconImage;         // 图标
+
+        [Header("单元格视觉系统 (useCellSystem = true)")]
+        [Tooltip("用于容纳动态生成单元格的容器")]
+        public RectTransform cellContainer;
+        [Tooltip("代表单个格子的预制体 (UI Image)")]
+        public GameObject cellPrefab;
+
+        [Header("其他组件")]
         public Button button;           // 可选
-        [Header("状态文本（手动拖拽）")]
-        [Tooltip("可选：在物品图标上方显示装备槽状态，如‘主手武器：已装备’。不需要显示时可留空。")]
+        [Tooltip("可选：在物品图标上方显示装备槽状态。")]
         public Text stateText;
 
         // 运行时绑定（通过 Bind 方法设置）
@@ -64,6 +75,12 @@ namespace demo2.DND.InventoryTetris
             AutoBindStateTextIfNeeded();
             // 初始先隐藏；后续在 OnEnable/Bind/事件中按需显示
             if (stateText != null) stateText.gameObject.SetActive(false);
+
+            // Disable the prefab template itself to prevent it from being rendered
+            if (useCellSystem && cellPrefab != null)
+            {
+                cellPrefab.SetActive(false);
+            }
         }
 
         private void OnEnable()
@@ -111,6 +128,9 @@ namespace demo2.DND.InventoryTetris
             AutoBindStateTextIfNeeded();
 
             RefreshEquipLabel();
+
+            // Rebuild visuals based on the new item data
+            RebuildVisuals();
         }
 
         private void HandleEquipmentChanged()
@@ -272,14 +292,27 @@ namespace demo2.DND.InventoryTetris
                 tx = Mathf.Clamp(tx, 0, Mathf.Max(0, Grid.Model.cols - BoundItem.Width));
                 ty = Mathf.Clamp(ty, 0, Mathf.Max(0, Grid.Model.rows - BoundItem.Height));
 
-                bool can = Grid.Model.CanPlaceIgnoring(BoundItem, tx, ty);
+                bool can = Grid.Model.CanPlace(BoundItem, tx, ty);
                 rect.anchoredPosition = Grid.GridToLocalTopLeft(tx, ty);
-                rect.sizeDelta = new Vector2(Grid.ItemPixelWidth(BoundItem), Grid.ItemPixelHeight(BoundItem));
 
-                if (bgImage != null)
+                // Update cell colors for drag feedback
+                if (useCellSystem && cellContainer != null)
+                {
+                    Color feedbackColor = can ? new Color(0.75f, 1f, 0.75f, 0.8f) : new Color(1f, 0.6f, 0.6f, 0.8f);
+                    foreach (Transform child in cellContainer)
+                    {
+                        var img = child.GetComponent<Image>();
+                        if (img != null)
+                        {
+                            img.color = feedbackColor;
+                        }
+                    }
+                }
+                else if (bgImage != null) // Fallback for old system
                 {
                     bgImage.color = can ? new Color(0.75f, 1f, 0.75f, bgOriginalColor.a) : new Color(1f, 0.6f, 0.6f, bgOriginalColor.a);
                 }
+
                 if (Grid.debugLogs)
                 {
                     Debug.Log($"[ItemView] Drag preview -> hover=({gx},{gy}) place=({tx},{ty}) can={can}");
@@ -299,7 +332,16 @@ namespace demo2.DND.InventoryTetris
             if (!dragging || BoundItem == null || Grid == null) return;
             dragging = false;
             group.blocksRaycasts = true;
-            if (bgImage != null) bgImage.color = bgOriginalColor;
+
+            // Restore original cell colors
+            if (useCellSystem)
+            {
+                RebuildVisuals(); // Just rebuild to restore colors and icon position
+            }
+            else if (bgImage != null)
+            {
+                bgImage.color = bgOriginalColor;
+            }
 
             if (Grid.PointerToGrid(eventData, out int gx, out int gy))
             {
@@ -354,7 +396,6 @@ namespace demo2.DND.InventoryTetris
         {
             if (BoundItem.data == null || !BoundItem.data.canRotate) return;
 
-            // 记下当前状态
             Vector2Int curPos;
             bool hasPos = Grid.TryGetGridPosition(BoundItem, out curPos);
             if (!hasPos) {
@@ -362,22 +403,96 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
-            // 先请求模型在原位旋转（正确处理占用的清与标记），成功后再修改实例旋转标志
-            bool rotatedOk = Grid.Model.TryRotateInPlace(BoundItem);
+            // 预旋转，获取新形状
+            BoundItem.ToggleRotate();
+
+            // 尝试在原位置“移动”到新形状
+            bool rotatedOk = Grid.TryMove(BoundItem, curPos.x, curPos.y);
+
             if (!rotatedOk) {
+                // 旋转失败，回滚旋转状态
+                BoundItem.ToggleRotate();
+                BoundItem.ToggleRotate();
+                BoundItem.ToggleRotate();
                 if (Grid != null && Grid.debugLogs) Debug.Log($"[ItemView] Rotate failed: model refused rotation at {curPos} (collision/bounds) ");
                 return;
             }
 
-            // 更新实例状态与视图尺寸/位置
-            BoundItem.ToggleRotate();
+            // 旋转成功，更新视图
             rect.sizeDelta = new Vector2(Grid.ItemPixelWidth(BoundItem), Grid.ItemPixelHeight(BoundItem));
             Grid.PositionViewAtGrid(this, curPos.x, curPos.y);
 
-            // 新增：同步旋转图标的视觉表现
-            if (iconImage != null)
+            // Rebuild visuals to reflect the new rotation
+            RebuildVisuals();
+        }
+
+        private void RebuildVisuals()
+        {
+            if (useCellSystem)
             {
-                iconImage.rectTransform.localRotation = Quaternion.Euler(0, 0, BoundItem.rotated ? -90f : 0f);
+                if (cellContainer == null || cellPrefab == null)
+                {
+                    Debug.LogError($"[ItemView] Cell system is enabled but `cellContainer` or `cellPrefab` is not assigned on {gameObject.name}.");
+                    return;
+                }
+
+                // Disable old system and hide original icon
+                if (bgImage != null) bgImage.enabled = false;
+                if (iconImage != null) iconImage.enabled = false;
+
+                // Clear old cells
+                foreach (Transform child in cellContainer)
+                {
+                    Destroy(child.gameObject);
+                }
+
+                var shape = BoundItem.GetCurrentShape();
+                if (shape == null || shape.Count == 0) return;
+
+                bool isFirstCell = true;
+
+                // Create new cells
+                foreach (var coord in shape)
+                {
+                    var cellGO = Instantiate(cellPrefab, cellContainer);
+                    cellGO.SetActive(true); // Ensure the instantiated cell is active
+                    var cellRT = cellGO.GetComponent<RectTransform>();
+                    if (cellRT != null)
+                    {
+                        cellRT.anchorMin = new Vector2(0, 1);
+                        cellRT.anchorMax = new Vector2(0, 1);
+                        cellRT.pivot = new Vector2(0, 1);
+                        cellRT.sizeDelta = Grid.cellSize;
+                        cellRT.anchoredPosition = new Vector2(
+                            coord.x * (Grid.cellSize.x + Grid.spacing.x),
+                           -coord.y * (Grid.cellSize.y + Grid.spacing.y)
+                        );
+
+                        if (isFirstCell)
+                        {
+                            if (iconImage != null)
+                            {
+                                iconImage.transform.SetParent(cellRT, false);
+                                iconImage.rectTransform.anchorMin = Vector2.zero;
+                                iconImage.rectTransform.anchorMax = Vector2.one;
+                                iconImage.rectTransform.sizeDelta = Vector2.zero;
+                                iconImage.rectTransform.anchoredPosition = Vector2.zero;
+                                iconImage.enabled = true;
+                            }
+                            isFirstCell = false;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Enable old system
+                if (bgImage != null) bgImage.enabled = true;
+                if (iconImage != null)
+                {
+                    iconImage.enabled = true;
+                    iconImage.rectTransform.localRotation = Quaternion.Euler(0, 0, -90f * BoundItem.rotation);
+                }
             }
         }
 

@@ -13,10 +13,13 @@ MonoBehaviour:
   m_Name: ItemBase_SO_Drop02
   m_EditorClassIdentifier: 
   itemId: Bow01
-  displayName: "\u957F\u5F13"
+  displayName: "\u77ED\u5F13"
   icon: {fileID: 21300000, guid: 9691c57a6adba4d499bd11659b647f27, type: 3}
-  slotWidth: 2
-  slotHeight: 3
+  shapeCoords:
+  - {x: 0, y: 0}
+  - {x: 0, y: 1}
+  - {x: 0, y: 2}
+  - {x: 1, y: 1}
   canRotate: 1
   isWeapon: 1
   isFinesse: 0
@@ -24,6 +27,7 @@ MonoBehaviour:
   weaponDamageDice:
     diceCount: 1
     diceSize: 8
+    modifier: 0
   weaponDamageType: 1
   useSeparateDamageAbility: 0
   weaponDamageAbilityMode: 2

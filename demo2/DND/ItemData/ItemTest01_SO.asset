@@ -15,8 +15,9 @@ MonoBehaviour:
   itemId: Sword01
   displayName: "\u77ED\u5251"
   icon: {fileID: 21300000, guid: 5b12a7802f87a054f82ab149b53e2c73, type: 3}
-  slotWidth: 2
-  slotHeight: 2
+  shapeCoords:
+  - {x: 0, y: 0}
+  - {x: 0, y: 1}
   canRotate: 1
   isWeapon: 1
   isFinesse: 1
@@ -24,6 +25,7 @@ MonoBehaviour:
   weaponDamageDice:
     diceCount: 1
     diceSize: 6
+    modifier: 0
   weaponDamageType: 2
   useSeparateDamageAbility: 0
   weaponDamageAbilityMode: 2
