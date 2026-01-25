@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿﻿﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -490,6 +490,7 @@ namespace demo2.DND.InventoryTetris
             }
 
             view.Bind(item, this);
+            view.SetCellSize(cellSize); // Pass the grid's cell size to the view
             // 新增：Bind 后立即刷新一次“已装备”标签，避免首帧未显示
             view.RefreshEquipLabel();
 
@@ -585,6 +586,7 @@ namespace demo2.DND.InventoryTetris
                 Debug.LogError("[InventoryGridView] 无法定位视图：缺少 RectTransform。");
                 return;
             }
+            rt.pivot = new Vector2(0, 1); // Force top-left pivot
             // For cell-based system, the root view's size should not be changed.
             // It acts as an anchor point. The cells inside will define the shape.
             if (!view.useCellSystem)

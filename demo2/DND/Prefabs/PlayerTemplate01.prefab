@@ -268,8 +268,6 @@ MonoBehaviour:
   initialItems:
   - {fileID: 11400000, guid: 88f110266ff0b3e42971dcf276867948, type: 2}
   - {fileID: 11400000, guid: d1013dc7f2c4b604ea152fbcba89b66e, type: 2}
-  - {fileID: 11400000, guid: 217af54a108079e429e8ff5b1213dbb2, type: 2}
-  - {fileID: 11400000, guid: a4f9808de77606c4d875619eb85b7632, type: 2}
 --- !u!114 &5012542204290718736
 MonoBehaviour:
   m_ObjectHideFlags: 0

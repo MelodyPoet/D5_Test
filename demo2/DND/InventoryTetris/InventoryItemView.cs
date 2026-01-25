@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
@@ -43,6 +43,8 @@ namespace demo2.DND.InventoryTetris
         private Color bgOriginalColor;
 
         private CharacterEquipment eqSubscribed;
+
+        private Vector2 _cellSize; // 新增：用于存储网格的单元格尺寸
 
         public RectTransform Rect => rect;
 
@@ -245,6 +247,114 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
+        public void SetCellSize(Vector2 cellSize)
+        {
+            _cellSize = cellSize;
+        }
+
+        private void RebuildVisuals()
+        {
+            if (useCellSystem)
+            {
+                if (cellContainer == null || cellPrefab == null)
+                {
+                    Debug.LogError($"[ItemView] Cell system is enabled but `cellContainer` or `cellPrefab` is not assigned on {gameObject.name}.");
+                    return;
+                }
+
+                // Reset cell container position and ensure it's top-left aligned
+                cellContainer.anchorMin = new Vector2(0, 1);
+                cellContainer.anchorMax = new Vector2(0, 1);
+                cellContainer.pivot = new Vector2(0, 1);
+                cellContainer.anchoredPosition = Vector2.zero;
+
+                // Disable old system and hide original icon
+                if (bgImage != null) bgImage.enabled = false;
+                if (iconImage != null) iconImage.enabled = false;
+
+                // Clear old cells
+                foreach (Transform child in cellContainer)
+                {
+                    Destroy(child.gameObject);
+                }
+
+                var shape = BoundItem.GetCurrentShape();
+                if (shape == null || shape.Count == 0) return;
+
+                bool isFirstCell = true;
+
+                // Create new cells
+                foreach (var coord in shape)
+                {
+                    var cellGO = Instantiate(cellPrefab, cellContainer);
+                    cellGO.SetActive(true); // Ensure the instantiated cell is active
+                    var cellRT = cellGO.GetComponent<RectTransform>();
+                    if (cellRT != null)
+                    {
+                        cellRT.anchorMin = new Vector2(0, 1);
+                        cellRT.anchorMax = new Vector2(0, 1);
+                        cellRT.pivot = new Vector2(0, 1);
+                        cellRT.sizeDelta = Grid.cellSize;
+                        // Position cells relative to the container's top-left, including spacing
+                        cellRT.anchoredPosition = new Vector2(
+                            coord.x * (Grid.cellSize.x + Grid.spacing.x),
+                           -coord.y * (Grid.cellSize.y + Grid.spacing.y)
+                        );
+
+                        if (isFirstCell)
+                        {
+                            if (iconImage != null)
+                            {
+                                iconImage.transform.SetParent(cellRT, false);
+                                iconImage.rectTransform.anchorMin = Vector2.zero;
+                                iconImage.rectTransform.anchorMax = Vector2.one;
+                                iconImage.rectTransform.sizeDelta = Vector2.zero;
+                                iconImage.rectTransform.anchoredPosition = Vector2.zero;
+                                iconImage.enabled = true;
+                            }
+                            isFirstCell = false;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Enable old system
+                if (bgImage != null) bgImage.enabled = true;
+                if (iconImage != null)
+                {
+                    iconImage.enabled = true;
+                    iconImage.rectTransform.localRotation = Quaternion.Euler(0, 0, -90f * BoundItem.rotation);
+                }
+            }
+        }
+
+        private void GenerateShape()
+        {
+            if (cellContainer == null || cellPrefab == null) return;
+
+            // Clear previous cells
+            foreach (Transform child in cellContainer)
+            {
+                Destroy(child.gameObject);
+            }
+
+            var shape = BoundItem.GetCurrentShape();
+            if (shape == null) return;
+
+            foreach (var coord in shape)
+            {
+                var cell = Instantiate(cellPrefab, cellContainer);
+                var rt = cell.transform as RectTransform;
+                rt.anchoredPosition = new Vector2(
+                    coord.x * (_cellSize.x + Grid.spacing.x),
+                   -coord.y * (_cellSize.y + Grid.spacing.y)
+                );
+                rt.sizeDelta = _cellSize;
+                cell.SetActive(true);
+            }
+        }
+
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (BoundItem == null || Grid == null) return;
@@ -424,76 +534,6 @@ namespace demo2.DND.InventoryTetris
 
             // Rebuild visuals to reflect the new rotation
             RebuildVisuals();
-        }
-
-        private void RebuildVisuals()
-        {
-            if (useCellSystem)
-            {
-                if (cellContainer == null || cellPrefab == null)
-                {
-                    Debug.LogError($"[ItemView] Cell system is enabled but `cellContainer` or `cellPrefab` is not assigned on {gameObject.name}.");
-                    return;
-                }
-
-                // Disable old system and hide original icon
-                if (bgImage != null) bgImage.enabled = false;
-                if (iconImage != null) iconImage.enabled = false;
-
-                // Clear old cells
-                foreach (Transform child in cellContainer)
-                {
-                    Destroy(child.gameObject);
-                }
-
-                var shape = BoundItem.GetCurrentShape();
-                if (shape == null || shape.Count == 0) return;
-
-                bool isFirstCell = true;
-
-                // Create new cells
-                foreach (var coord in shape)
-                {
-                    var cellGO = Instantiate(cellPrefab, cellContainer);
-                    cellGO.SetActive(true); // Ensure the instantiated cell is active
-                    var cellRT = cellGO.GetComponent<RectTransform>();
-                    if (cellRT != null)
-                    {
-                        cellRT.anchorMin = new Vector2(0, 1);
-                        cellRT.anchorMax = new Vector2(0, 1);
-                        cellRT.pivot = new Vector2(0, 1);
-                        cellRT.sizeDelta = Grid.cellSize;
-                        cellRT.anchoredPosition = new Vector2(
-                            coord.x * (Grid.cellSize.x + Grid.spacing.x),
-                           -coord.y * (Grid.cellSize.y + Grid.spacing.y)
-                        );
-
-                        if (isFirstCell)
-                        {
-                            if (iconImage != null)
-                            {
-                                iconImage.transform.SetParent(cellRT, false);
-                                iconImage.rectTransform.anchorMin = Vector2.zero;
-                                iconImage.rectTransform.anchorMax = Vector2.one;
-                                iconImage.rectTransform.sizeDelta = Vector2.zero;
-                                iconImage.rectTransform.anchoredPosition = Vector2.zero;
-                                iconImage.enabled = true;
-                            }
-                            isFirstCell = false;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Enable old system
-                if (bgImage != null) bgImage.enabled = true;
-                if (iconImage != null)
-                {
-                    iconImage.enabled = true;
-                    iconImage.rectTransform.localRotation = Quaternion.Euler(0, 0, -90f * BoundItem.rotation);
-                }
-            }
         }
 
         private void BringToFront()
