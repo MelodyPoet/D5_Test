@@ -1,25 +1,21 @@
-﻿﻿﻿using UnityEngine;
-using UnityEngine.UI;
+﻿using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace demo2.DND.InventoryTetris
 {
-    [RequireComponent(typeof(RectTransform))]
-    [RequireComponent(typeof(CanvasGroup))]
-    public class InventoryItemView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler
+    /// <summary>
+    /// 物品在背包中的视图，负责响应点击、显示状态等。
+    /// </summary>
+    public class InventoryItemView : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
-        [Header("视觉表现模式")]
-        [Tooltip("True: 使用 `shapeCoords` 动态生成单元格来精确显示形状。\nFalse: 使用传统的 `bgImage` 和 `iconImage` 拉伸填充。")]
+        [Header("UI 组件（自动查找或手动绑定）")]
+        public Image bgImage;
+        public Image iconImage;
+
+        [Header("Cell-based Shape")]
         public bool useCellSystem = true;
-
-        [Header("传统视觉组件 (useCellSystem = false)")]
-        public Image bgImage;           // 背景（可为九宫格）
-        public Image iconImage;         // 图标
-
-        [Header("单元格视觉系统 (useCellSystem = true)")]
-        [Tooltip("用于容纳动态生成单元格的容器")]
         public RectTransform cellContainer;
-        [Tooltip("代表单个格子的预制体 (UI Image)")]
         public GameObject cellPrefab;
 
         [Header("其他组件")]
@@ -355,148 +351,108 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
-        public void OnBeginDrag(PointerEventData eventData)
-        {
-            if (BoundItem == null || Grid == null) return;
-            dragging = true;
-            startAnchoredPos = rect.anchoredPosition;
-            hasStartGridPos = Grid.TryGetGridPosition(BoundItem, out startGridPos);
-            group.blocksRaycasts = false; // 避免阻拦事件
-            BringToFront();
-
-            // 计算抓取偏移（以格为单位），保证拖动时鼠标下的格子保持为物品内部的同一格
-            grabOffsetCellX = 0;
-            grabOffsetCellY = 0;
-            if (hasStartGridPos && Grid.TryGetPointerGridLocal(eventData, out float lx, out float ly))
-            {
-                float pitchX = Grid.cellSize.x + Grid.spacing.x;
-                float pitchY = Grid.cellSize.y + Grid.spacing.y;
-                // 物品左上角（去除 padding 后的局部偏移）
-                float itemLx = startGridPos.x * pitchX;
-                float itemLy = startGridPos.y * pitchY;
-                float dx = Mathf.Max(0f, lx - itemLx);
-                float dy = Mathf.Max(0f, ly - itemLy);
-                int offX = Mathf.FloorToInt(dx / pitchX);
-                int offY = Mathf.FloorToInt(dy / pitchY);
-                // clamp 到物品内部格子范围
-                grabOffsetCellX = Mathf.Clamp(offX, 0, Mathf.Max(0, BoundItem.Width - 1));
-                grabOffsetCellY = Mathf.Clamp(offY, 0, Mathf.Max(0, BoundItem.Height - 1));
-            }
-
-            if (Grid.debugLogs)
-            {
-                Debug.Log($"[ItemView] BeginDrag '{BoundItem?.data?.displayName ?? BoundItem?.instanceId}' hasStartGridPos={hasStartGridPos} startPos={startGridPos} grabOff=({grabOffsetCellX},{grabOffsetCellY})");
-            }
-        }
-
-        public void OnDrag(PointerEventData eventData)
-        {
-            if (!dragging || BoundItem == null || Grid == null) return;
-
-            if (Grid.PointerToGrid(eventData, out int gx, out int gy))
-            {
-                // 将鼠标下的格子转为物品应当放置的左上角格子
-                int tx = gx - grabOffsetCellX;
-                int ty = gy - grabOffsetCellY;
-                // 限制在边界内，保证物品整体在网格中
-                tx = Mathf.Clamp(tx, 0, Mathf.Max(0, Grid.Model.cols - BoundItem.Width));
-                ty = Mathf.Clamp(ty, 0, Mathf.Max(0, Grid.Model.rows - BoundItem.Height));
-
-                bool can = Grid.Model.CanPlace(BoundItem, tx, ty);
-                rect.anchoredPosition = Grid.GridToLocalTopLeft(tx, ty);
-
-                // Update cell colors for drag feedback
-                if (useCellSystem && cellContainer != null)
-                {
-                    Color feedbackColor = can ? new Color(0.75f, 1f, 0.75f, 0.8f) : new Color(1f, 0.6f, 0.6f, 0.8f);
-                    foreach (Transform child in cellContainer)
-                    {
-                        var img = child.GetComponent<Image>();
-                        if (img != null)
-                        {
-                            img.color = feedbackColor;
-                        }
-                    }
-                }
-                else if (bgImage != null) // Fallback for old system
-                {
-                    bgImage.color = can ? new Color(0.75f, 1f, 0.75f, bgOriginalColor.a) : new Color(1f, 0.6f, 0.6f, bgOriginalColor.a);
-                }
-
-                if (Grid.debugLogs)
-                {
-                    Debug.Log($"[ItemView] Drag preview -> hover=({gx},{gy}) place=({tx},{ty}) can={can}");
-                }
-            }
-            else
-            {
-                if (Grid.debugLogs)
-                {
-                    Debug.Log("[ItemView] Drag preview -> out of container");
-                }
-            }
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            if (!dragging || BoundItem == null || Grid == null) return;
-            dragging = false;
-            group.blocksRaycasts = true;
-
-            // Restore original cell colors
-            if (useCellSystem)
-            {
-                RebuildVisuals(); // Just rebuild to restore colors and icon position
-            }
-            else if (bgImage != null)
-            {
-                bgImage.color = bgOriginalColor;
-            }
-
-            if (Grid.PointerToGrid(eventData, out int gx, out int gy))
-            {
-                int tx = gx - grabOffsetCellX;
-                int ty = gy - grabOffsetCellY;
-                tx = Mathf.Clamp(tx, 0, Mathf.Max(0, Grid.Model.cols - BoundItem.Width));
-                ty = Mathf.Clamp(ty, 0, Mathf.Max(0, Grid.Model.rows - BoundItem.Height));
-
-                bool ok = Grid.TryMove(BoundItem, tx, ty);
-                if (Grid.debugLogs)
-                {
-                    Debug.Log($"[ItemView] EndDrag drop -> hover=({gx},{gy}) place=({tx},{ty}) move={(ok ? "OK" : "FAIL")}");
-                }
-                if (ok) return;
-            }
-            else if (Grid.debugLogs)
-            {
-                Debug.Log("[ItemView] EndDrag drop -> out of container, rollback");
-            }
-
-            // 回滚
-            rect.anchoredPosition = startAnchoredPos;
-            if (hasStartGridPos)
-            {
-                Grid.PositionViewAtGrid(this, startGridPos.x, startGridPos.y);
-            }
-        }
-
         public void OnPointerClick(PointerEventData eventData)
         {
             if (BoundItem == null || Grid == null) return;
-            if (eventData.button == PointerEventData.InputButton.Right)
+
+            // 仅用于调试双击与装备逻辑
+            bool hasDragCtrl = ItemDragController.Current != null;
+            bool isHolding = ItemDragController.Current?.IsHoldingItem ?? false;
+            Debug.Log($"[ItemView Click] {BoundItem?.data?.displayName} button={eventData.button} clicks={eventData.clickCount}, hasDragCtrl={hasDragCtrl}, isHolding={isHolding}");
+
+            // 左键双击：装备/卸下切换（仅在未拿起时生效）
+            if (eventData.button == PointerEventData.InputButton.Left && eventData.clickCount == 2)
             {
-                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                if (shift)
+                if (ItemDragController.Current == null || !ItemDragController.Current.IsHoldingItem)
                 {
-                    RotateInPlace();
-                    return;
+                    ToggleEquipState();
                 }
-                // 打开右键菜单
-                ItemContextMenu.ShowForItem(this, eventData.position);
             }
         }
 
-        // 提供给菜单调用的公开旋转方法
+        private void ToggleEquipState()
+        {
+            var eq = ResolveEquipment();
+            if (eq == null || BoundItem == null || BoundItem.data == null)
+            {
+                Debug.LogWarning($"[ToggleEquipState] eq 或 BoundItem.data 为 null，无法切换装备状态。eq={(eq != null)} item={BoundItem?.data?.displayName ?? "null"}");
+                return;
+            }
+
+            bool isEquipped = eq.IsEquipped(BoundItem);
+            Debug.Log($"[ToggleEquipState] {BoundItem.data.displayName} 原状态 isEquipped={isEquipped}");
+
+            if (!isEquipped)
+            {
+                // 尝试装备
+                if (!eq.CanEquip(BoundItem))
+                {
+                    Debug.LogWarning($"[ToggleEquipState] CanEquip 返回 false，无法装备 {BoundItem.data.displayName}");
+                    return;
+                }
+                if (BoundItem.data.isWeapon) eq.EquipToSlot(EquipmentSlot.MainHand, BoundItem);
+                else if (BoundItem.data.isArmor) eq.EquipToSlot(EquipmentSlot.Armor, BoundItem);
+                else if (BoundItem.data.isShield) eq.EquipToSlot(EquipmentSlot.OffHand, BoundItem);
+            }
+            else
+            {
+                // 尝试卸下
+                var mh = eq.GetEquipped(EquipmentSlot.MainHand);
+                var ar = eq.GetEquipped(EquipmentSlot.Armor);
+                var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+                if (BoundItem.data.isWeapon && ReferenceEquals(mh, BoundItem)) eq.UnequipSlot(EquipmentSlot.MainHand);
+                else if (BoundItem.data.isArmor && ReferenceEquals(ar, BoundItem)) eq.UnequipSlot(EquipmentSlot.Armor);
+                else if (BoundItem.data.isShield && ReferenceEquals(sh, BoundItem)) eq.UnequipSlot(EquipmentSlot.OffHand);
+            }
+
+            // 更新视觉：不再用 stateText，而是用 cellPrefab 的 Image 颜色表示
+            UpdateEquipColor();
+        }
+
+        private void UpdateEquipColor()
+        {
+            var eq = ResolveEquipment();
+            if (eq == null || BoundItem == null || BoundItem.data == null) return;
+
+            bool equipped = eq.IsEquipped(BoundItem);
+            Color targetColor = equipped ? Color.gray : Color.white;
+
+            if (cellContainer != null)
+            {
+                foreach (Transform child in cellContainer)
+                {
+                    var img = child.GetComponent<Image>();
+                    if (img != null)
+                    {
+                        img.color = targetColor;
+                    }
+                }
+            }
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            // 拖拽/持有状态下不显示 Tooltip，避免与拖拽逻辑冲突
+            if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
+                return;
+
+            TooltipSystem.Show(BoundItem);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            TooltipSystem.Hide();
+        }
+
+        public void RefreshVisuals()
+        {
+            RebuildVisuals();
+        }
+
+
+        /// <summary>
+        /// 旋转物品（通常由右键菜单调用）。
+        /// </summary>
         public void RotateInPlace()
         {
             TryRotateInPlace();
@@ -514,16 +470,16 @@ namespace demo2.DND.InventoryTetris
             }
 
             // 预旋转，获取新形状
-            BoundItem.ToggleRotate();
+            BoundItem.Rotate();
 
             // 尝试在原位置“移动”到新形状
             bool rotatedOk = Grid.TryMove(BoundItem, curPos.x, curPos.y);
 
             if (!rotatedOk) {
                 // 旋转失败，回滚旋转状态
-                BoundItem.ToggleRotate();
-                BoundItem.ToggleRotate();
-                BoundItem.ToggleRotate();
+                BoundItem.Rotate();
+                BoundItem.Rotate();
+                BoundItem.Rotate();
                 if (Grid != null && Grid.debugLogs) Debug.Log($"[ItemView] Rotate failed: model refused rotation at {curPos} (collision/bounds) ");
                 return;
             }

@@ -11,8 +11,8 @@ namespace demo2.DND.InventoryTetris
     /// </summary>
     public class CharacterInventory : MonoBehaviour
     {
-        private const int MaxRows = 7;
-        private const int MaxCols = 15;
+        private const int MaxRows = 10;
+        private const int MaxCols = 16;
 
         [Header("网格容量（单位：格）")]
         [Range(1, MaxRows)] public int rows = 6;

@@ -1,4 +1,4 @@
-﻿﻿﻿using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -12,8 +12,8 @@ namespace demo2.DND.InventoryTetris
     [RequireComponent(typeof(RectTransform))]
     public class InventoryGridView : MonoBehaviour
     {
-        private const int MaxRows = 7;
-        private const int MaxCols = 15;
+        private const int MaxRows = 10;
+        private const int MaxCols = 16;
 
         [Header("网格尺寸（单位：格）")]
         [Range(1, MaxRows)] public int rows = 6;
@@ -65,6 +65,8 @@ namespace demo2.DND.InventoryTetris
         private InventoryGridModel _model;
         private readonly Dictionary<ItemInstance, InventoryItemView> _views = new Dictionary<ItemInstance, InventoryItemView>();
         private RectTransform _debugBoard; // 棋盘格根结点（调试）
+        private GameObject _previewObject;
+
 
         // 对外属性（供其他组件访问）
         public InventoryGridModel Model => _model;
@@ -370,16 +372,104 @@ namespace demo2.DND.InventoryTetris
         /// </summary>
         public bool Remove(ItemInstance item)
         {
+            return RemoveItem(item, true);
+        }
+
+        public bool RemoveItem(ItemInstance item, bool destroyView)
+        {
             if (!_model.Remove(item)) return false;
             if (_views.TryGetValue(item, out var v))
             {
-                if (v != null)
+                if (v != null && destroyView)
                 {
                     Destroy(v.gameObject);
                 }
-                _views.Remove(item);
+                if (destroyView)
+                {
+                    _views.Remove(item);
+                }
             }
             return true;
+        }
+
+        public void RefreshGrid()
+        {
+            foreach (var view in _views.Values)
+            {
+                if (view != null && view.gameObject != null)
+                {
+                    if (view.BoundItem != null && _model.TryGetPosition(view.BoundItem, out Vector2Int pos))
+                    {
+                        PositionViewAtGrid(view, pos.x, pos.y);
+                        view.gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        view.gameObject.SetActive(false);
+                    }
+                }
+            }
+        }
+
+        public bool CanPlaceItemAt(ItemInstance item, int x, int y)
+        {
+            return _model.CanPlace(item, x, y);
+        }
+
+        public void PlaceItemAt(ItemInstance item, int x, int y)
+        {
+            _model.TryPlace(item, x, y);
+        }
+
+        public void ShowPlacementPreview(ItemInstance item, Vector2Int position)
+        {
+            if (_previewObject == null)
+            {
+                _previewObject = new GameObject("PlacementPreview");
+                _previewObject.transform.SetParent(container, false);
+                var rectTransform = _previewObject.AddComponent<RectTransform>();
+                rectTransform.pivot = new Vector2(0, 1);
+                rectTransform.anchorMin = new Vector2(0, 1);
+                rectTransform.anchorMax = new Vector2(0, 1);
+            }
+
+            _previewObject.SetActive(true);
+            _previewObject.transform.SetAsFirstSibling();
+            var previewRect = _previewObject.GetComponent<RectTransform>();
+            previewRect.anchoredPosition = GridToLocalTopLeft(position.x, position.y);
+
+            // Clear previous preview cells
+            foreach (Transform child in _previewObject.transform)
+            {
+                Destroy(child.gameObject);
+            }
+
+            bool canPlace = CanPlaceItemAt(item, position.x, position.y);
+            var shape = item.GetCurrentShape();
+
+            for (int i = 0; i < shape.Count; i++)
+            {
+                var cellGo = new GameObject($"preview_cell_{i}", typeof(RectTransform), typeof(Image));
+                cellGo.transform.SetParent(previewRect, false);
+                var rt = cellGo.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0, 1);
+                rt.anchorMax = new Vector2(0, 1);
+                rt.pivot = new Vector2(0, 1);
+                rt.sizeDelta = cellSize;
+                rt.anchoredPosition = new Vector2(shape[i].x * (cellSize.x + spacing.x), -shape[i].y * (cellSize.y + spacing.y));
+
+                var img = cellGo.GetComponent<Image>();
+                img.color = canPlace ? new Color(0, 1, 0, 0.3f) : new Color(1, 0, 0, 0.3f);
+                img.raycastTarget = false;
+            }
+        }
+
+        public void ClearPlacementPreview()
+        {
+            if (_previewObject != null)
+            {
+                _previewObject.SetActive(false);
+            }
         }
 
         /// <summary>
@@ -490,8 +580,8 @@ namespace demo2.DND.InventoryTetris
             }
 
             view.Bind(item, this);
-            view.SetCellSize(cellSize); // Pass the grid's cell size to the view
-            // 新增：Bind 后立即刷新一次“已装备”标签，避免首帧未显示
+            item.view = view; // 反向绑定：让实例知道自己的视图，便于局部刷新
+            view.SetCellSize(cellSize);
             view.RefreshEquipLabel();
 
             // 视图使用左上对齐定位（直接获取 RectTransform，避免依赖 InventoryItemView.Awake 初始化时序）

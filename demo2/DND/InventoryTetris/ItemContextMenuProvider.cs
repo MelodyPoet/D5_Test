@@ -3,21 +3,23 @@
 namespace demo2.DND.InventoryTetris
 {
     /// <summary>
-    /// 右键菜单提供者：挂在任意场景对象上，在 Inspector 中指向“右键菜单预制体”。
-    /// ItemContextMenu 会在场景中查找此 Provider 来实例化菜单。
+    /// 在场景中提供对 ItemContextMenu 预制体的引用，并负责其实例化。
     /// </summary>
     public class ItemContextMenuProvider : MonoBehaviour
     {
-        [Header("右键菜单预制体（必填，任意Prefab GameObject）")]
-        public GameObject menuPrefab;
+        public ItemContextMenu contextMenuPrefab;
 
-        private static ItemContextMenuProvider _cached;
-
-        public static ItemContextMenuProvider GetOrFind()
+        public ItemContextMenu CreateInstance()
         {
-            if (_cached != null) return _cached;
-            _cached = FindObjectOfType<ItemContextMenuProvider>(true);
-            return _cached;
+            if (contextMenuPrefab == null)
+            {
+                Debug.LogError("Context menu prefab is not assigned in ItemContextMenuProvider.");
+                return null;
+            }
+            var instance = Instantiate(contextMenuPrefab, transform);
+            ItemContextMenu.SetCurrent(instance);
+            return instance;
         }
     }
 }
+

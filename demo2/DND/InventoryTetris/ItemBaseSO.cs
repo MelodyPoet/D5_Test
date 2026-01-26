@@ -1,4 +1,4 @@
-﻿﻿using UnityEngine;
+﻿﻿﻿using UnityEngine;
 using System.Collections.Generic;
 using System;
 using demo2.DND.Stats;
@@ -12,6 +12,9 @@ namespace demo2.DND.InventoryTetris
         public string itemId;
         public string displayName;
         public Sprite icon;
+        [TextArea(3, 10)]
+        [Tooltip("物品的详细描述，将显示在提示框中。")]
+        public string description;
 
         [Header("占用格子形状（单位：格）")]
         [Tooltip("定义物品形状，使用相对坐标列表。原点(0,0)是形状包围盒的左上角。例如，一个T形可以定义为 [(0,0), (1,0), (2,0), (1,1)]")]
@@ -89,6 +92,15 @@ namespace demo2.DND.InventoryTetris
             {
                 yield return modifiers[i].ToRuntime(source);
             }
+        }
+
+        public string GetTooltipInfo()
+        {
+            if (string.IsNullOrEmpty(description))
+            {
+                return displayName;
+            }
+            return $"{displayName}\n{description}";
         }
     }
 }

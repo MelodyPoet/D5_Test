@@ -15,6 +15,7 @@ MonoBehaviour:
   itemId: Shield01
   displayName: "\u6728\u76FE"
   icon: {fileID: 21300000, guid: 0ae2c580cdbfac341bfe9c6d056206ea, type: 3}
+  description: "\u4E00\u5757\u6389\u6F06\u7684\u6728\u76FE\n\u62A4\u7532\u719F\u7EC3\u9879:\u76FE\u724C\nAC:2"
   shapeCoords:
   - {x: 0, y: 0}
   - {x: 0, y: 1}

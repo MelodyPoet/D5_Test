@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3674519299660475134}
   - component: {fileID: 2864027936891456022}
+  - component: {fileID: -3313275394739113343}
   m_Layer: 5
   m_Name: MenuRoot
   m_TagString: Untagged
@@ -50,12 +51,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 277f5e6a404840dc9a03789c3ce8123f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  overlayRoot: {fileID: 4204914784960043930}
-  panelRoot: {fileID: 3769076169503010613}
-  btnEquip: {fileID: 4787330445005612332}
-  btnUnequip: {fileID: 2568319001049249955}
-  btnRotate: {fileID: 3824534566901000084}
-  overlayCloseButton: {fileID: 0}
+  equipButton: {fileID: 4787330445005612332}
+  unequipButton: {fileID: 2568319001049249955}
+  rotateButton: {fileID: 3824534566901000084}
+  dropButton: {fileID: 0}
+  closeButton: {fileID: 0}
+--- !u!114 &-3313275394739113343
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1111721797359295037}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744fc8506a4745438903287bfc3e8b2f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1137151267695666936
 GameObject:
   m_ObjectHideFlags: 0

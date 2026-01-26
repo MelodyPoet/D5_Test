@@ -11,6 +11,7 @@ namespace demo2.DND.InventoryTetris
         public string instanceId;
         public ItemBaseSO data;
         public int rotation; // 0=0, 1=90, 2=180, 3=270
+        public Vector2Int gridPosition;
 
         private List<Vector2Int> _currentShape;
 
@@ -30,7 +31,7 @@ namespace demo2.DND.InventoryTetris
             return _currentShape;
         }
 
-        public void ToggleRotate()
+        public void Rotate()
         {
             if (data != null && data.canRotate)
             {

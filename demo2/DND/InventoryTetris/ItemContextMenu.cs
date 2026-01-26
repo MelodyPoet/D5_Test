@@ -14,9 +14,17 @@ namespace demo2.DND.InventoryTetris
         // 保证同一时间只有一个菜单
         private static ItemContextMenu _current;
 
+        public static void SetCurrent(ItemContextMenu instance)
+        {
+            if (_current != null && _current != instance)
+            {
+                Destroy(_current.gameObject);
+            }
+            _current = instance;
+        }
+
         private ItemContextMenuView _view;   // 从预制体上获取的视图引用
         private Canvas _canvas;
-        private GameObject _rootInstance;    // 实例化出来的预制体根，用于关闭时整体销毁
 
         private InventoryItemView _itemView;
         private InventoryGridView _grid;
@@ -26,238 +34,155 @@ namespace demo2.DND.InventoryTetris
         private Button overlayCloseBtnInstance;
         private bool createdOverlayInstance = false;
 
-        public static void ShowForItem(InventoryItemView itemView, Vector2 screenPosition)
+        // 增加一个 isHolding 参数，用于区分是“在背包里右键”还是“拿在手上右键”
+        private void Awake()
         {
-            if (itemView == null || itemView.Grid == null) return;
-            var canvas = itemView.GetComponentInParent<Canvas>();
-            if (canvas == null)
+            _view = GetComponent<ItemContextMenuView>();
+            _canvas = GetComponentInParent<Canvas>();
+
+            if (_view != null)
             {
-                Debug.LogWarning("[ItemContextMenu] 未找到父 Canvas，已取消打开菜单。");
+                if (_view.equipButton != null)
+                    _view.equipButton.onClick.AddListener(OnClickEquip);
+                if (_view.unequipButton != null)
+                    _view.unequipButton.onClick.AddListener(OnClickUnequip);
+                if (_view.rotateButton != null)
+                    _view.rotateButton.onClick.AddListener(OnClickRotate);
+            }
+        }
+
+        public static void ShowForItem(InventoryItemView itemView, Vector2 screenPos, bool isHolding = false)
+        {
+            // 再次右键同一个物品：视为关闭菜单
+            if (_current != null && _current._itemView == itemView && _current.gameObject.activeSelf)
+            {
+                _current.gameObject.SetActive(false);
                 return;
             }
 
-            var provider = ItemContextMenuProvider.GetOrFind();
-            if (provider == null || provider.menuPrefab == null)
+            if (_current == null)
             {
-                Debug.LogError("[ItemContextMenu] 未配置菜单预制体：请在场景中放置 ItemContextMenuProvider 并指定 menuPrefab（GameObject）。");
+                var provider = UnityEngine.Object.FindObjectOfType<ItemContextMenuProvider>();
+                if (provider != null)
+                {
+                    _current = provider.CreateInstance();
+                }
+            }
+
+            if (_current == null)
+            {
+                Debug.LogError("[ItemContextMenu] Instance not found. Ensure ItemContextMenuProvider is in the scene.");
                 return;
             }
 
-            // 关闭旧菜单
+            _current.Show(itemView, screenPos, isHolding);
+        }
+
+        public static void CloseCurrent()
+        {
             if (_current != null)
             {
-                _current.CloseInternal();
-                _current = null;
+                _current.gameObject.SetActive(false);
             }
-
-            // 实例化 GameObject 预制体
-            var rootGo = GameObject.Instantiate(provider.menuPrefab, canvas.transform, false);
-            if (rootGo == null)
-            {
-                Debug.LogError("[ItemContextMenu] 菜单预制体实例化失败。");
-                return;
-            }
-
-            // 在根或子节点查找视图组件
-            var view = rootGo.GetComponent<ItemContextMenuView>() ?? rootGo.GetComponentInChildren<ItemContextMenuView>(true);
-            if (view == null)
-            {
-                Debug.LogError("[ItemContextMenu] 预制体中未找到 ItemContextMenuView，请在菜单预制体上挂载该脚本并指向按钮与面板。");
-                GameObject.Destroy(rootGo);
-                return;
-            }
-
-            // 将控制器挂到根对象上
-            var ctrl = rootGo.AddComponent<ItemContextMenu>();
-            _current = ctrl;
-            ctrl.Init(view, canvas, itemView, screenPosition, rootGo);
         }
 
-        private void Init(ItemContextMenuView view, Canvas canvas, InventoryItemView itemView, Vector2 screenPosition, GameObject rootInstance)
+        private void Show(InventoryItemView itemView, Vector2 screenPos, bool isHolding)
         {
-            _view = view;
-            _canvas = canvas;
-            _rootInstance = rootInstance;
+            if (_view == null)
+            {
+                Debug.LogError("[ItemContextMenu] ItemContextMenuView not assigned on prefab.", this);
+                return;
+            }
+            if (itemView == null)
+            {
+                Debug.LogError("[ItemContextMenu] Show called with null itemView.");
+                return;
+            }
+
             _itemView = itemView;
-            _grid = itemView.Grid;
             _item = itemView.BoundItem;
+            _grid = itemView.Grid;
 
-            // 确保在未手动拖引用时也能自动匹配到按钮/面板
-            _view.EnsureRuntimeBindings();
-
-            // 绑定按钮事件
-            if (_view.btnEquip != null) _view.btnEquip.onClick.AddListener(OnClickEquip);
-            if (_view.btnUnequip != null) _view.btnUnequip.onClick.AddListener(OnClickUnequip);
-            if (_view.btnRotate != null) _view.btnRotate.onClick.AddListener(OnClickRotate);
-
-            // 点击空白关闭
-            SetupOverlayClose();
-
-            // 根据状态设置按钮可用性
-            RefreshButtonsInteractable();
-
-            // 定位到鼠标处并进行边界夹紧
-            PositionPanelAt(screenPosition);
-
-            // 关键修复：将面板强制置于顶层，确保它不会被背景遮罩等同级UI遮挡
-            if (_view.panelRoot != null)
+            if (_item == null || _item.data == null)
             {
-                _view.panelRoot.SetAsLastSibling();
-            }
-        }
-
-        private void SetupOverlayClose()
-        {
-            // 修复方案：创建一个专用的、位于面板下方的全屏背景遮罩来处理关闭事件，
-            // 而不是在根节点或 overlayRoot 上添加组件，这会意外拦截所有子节点的点击事件。
-
-            // 1. 创建一个新的 GameObject 作为背景遮罩
-            var overlayGo = new GameObject("ContextMenuOverlay", typeof(RectTransform), typeof(Image), typeof(Button));
-            overlayGo.transform.SetParent(_rootInstance.transform, false);
-            // 将其层级设置在最底层，确保它在面板后面
-            overlayGo.transform.SetAsFirstSibling();
-
-            // 2. 设置 RectTransform 使其充满整个父级（Canvas）
-            var overlayRt = overlayGo.GetComponent<RectTransform>();
-            overlayRt.anchorMin = Vector2.zero;
-            overlayRt.anchorMax = Vector2.one;
-            overlayRt.sizeDelta = Vector2.zero;
-            overlayRt.anchoredPosition = Vector2.zero;
-
-            // 3. 设置 Image 为透明但可接收射线
-            var overlayImg = overlayGo.GetComponent<Image>();
-            overlayImg.color = Color.clear; // 完全透明
-            overlayImg.raycastTarget = true;
-
-            // 4. 设置 Button 并绑定 Close 事件
-            var overlayBtn = overlayGo.GetComponent<Button>();
-            overlayBtn.transition = Selectable.Transition.None;
-            overlayBtn.onClick.AddListener(Close);
-
-            // 记录下来，以便在关闭时清理
-            overlayCloseBtnInstance = overlayBtn;
-            createdOverlayInstance = true;
-        }
-
-        private CharacterEquipment ResolveEquipment()
-        {
-            // 修复：最可靠的引用是 Grid 上的 SourceEquipment，由 Binder 在顶层注入。
-            // 不再需要复杂的 GetComponentInParent/Children 查找，那会因场景结构变化而出错。
-            if (_grid != null && _grid.SourceEquipment != null)
-            {
-                return _grid.SourceEquipment;
-            }
-
-            // 如果上述方法失败，作为最后的兜底，再进行一次全局查找。
-            // 但在正常流程中，代码不应该执行到这里。
-            Debug.LogWarning("[ItemContextMenu] 无法从 Grid.SourceEquipment 获取装备组件！正在尝试全局查找作为后备。请检查 InventoryUIBinder 是否正确配置。");
-            var eq = FindObjectOfType<CharacterEquipment>();
-            if (eq == null)
-            {
-                Debug.LogError("[ItemContextMenu] ResolveEquipment 彻底失败，场景中找不到任何 CharacterEquipment 组件。");
-            }
-            return eq;
-        }
-
-        private void RefreshButtonsInteractable()
-        {
-            var eq = ResolveEquipment();
-            bool isEquipped = (eq != null && eq.IsEquipped(_item));
-            bool canEquip = (eq != null && _item != null && _item.data != null) && eq.CanEquip(_item);
-            bool rotatable = _item != null && _item.data != null && _item.data.canRotate;
-
-            if (_view.btnEquip != null) _view.btnEquip.interactable = (eq != null) && canEquip && !isEquipped;
-            if (_view.btnUnequip != null) _view.btnUnequip.interactable = (eq != null) && isEquipped;
-            if (_view.btnRotate != null) _view.btnRotate.interactable = rotatable;
-        }
-
-        private void PositionPanelAt(Vector2 screenPosition)
-        {
-            if (_view.panelRoot == null)
-            {
-                Debug.LogWarning("[ItemContextMenu] 预制体未设置 panelRoot，无法定位菜单面板。");
+                Debug.LogWarning("[ItemContextMenu] BoundItem or its data is null. Menu will not be shown.");
+                gameObject.SetActive(false);
                 return;
             }
 
-            // 以 panel 的父节点作为坐标参考，最大限度适配任意锚点/枢轴配置
-            var parentRect = _view.panelRoot.parent as RectTransform;
-            if (parentRect == null)
+            bool isHoldingItem = isHolding || (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem);
+
+            // 规则：
+            // - 在背包格子里（未拿起，isHoldingItem=false）：只允许 装备/卸下，禁用旋转
+            // - 被拿起（isHoldingItem=true）：只允许 旋转，禁用装备/卸下
+
+            if (_view.equipButton != null)
             {
-                Debug.LogWarning("[ItemContextMenu] panelRoot 没有父 RectTransform，定位可能不正确。");
-                parentRect = _view.overlayRoot != null ? _view.overlayRoot : _view.GetComponent<RectTransform>();
-                if (parentRect == null) return;
+                bool canBeEquipped = _item.data.isWeapon || _item.data.isArmor || _item.data.isShield;
+                _view.equipButton.gameObject.SetActive(!isHoldingItem && canBeEquipped);
             }
 
-            Camera cam = null;
-            if (_canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            if (_view.unequipButton != null)
             {
-                cam = _canvas.worldCamera != null ? _canvas.worldCamera : Camera.main;
+                var eq = ResolveEquipment();
+                bool isEquipped = eq != null && eq.IsEquipped(_item);
+                _view.unequipButton.gameObject.SetActive(!isHoldingItem && isEquipped);
             }
 
-            // 将屏幕坐标转换为父Rect的本地坐标（以父pivot为原点）
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, screenPosition, cam, out var local);
-            _view.panelRoot.anchoredPosition = local; // 先把面板pivot放到鼠标点
-            Canvas.ForceUpdateCanvases();
+            if (_view.rotateButton != null)
+            {
+                // 只有拿在手上时才允许旋转
+                _view.rotateButton.gameObject.SetActive(isHoldingItem && _item.data.canRotate);
+            }
 
-            // 依据父Rect与面板Rect的尺寸/枢轴进行边界夹紧
-            var pRect = parentRect.rect;
-            var panelRect = _view.panelRoot.rect;
+            // 激活菜单并设置位置
+            gameObject.SetActive(true);
 
-            // 父坐标系下的左右上下边界（以父pivot为原点）
-            float left = -pRect.width * parentRect.pivot.x;
-            float right = pRect.width * (1f - parentRect.pivot.x);
-            float bottom = -pRect.height * parentRect.pivot.y;
-            float top = pRect.height * (1f - parentRect.pivot.y);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _canvas.transform as RectTransform,
+                screenPos,
+                _canvas.worldCamera,
+                out Vector2 localPoint);
 
-            // 面板pivot到边缘的内/外边距
-            float minX = left + panelRect.width * _view.panelRoot.pivot.x;
-            float maxX = right - panelRect.width * (1f - _view.panelRoot.pivot.x);
-            float minY = bottom + panelRect.height * _view.panelRoot.pivot.y;
-            float maxY = top - panelRect.height * (1f - _view.panelRoot.pivot.y);
-
-            var pos = _view.panelRoot.anchoredPosition;
-            pos.x = Mathf.Clamp(pos.x, minX, maxX);
-            pos.y = Mathf.Clamp(pos.y, minY, maxY);
-            _view.panelRoot.anchoredPosition = pos;
+            (transform as RectTransform).localPosition = localPoint;
         }
+
+        // ...
 
         private void OnClickRotate()
         {
-            if (_itemView == null) return;
-            if (_grid == null || _grid.transform.childCount == 0)
+            if (_itemView == null || _item == null) return;
+
+            _item.Rotate();
+
+            // 如果是通过 ItemDragController 持有状态下旋转，需要通知它刷新图标
+            if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
             {
-                Debug.LogWarning("[ItemContextMenu] 物品旋转失败：未找到可用的格子位置。");
-                return;
+                ItemDragController.Current.RefreshHoldingItemIcon();
+            }
+            else
+            {
+                // 否则，执行原地旋转的刷新
+                _itemView.RefreshVisuals();
             }
 
-            _itemView.RotateInPlace();
-            Close();
+            gameObject.SetActive(false);
         }
 
         private void OnClickEquip()
         {
-            var eq = ResolveEquipment();
-            string itemName = _item?.data?.displayName ?? "null";
-            if (eq == null)
+            // 持有状态下不允许装备
+            if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
             {
-                Debug.LogError($"[ContextMenu] 装备 '{itemName}' 失败: ResolveEquipment() 返回 null。");
-                Close();
-                return;
-            }
-            if (_item == null || _item.data == null)
-            {
-                Debug.LogError($"[ContextMenu] 装备失败: 物品实例或数据为空。");
-                Close();
-                return;
-            }
-            if (!eq.CanEquip(_item))
-            {
-                Debug.LogWarning($"[ContextMenu] 无法装备 '{itemName}': CanEquip() 返回 false。");
-                Close();
+                Debug.LogWarning("[ItemContextMenu] Cannot equip while holding item. Place it first.");
                 return;
             }
 
-            Debug.Log($"[ContextMenu] 正在尝试装备 '{itemName}'...");
+            var eq = ResolveEquipment();
+            if (eq == null || _item == null || _item.data == null) return;
+
+            if (!eq.CanEquip(_item)) return;
+
             if (_item.data.isWeapon) eq.EquipToSlot(EquipmentSlot.MainHand, _item);
             else if (_item.data.isArmor) eq.EquipToSlot(EquipmentSlot.Armor, _item);
             else if (_item.data.isShield) eq.EquipToSlot(EquipmentSlot.OffHand, _item);
@@ -265,76 +190,39 @@ namespace demo2.DND.InventoryTetris
             // 刷新UI（GridView会刷新所有物品的标签，更可靠）
             if (_grid != null) _grid.RefreshAllEquipLabels();
             else _itemView?.RefreshEquipLabel();
-            Close();
+
+            gameObject.SetActive(false);
         }
 
         private void OnClickUnequip()
         {
-            var eq = ResolveEquipment();
-            string itemName = _item?.data?.displayName ?? "null";
-            if (eq == null)
+            // 持有状态下不允许卸下
+            if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
             {
-                Debug.LogError($"[ContextMenu] 卸下 '{itemName}' 失败: ResolveEquipment() 返回 null。");
-                Close();
-                return;
-            }
-            if (_item == null || _item.data == null)
-            {
-                Debug.LogError($"[ContextMenu] 卸下失败: 物品实例或数据为空。");
-                Close();
                 return;
             }
 
-            Debug.Log($"[ContextMenu] 正在尝试卸下 '{itemName}'...");
+            var eq = ResolveEquipment();
+            if (eq == null || _item == null || _item.data == null) return;
+
             var mh = eq.GetEquipped(EquipmentSlot.MainHand);
             var ar = eq.GetEquipped(EquipmentSlot.Armor);
             var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+
             if (_item.data.isWeapon && ReferenceEquals(mh, _item)) eq.UnequipSlot(EquipmentSlot.MainHand);
             else if (_item.data.isArmor && ReferenceEquals(ar, _item)) eq.UnequipSlot(EquipmentSlot.Armor);
             else if (_item.data.isShield && ReferenceEquals(sh, _item)) eq.UnequipSlot(EquipmentSlot.OffHand);
-            else
-            {
-                Debug.LogWarning($"[ContextMenu] 卸下 '{itemName}' 时发现它并未装备在对应槽位。");
-            }
 
             if (_grid != null) _grid.RefreshAllEquipLabels();
             else _itemView?.RefreshEquipLabel();
-            Close();
+
+            gameObject.SetActive(false);
         }
 
-        private void Close()
+        private CharacterEquipment ResolveEquipment()
         {
-            CloseInternal();
-        }
-
-        private void CloseInternal()
-        {
-            // Clean up any overlay/button we created at runtime and remove listeners from others.
-            try
-            {
-                if (overlayCloseBtnInstance != null)
-                {
-                    try { overlayCloseBtnInstance.onClick.RemoveListener(Close); } catch { }
-                    if (createdOverlayInstance && overlayCloseBtnInstance.gameObject != null)
-                    {
-                        Destroy(overlayCloseBtnInstance.gameObject);
-                    }
-                    overlayCloseBtnInstance = null;
-                    createdOverlayInstance = false;
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[ItemContextMenu] Exception while cleaning up overlay button: {ex}");
-            }
-
-            if (_rootInstance != null)
-            {
-                Destroy(_rootInstance);
-                _rootInstance = null;
-            }
-            _view = null;
-            if (_current == this) _current = null;
+            if (_itemView == null) return null;
+            return _itemView.Grid?.SourceEquipment;
         }
     }
 }

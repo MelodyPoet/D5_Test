@@ -15,6 +15,8 @@ MonoBehaviour:
   itemId: Bow01
   displayName: "\u77ED\u5F13"
   icon: {fileID: 21300000, guid: 9691c57a6adba4d499bd11659b647f27, type: 3}
+  description: "\u4E00\u628A\u6728\u5236\u77ED\u5F13\n\u6B66\u5668\u719F\u7EC3:\u77ED\u5F13\n\u8FDC\u7A0B
+    \n1d6 \u7A7F\u523A\u4F24\u5BB3"
   shapeCoords:
   - {x: 0, y: 0}
   - {x: 0, y: 1}
@@ -26,7 +28,7 @@ MonoBehaviour:
   weaponHitAbilityMode: 1
   weaponDamageDice:
     diceCount: 1
-    diceSize: 8
+    diceSize: 6
     modifier: 0
   weaponDamageType: 1
   useSeparateDamageAbility: 0
