@@ -915,14 +915,7 @@ Serializable class，用于表示 DND5E 中的伤害骰数（如 1d6、2d8+3）�
 - 确认 `InventoryUIBinder.enableEventChannels=true` 且面板中 Binder 已指向上述两个通道资产。
 - 确认场景存在唯一 `InventoryController` 与 `ActiveCharacterManager`，且其字段已拖拽到对应资产。
 
-【快速配置核对（事件总线）】
-- `InventoryUIBinder`（每个背包UI实例）：勾选 `enableEventChannels`，拖入 `InventoryChangedChannel.asset` 与 `ActiveCharacterChangedChannel.asset`。
-- `InventoryController`（全局）：拖入 `RequestEquipItemChannel.asset` 与 `InventoryChangedChannel.asset`。
-- `ActiveCharacterManager`（全局）：拖入 `ActiveCharacterChangedChannel.asset`。
-- 角色预制体：继续手动挂载 `CharacterStats` / `CharacterEquipment` / `CharacterInventory`。
-
-【追加 - 2025-11-13 完成事项】
-- 已执行旧路径退役：`InventoryUIBinder` 取消直接订阅 `CharacterInventory.OnInventoryChanged`，刷新现由事件通道驱动（`InventoryChangedChannel_SO` / `ActiveCharacterChangedChannel_SO`）。
+5. 已执行旧路径退役：`InventoryUIBinder` 取消直接订阅 `CharacterInventory.OnInventoryChanged`，刷新现由事件通道驱动（`InventoryChangedChannel_SO` / `ActiveCharacterChangedChannel_SO`）。
 - Binder 内部新增在 TryAddNew/Remove 成功后主动 RaiseEvent 逻辑，确保外部不依赖旧订阅即可获得刷新。
 - 下一阶段：观察是否仍需保留 fallback 日志；若运行一段时间未出现遗漏刷新，再移除相关警告与临时变量。
 
@@ -1275,7 +1268,7 @@ Spine Skin Importer映射规则确认:
 最终目的是玩家在角色捏人换装定制化的Customization UI界面选择不同的部件来更换角色外观时,Spine的SkeletonAnimation组件能正确识别并应用
 对应的皮肤和附件.因此需要确认Spine导出的皮肤和附件名称与Unity中SkeletonData的Skins和Attachments的映射关系.
 以当前示例的Spine骨骼和皮肤文件具体规则如下:
-由于换装的主要目的是有机的组合Spine素材中设置的不同部件的皮肤,因此需要确保每个部件的皮肤名称在Spine和Unity中是一一对应的.
+由于换装的主要目的是有机的组合Spine素材中设置的不同部件的皮肤，因此需要确保每个部件的皮肤名称在Spine和Unity中是一一对应的.
 玩家在UI界面选择时，角色应该保持原骨骼的所有动画正常播放前提下，可以适配所有服装样式
 玩家选择不同部件组合/整套套装时，会激活不同的对应条件(UI界面应该设置不同标签区分开整套和部件组合的选择)
 因此，需要确保以下两者情况:
@@ -1303,3 +1296,146 @@ ApplyAppearanceToSkeleton() 方法确保每次部件更改后，Spine骨架的�
 4.如果玩家当前时自定义组合模式(非整套full-skins),则记录当前的组合，因为如果玩家再次点击full-skins后再次点击散装部件时,应该恢复之前记录
 的散装部件的自定义组合状态+当下玩家选择的新部件进行显示.
 
+
+---
+
+## 附录：存档与数据驱动设计策略（单机RPG ⇨ 联网扩展预留）
+
+本项目规划为**先完成可上 Steam 的 PVE 单机 RPG**，后续在不推翻现有架构的前提下，预留向**多人联网（含 PVP/MMO 要素）**扩展的空间。
+以下约定仅作为技术选型与数据设计的总则，不改变现有业务逻辑实现。
+
+### 1. 单机阶段的存档策略（本地真源）
+
+1.1 真源位置
+- 单机版本中，**本地存档文件是运行时状态的真源**，Unity 场景和组件只是当前快照。
+- 静态内容（如 `ItemBaseSO`、法术 SO、角色模板 SO、Spine 换装配置 SO）仍作为**只读模板**存在工程中，不直接写入存档，只用 ID/路径引用。
+
+1.2 存档范围建议
+- **角色基础信息**：角色 ID、名称、等级、经验、可用属性点/专长点等。
+- **数值状态**：基础属性、已习得专长/技能列表、当前生命/法力（视是否需要战斗中读档而定）。
+- **装备状态**：`CharacterEquipment` 每个槽位绑定的 `ItemInstance.instanceId`。
+- **背包状态**：`CharacterInventory.Items` 列表中每个 `ItemInstance` 的：
+  - `instanceId`（唯一标识）
+  - 对应模板 ID（映射到 `ItemBaseSO`：GUID 或资源路径）
+  - `gridPosition`（格子坐标，已在运行时维护）
+  - `rotation`（物品旋转状态）
+  - 未来扩展字段（耐久、强化等级、随机词条等）。
+- **任务 / 世界进度**：当前主线/支线阶段、已完成任务 ID、关键世界开关（如传送点解锁、Boss 击杀标记等）。
+
+1.3 推荐实现方式
+- 定义统一的存档数据结构，例如：
+  - `GameSaveData`（包含多个 `CharacterSaveData` 与全局世界状态）。
+  - `CharacterSaveData`：包含等级/经验、BaseStats、Feat 列表、`ItemInstanceSaveData` 列表、`EquipmentSaveData` 等。
+- 使用 JSON 作为首选存储格式：
+  - 优点：可读易调试、版本演进友好、跨平台一致。
+  - 存储目录：`Application.persistentDataPath` 下以 `save_slotX.json` 形式保存。
+- 提供集中式 API（避免到处散写 IO）：
+  - `SaveGameManager.SaveGame(slotId)`：遍历当前 `CharacterInventory`、`CharacterEquipment`、`CharacterStats` 组装 `GameSaveData` 并写入文件。
+  - `SaveGameManager.LoadGame(slotId)`：从文件还原 `GameSaveData`，重建 `ItemInstance` 列表、恢复装备槽绑定，最后调用 UI 刷新接口（例如 `InventoryUIBinder.RefreshFromInventory()`）。
+
+1.4 与当前背包实现的对接
+- 当前已将物品的格子坐标写入 `ItemInstance.gridPosition`，且 `InventoryGridView.SpawnInstance` 优先使用该位置落地。
+- 存档只需将 `gridPosition` 一并序列化记录，在读档阶段重建 `ItemInstance` 时按存档覆盖 `rotation` 与 `gridPosition`，即可保持玩家手动调整的背包布局不变。
+
+
+### 2. 联网 / MMO 阶段的存档与数据真源迁移
+
+2.1 真源迁移原则
+- 多人联网（含 PVP/MMO）模式下，涉及**角色实力、经济、进度**的所有关键数据，其真源必须迁移到服务器。
+- 客户端的数据结构（`ItemInstance`、`CharacterInventory`、`CharacterEquipment`、`CharacterStats` 等）继续作为**缓存 + 表现层**使用，但不再拥有最终裁决权。
+
+2.2 客户端与服务器的角色
+- **服务器端**：
+  - 保存并裁决：角色属性、背包物品、装备状态、金币/货币、任务进度、世界状态、PVP 战果等。
+  - 通常使用关系型 DB（如 MySQL/PostgreSQL）或文档型 DB（如 MongoDB）储存。
+  - 内部也可使用与客户端类似的领域模型（如 Server 版 `ItemInstance`、`CharacterInventory`），但与 Unity 解耦。
+- **客户端**：
+  - 持有一份从服务器获取的**快照**，重建 Unity 组件树以驱动表现（Spine 捏人、背包 UI、战斗动画等）。
+  - 存本地的仅是**最近一次快照缓存**，真正存档仍以服务器为准。
+
+2.3 可复用的存档结构
+- 建议客户端的 `GameSaveData` 结构尽量与服务器端使用的角色数据结构保持相似：
+  - 相当于客户端的 JSON Save 就是“服务器角色数据的一种序列化快照”。
+- 这样单机阶段的 `GameSaveData` / `CharacterSaveData` / `ItemInstanceSaveData` 将来可以直接用于：
+  - 与服务器的 HTTP / gRPC / 自定义协议的数据交换；
+  - 本地缓存最近一次从服务器拉取的数据。
+
+2.4 逻辑裁决位置的预留
+- 当前单机阶段，装备/卸下、背包移动、经验结算等逻辑可以完全在客户端实现。
+- 为未来 MMO 预留扩展空间：为“改变角色状态的操作”准备一层服务接口，例如：
+  - `IGameLogicService.TryEquipItem(...)`
+  - `IGameLogicService.TryMoveItem(...)`
+  - `IGameLogicService.TryApplyDamage(...)`
+- 单机版使用 `LocalGameLogicService`（直接修改本地对象），
+- 联网版使用 `RemoteGameLogicService`（将请求发往服务器，由服务器返回新状态再更新本地）。
+
+
+### 3. 使用 Excel 表驱动静态数据（掉落表/刷怪/经验表等）
+
+为避免大量“表格型数据”全部使用 ScriptableObject 逐条手填，统一采用：
+
+> Excel/CSV 作为**源数据** → Editor 工具导入 → 生成 ScriptableObject 容器 → 运行时只读取容器，不直接读 Excel。
+
+3.1 适合从 Excel 驱动的配置类型
+- 怪物刷新表（MonsterSpawn）：怪物 ID、等级区间、刷新区域 ID、刷新权重/时间间隔等。
+- 掉落表（DropTables）：掉落表 ID、物品 ID、权重、数量范围、等级条件等。
+- 升级经验表（LevelExp）：等级、所需经验、获得属性点/专长点等。
+- 技能/专长表（Feats/Skills）：SkillId、等级、前置条件、数值加成等。
+
+3.2 Editor 导入管线（建议流程）
+1. 在项目中约定一个原始表目录，例如：`Assets/GameData/Raw/*.xlsx` 或 `*.csv`。
+2. 每张表定义清晰的列：
+   - 第一行：字段名（如 `DropTableId`, `ItemId`, `Weight`, `MinQty`, `MaxQty`）。
+   - 第二行：字段类型（可选：`int`/`float`/`string`/`enum` 等），方便导入工具做类型解析。
+3. 编写 Editor 菜单脚本（例如：`Tools/GameData/Import Excel`）：
+   - 使用 CSV 或 xlsx 解析库（`#if UNITY_EDITOR` 下引用），读取每行数据。
+   - 将每行映射为 C# Row 结构体或类，如：
+     ```csharp
+     [Serializable]
+     public class DropTableRow {
+         public string dropTableId;
+         public string itemId;   // 对应 ItemBaseSO 的逻辑 ID
+         public float weight;
+         public int minQty;
+         public int maxQty;
+         public int minLevel;
+         public int maxLevel;
+     }
+     ```
+   - 将行集合填入 ScriptableObject 容器中，例如：
+     ```csharp
+     [CreateAssetMenu(menuName = "GameData/DropTable")] 
+     public class DropTable : ScriptableObject {
+         public List<DropTableRow> rows;
+         // 可选：构建按 dropTableId 分组的字典索引
+     }
+     ```
+   - 导入器负责在 `Assets/GameData/Generated/` 等目录下创建/更新对应 `.asset` 文件。
+
+3.3 运行时代码的使用原则
+- 运行时代码**只依赖 SO 容器**（例如 `DropTable`, `MonsterSpawnTable`, `LevelExpTable`），
+  不直接访问 Excel/CSV 文件：
+  - 掉落逻辑根据怪物配置上的 `DropTableId`，从 `DropTable` 容器中筛选行并做权重随机，最后再根据 `itemId` 映射到 `ItemBaseSO` 生成 `ItemInstance`。
+  - 刷怪逻辑根据地点 ID 和 `MonsterSpawnTable` 的规则生成敌人。
+  - 升级逻辑根据 `LevelExpTable` 查经验阈值，发放属性点/专长点。
+- 这样在未来 MMO 模式下：
+  - 客户端与服务器都可以共用同一份 Excel 源数据，分别生成各自语言/平台的配置对象；
+  - 真正的掉落/升级裁决可以逐步迁移到服务器实现，而客户端仍使用同样的数据表进行 UI 显示或本地预测。
+
+
+### 4. 技术选型小结（供后续开发快速回顾）
+
+- **单机 PVE 阶段**：
+  - 真源：本地 JSON 存档（`GameSaveData`），静态内容用 SO + 表导入生成容器。
+  - 运行时：`CharacterInventory` / `ItemInstance` / `CharacterEquipment` / `CharacterStats` 驱动所有战斗与 UI。
+  - 存档：通过集中式 `SaveGameManager` 收集并写入文件；启动/读档时重建运行时对象。
+
+- **联网 PVP/MMO 扩展阶段**：
+  - 真源：服务器数据库；客户端存档作为“快照缓存”，不再拥有裁决权。
+  - 协议：以当前 `GameSaveData` 结构为蓝本定义网络消息格式，逐步替换 `LocalGameLogicService` 为远程实现。
+  - 静态数据：继续使用 Excel → （服务器/客户端各自的）容器对象的模式，前后端共用一份源表。
+
+- **Excel 表驱动**：
+  - 大量同构、易表格化的数据（掉落表、刷怪表、经验表、技能表）统一由 Excel/CSV 驱动；
+  - Editor 工具负责生成 SO 容器；
+  - 运行时代码只依赖容器，不直接读原始表。
