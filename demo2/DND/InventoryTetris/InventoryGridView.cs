@@ -241,6 +241,37 @@ namespace demo2.DND.InventoryTetris
             if (inst == null || itemViewPrefab == null) return null;
             if (_views.ContainsKey(inst)) return _views[inst];
 
+            // 优先使用实例上已记录的 gridPosition（用于持久化还原）
+            if (inst.gridPosition != default)
+            {
+                int gx = inst.gridPosition.x;
+                int gy = inst.gridPosition.y;
+                if (gx >= 0 && gy >= 0 && gx < cols && gy < rows && _model.CanPlace(inst, gx, gy))
+                {
+                    var viewAtSaved = CreateView(inst);
+                    if (viewAtSaved == null)
+                    {
+                        if (debugLogs)
+                        {
+                            string nameFail = inst.data != null ? inst.data.displayName : inst.instanceId;
+                            Debug.LogError($"CreateView failed for '{nameFail}' at saved position {gx},{gy}.");
+                        }
+                        return null;
+                    }
+
+                    _model.TryPlace(inst, gx, gy);
+                    PositionViewAtGrid(viewAtSaved, gx, gy);
+                    _views[inst] = viewAtSaved;
+                    if (debugLogs)
+                    {
+                        string itemDisplayNameSaved = inst?.data?.displayName ?? inst?.instanceId ?? "<null>";
+                        Debug.Log($"SpawnInstance using saved position: {itemDisplayNameSaved} at ({gx},{gy})");
+                    }
+                    return viewAtSaved;
+                }
+            }
+
+            // 否则按旧逻辑，从左上扫描第一个可用空位
             for (int y = 0; y < rows; y++)
             {
                 for (int x = 0; x < cols; x++)
@@ -274,8 +305,8 @@ namespace demo2.DND.InventoryTetris
 
             if (debugLogs)
             {
-                string itemDisplayName = inst?.data?.displayName ?? inst?.instanceId ?? "<null>";
-                Debug.LogWarning($"SpawnInstance failed (no space): {itemDisplayName}");
+                string itemDisplayName2 = inst?.data?.displayName ?? inst?.instanceId ?? "<null>";
+                Debug.LogWarning($"SpawnInstance failed (no space): {itemDisplayName2}");
             }
             Debug.LogWarning("没有空间放置该实例物品");
             return null;

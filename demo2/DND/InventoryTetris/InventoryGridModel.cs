@@ -25,7 +25,9 @@ namespace demo2.DND.InventoryTetris
         {
             if (!CanPlace(item, x, y)) return false;
             Mark(item, x, y, item);
-            itemPositions[item] = new Vector2Int(x, y);
+            var pos = new Vector2Int(x, y);
+            itemPositions[item] = pos;
+            item.gridPosition = pos; // 同步回实例，便于序列化保存
             return true;
         }
 
@@ -37,7 +39,9 @@ namespace demo2.DND.InventoryTetris
             if (CanPlace(item, x, y))
             {
                 Mark(item, x, y, item);
-                itemPositions[item] = new Vector2Int(x, y);
+                var pos = new Vector2Int(x, y);
+                itemPositions[item] = pos;
+                item.gridPosition = pos; // 同步当前位置
                 return true;
             }
             Mark(item, old.x, old.y, item);
@@ -49,6 +53,7 @@ namespace demo2.DND.InventoryTetris
             if (!itemPositions.TryGetValue(item, out var pos)) return false;
             Mark(item, pos.x, pos.y, null);
             itemPositions.Remove(item);
+            item.gridPosition = default; // 可选：重置序列化位置
             return true;
         }
 
