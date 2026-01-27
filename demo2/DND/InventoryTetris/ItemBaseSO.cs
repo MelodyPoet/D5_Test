@@ -1,4 +1,4 @@
-﻿﻿﻿using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using System;
 using demo2.DND.Stats;
@@ -15,6 +15,9 @@ namespace demo2.DND.InventoryTetris
         [TextArea(3, 10)]
         [Tooltip("物品的详细描述，将显示在提示框中。")]
         public string description;
+
+        [Tooltip("显式标记该物品是否可被装备（优先于 isWeapon/isArmor/isShield）。勾选后双击将触发装备/卸下；未勾选则视为非装备物品。保持向后兼容，若未勾选将回退到 isWeapon/isArmor/isShield 判定。")]
+        public bool isEquippable = false;
 
         [Header("占用格子形状（单位：格）")]
         [Tooltip("定义物品形状，使用相对坐标列表。原点(0,0)是形状包围盒的左上角。例如，一个T形可以定义为 [(0,0), (1,0), (2,0), (1,1)]")]

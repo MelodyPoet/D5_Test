@@ -129,11 +129,16 @@ namespace demo2.DND.InventoryTetris
 
             // Rebuild visuals based on the new item data
             RebuildVisuals();
+
+            // After visuals rebuilt ensure equip color matches current equipment state
+            UpdateEquipColor();
         }
 
         private void HandleEquipmentChanged()
         {
             RefreshEquipLabel();
+            // Ensure equip color/visuals update when equipment on the character changes
+            UpdateEquipColor();
         }
 
         private CharacterEquipment ResolveEquipment()
@@ -201,6 +206,8 @@ namespace demo2.DND.InventoryTetris
                 stateText.text = string.Empty;
                 stateText.gameObject.SetActive(false);
                 Debug.Log("[RefreshEquipLabel] BoundItem 为空，隐藏 StateText。");
+                // also ensure equip color cleared
+                UpdateEquipColor();
                 return;
             }
 
@@ -210,6 +217,7 @@ namespace demo2.DND.InventoryTetris
                 stateText.text = string.Empty;
                 stateText.gameObject.SetActive(false);
                 Debug.LogWarning("[RefreshEquipLabel] 无法解析装备组件或 BoundItem.data 为空，隐藏 StateText。");
+                UpdateEquipColor();
                 return;
             }
 
@@ -241,6 +249,9 @@ namespace demo2.DND.InventoryTetris
                 stateText.gameObject.SetActive(false);
                 Debug.Log("[RefreshEquipLabel] 物品未装备，隐藏 StateText。");
             }
+
+            // Ensure equip-state visual (cell/icon/bg) is synchronized with label state
+            UpdateEquipColor();
         }
 
         public void SetCellSize(Vector2 cellSize)
@@ -363,19 +374,97 @@ namespace demo2.DND.InventoryTetris
             // 左键双击：装备/卸下切换（仅在未拿起时生效）
             if (eventData.button == PointerEventData.InputButton.Left && eventData.clickCount == 2)
             {
-                if (ItemDragController.Current == null || !ItemDragController.Current.IsHoldingItem)
+                // Only equippable items respond to double-click equip/unequip
+                if (!IsEquippable())
                 {
-                    ToggleEquipState();
+                    Debug.Log("[ItemView] 双击被忽略：该物品不可装备。");
+                    return;
+                }
+
+                // 如果拖拽控制器存在且当前处于拿起状态，则忽略双击
+                if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
+                {
+                    Debug.Log("[ItemView] 双击忽略：当前处于拿起状态（holding）。");
+                    return;
+                }
+
+                // 必须确保该物品当前已经落在背包格子上并且位置合法（防止在未放下或非法位置时装备）
+                if (Grid != null)
+                {
+                    if (Grid.TryGetGridPosition(BoundItem, out var pos))
+                    {
+                        // 进一步确认当前位置对该物品仍然是合法的放置位置
+                        if (Grid.CanPlaceItemAt(BoundItem, pos.x, pos.y))
+                        {
+                            ToggleEquipState();
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[ItemView] 双击忽略：物品在网格位置({pos.x},{pos.y})不再是合法放置位置。");
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("[ItemView] 双击忽略：物品未落在任何网格位置（未放下）。");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[ItemView] 双击操作失败：未找到 Grid 引用。");
                 }
             }
         }
 
+        /// <summary>
+        /// Returns whether the bound item is equippable (weapon/armor/shield) or explicitly marked as equippable on the SO.
+        /// </summary>
+        private bool IsEquippable()
+        {
+            if (BoundItem == null || BoundItem.data == null) return false;
+            var d = BoundItem.data;
+            // Prefer explicit isEquippable flag if set by designer; fallback to legacy flags for compatibility.
+            if (d.isEquippable) return true;
+            return d.isWeapon || d.isArmor || d.isShield;
+        }
+
         private void ToggleEquipState()
         {
-            var eq = ResolveEquipment();
-            if (eq == null || BoundItem == null || BoundItem.data == null)
+            // Only equippable items can be toggled
+            if (!IsEquippable())
             {
-                Debug.LogWarning($"[ToggleEquipState] eq 或 BoundItem.data 为 null，无法切换装备状态。eq={(eq != null)} item={BoundItem?.data?.displayName ?? "null"}");
+                Debug.LogWarning("[ToggleEquipState] 物品不可装备，忽略切换请求。");
+                return;
+            }
+
+            // 防御：仅在物品当前有绑定且位于网格上并且位置合法时才尝试装备/卸下
+            if (BoundItem == null || BoundItem.data == null)
+            {
+                Debug.LogWarning("[ToggleEquipState] BoundItem 或 BoundItem.data 为 null，不能切换装备。");
+                return;
+            }
+
+            if (Grid == null)
+            {
+                Debug.LogWarning("[ToggleEquipState] 无法切换装备：未绑定 Grid 视图。");
+                return;
+            }
+
+            if (!Grid.TryGetGridPosition(BoundItem, out var currentPos))
+            {
+                Debug.LogWarning("[ToggleEquipState] 物品当前未放置在网格上（可能正在被拿起），无法装备/卸下。");
+                return;
+            }
+
+            if (!Grid.CanPlaceItemAt(BoundItem, currentPos.x, currentPos.y))
+            {
+                Debug.LogWarning($"[ToggleEquipState] 当前物品在位置({currentPos.x},{currentPos.y})不构成合法放置，禁止装备/卸下。");
+                return;
+            }
+
+            var eq = ResolveEquipment();
+            if (eq == null)
+            {
+                Debug.LogWarning($"[ToggleEquipState] eq 为 null，无法切换装备状态。Item={BoundItem.data.displayName}");
                 return;
             }
 
@@ -405,18 +494,40 @@ namespace demo2.DND.InventoryTetris
                 else if (BoundItem.data.isShield && ReferenceEquals(sh, BoundItem)) eq.UnequipSlot(EquipmentSlot.OffHand);
             }
 
-            // 更新视觉：不再用 stateText，而是用 cellPrefab 的 Image 颜色表示
+            // 更新视觉：仅对可装备物品改变 cell 色彩
             UpdateEquipColor();
         }
 
         private void UpdateEquipColor()
         {
-            var eq = ResolveEquipment();
-            if (eq == null || BoundItem == null || BoundItem.data == null) return;
+            // Only change color for equippable items
+            if (!IsEquippable()) return;
 
-            bool equipped = eq.IsEquipped(BoundItem);
+            var eq = ResolveEquipment();
+            bool equipped = false;
+            if (eq != null && BoundItem != null && BoundItem.data != null)
+            {
+                equipped = eq.IsEquipped(BoundItem);
+            }
+            else
+            {
+                // Fallback: if equipment component not resolvable (timing/scene order), try use CharacterInventory saved equipped IDs
+                if (Grid != null && Grid.SourceInventory != null && BoundItem != null && BoundItem.data != null)
+                {
+                    var inv = Grid.SourceInventory;
+                    string id = BoundItem.instanceId;
+                    if (BoundItem.data.isWeapon && !string.IsNullOrEmpty(inv.equippedMainHandId) && inv.equippedMainHandId == id) equipped = true;
+                    else if (BoundItem.data.isArmor && !string.IsNullOrEmpty(inv.equippedArmorId) && inv.equippedArmorId == id) equipped = true;
+                    else if (BoundItem.data.isShield && !string.IsNullOrEmpty(inv.equippedShieldId) && inv.equippedShieldId == id) equipped = true;
+                }
+            }
             Color targetColor = equipped ? Color.gray : Color.white;
 
+            Debug.Log($"[UpdateEquipColor] item={BoundItem.data.displayName} id={BoundItem.instanceId} resolvedEq={(eq!=null?eq.gameObject.name:"null")}, isEquipped={equipped}, targetColor={targetColor}");
+
+            bool appliedAny = false;
+
+            // Update cell images if using cell system
             if (cellContainer != null)
             {
                 foreach (Transform child in cellContainer)
@@ -425,18 +536,74 @@ namespace demo2.DND.InventoryTetris
                     if (img != null)
                     {
                         img.color = targetColor;
+                        appliedAny = true;
                     }
                 }
             }
+
+            // Also update the icon and background so the visual clearly shows equipped state
+            if (iconImage != null)
+            {
+                iconImage.color = targetColor;
+                appliedAny = true;
+            }
+            if (bgImage != null)
+            {
+                bgImage.color = bgOriginalColor * (equipped ? 0.8f : 1f);
+                appliedAny = true;
+            }
+
+            // Defensive: if nothing was applied (no cell container and no images), try to color any Image on this view
+            if (!appliedAny)
+            {
+                var imgs = GetComponentsInChildren<Image>(true);
+                foreach (var i in imgs)
+                {
+                    i.color = targetColor;
+                }
+                Debug.LogWarning($"[UpdateEquipColor] No primary images found; applied color to {imgs.Length} child Image(s).");
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the currently bound item is equippable and currently equipped on the resolved CharacterEquipment.
+        /// Used by drag controller to lock picking up equipped items.
+        /// </summary>
+        public bool IsEquippedForBoundItem()
+        {
+            if (BoundItem == null || BoundItem.data == null) return false;
+            if (!IsEquippable()) return false;
+            var eq = ResolveEquipment();
+            if (eq == null) return false;
+            return eq.IsEquipped(BoundItem);
+        }
+
+        private void AutoBindStateTextIfNeeded()
+        {
+            if (stateText != null) return;
+            // Try find a child Text named 'StateText' first
+            var candidates = GetComponentsInChildren<Text>(true);
+            foreach (var t in candidates)
+            {
+                if (t == null) continue;
+                if (t.name.Equals("StateText", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    stateText = t;
+                    return;
+                }
+            }
+            // Fallback to first found Text
+            if (candidates.Length > 0) stateText = candidates[0];
         }
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            // 拖拽/持有状态下不显示 Tooltip，避免与拖拽逻辑冲突
-            if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
-                return;
-
-            TooltipSystem.Show(BoundItem);
+            // Show tooltip if available and item bound
+            if (BoundItem != null)
+            {
+                // Anchor tooltip to this item's root rect (so it stays fixed at item front)
+                TooltipSystem.Show(BoundItem, this.GetComponent<RectTransform>(), false);
+            }
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -444,96 +611,20 @@ namespace demo2.DND.InventoryTetris
             TooltipSystem.Hide();
         }
 
+        /// <summary>
+        /// Public wrapper to allow external callers to refresh visuals after runtime changes (rotate/etc.).
+        /// </summary>
         public void RefreshVisuals()
         {
             RebuildVisuals();
         }
 
-
         /// <summary>
-        /// 旋转物品（通常由右键菜单调用）。
+        /// Public helper to force sync equip visuals (safe to call from external code).
         /// </summary>
-        public void RotateInPlace()
+        public void SyncEquipVisual()
         {
-            TryRotateInPlace();
-        }
-
-        private void TryRotateInPlace()
-        {
-            if (BoundItem.data == null || !BoundItem.data.canRotate) return;
-
-            Vector2Int curPos;
-            bool hasPos = Grid.TryGetGridPosition(BoundItem, out curPos);
-            if (!hasPos) {
-                if (Grid != null && Grid.debugLogs) Debug.Log("[ItemView] Rotate failed: item has no grid position mapping");
-                return;
-            }
-
-            // 预旋转，获取新形状
-            BoundItem.Rotate();
-
-            // 尝试在原位置“移动”到新形状
-            bool rotatedOk = Grid.TryMove(BoundItem, curPos.x, curPos.y);
-
-            if (!rotatedOk) {
-                // 旋转失败，回滚旋转状态
-                BoundItem.Rotate();
-                BoundItem.Rotate();
-                BoundItem.Rotate();
-                if (Grid != null && Grid.debugLogs) Debug.Log($"[ItemView] Rotate failed: model refused rotation at {curPos} (collision/bounds) ");
-                return;
-            }
-
-            // 旋转成功，更新视图
-            rect.sizeDelta = new Vector2(Grid.ItemPixelWidth(BoundItem), Grid.ItemPixelHeight(BoundItem));
-            Grid.PositionViewAtGrid(this, curPos.x, curPos.y);
-
-            // Rebuild visuals to reflect the new rotation
-            RebuildVisuals();
-        }
-
-        private void BringToFront()
-        {
-            transform.SetAsLastSibling();
-        }
-
-        // 新增：自动找到当前物品预制体下用于显示“已装备”状态的 Text
-        private void AutoBindStateTextIfNeeded()
-        {
-            if (stateText != null)
-            {
-                Debug.Log("[AutoBindStateTextIfNeeded] StateText 已绑定，无需重复绑定。");
-                return;
-            }
-
-            // 1) 优先按常见命名查找（包含常见空格写法）
-            var candidatesByName = new[] { "StateText", "State Text", "EquipState", "EquippedText", "Stats Text" };
-            foreach (var n in candidatesByName)
-            {
-                var t = transform.Find(n);
-                if (t != null)
-                {
-                    var txt = t.GetComponent<Text>();
-                    if (txt != null)
-                    {
-                        stateText = txt;
-                        Debug.Log($"[AutoBindStateTextIfNeeded] 成功绑定 StateText: {n}");
-                        return;
-                    }
-                }
-            }
-
-            // 2) 兜底：查找第一个子级 Text（包含隐藏对象）
-            var any = GetComponentInChildren<Text>(true);
-            if (any != null)
-            {
-                stateText = any;
-                Debug.Log("[AutoBindStateTextIfNeeded] 兜底绑定到第一个 Text 组件。");
-            }
-            else
-            {
-                Debug.LogWarning("[AutoBindStateTextIfNeeded] 未找到任何 Text 组件，绑定失败。");
-            }
+            UpdateEquipColor();
         }
     }
 }

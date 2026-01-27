@@ -33,6 +33,14 @@ namespace demo2.DND.InventoryTetris
 
         public IReadOnlyList<ItemInstance> Items => items;
 
+        [Header("持久化/保存（运行时/序列化辅助）")]
+        [Tooltip("记录当前已装备的实例 ID（用于在 UI 重新绑定时恢复玩家的装备选择）。由系统自动维护，也可通过序列化工具备份。")]
+        public string equippedMainHandId;
+        public string equippedArmorId;
+        public string equippedShieldId;
+
+        private CharacterEquipment _persistenceEqSubscribed;
+
         private void ClampCapacity()
         {
             int newRows = Mathf.Clamp(rows, 1, MaxRows);
@@ -70,6 +78,20 @@ namespace demo2.DND.InventoryTetris
                     var inst = new ItemInstance(so);
                     items.Add(inst);
                 }
+            }
+
+            // Attempt to restore previous equip choices (by instance IDs) before auto-equip defaults
+            var eqForRestore = GetComponent<CharacterEquipment>()
+                         ?? GetComponentInParent<CharacterEquipment>()
+                         ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eqForRestore != null)
+            {
+                RestoreEquippedFromSavedIds(eqForRestore);
+                // Subscribe to equipment change to persist updates
+                try {
+                    eqForRestore.OnEquipmentChanged += HandleEquipmentChangedFromEquipment;
+                    _persistenceEqSubscribed = eqForRestore;
+                } catch { }
             }
 
             // 启动时按物品类型自动尝试装备到槽位（不覆盖已存在装备）
@@ -295,8 +317,85 @@ namespace demo2.DND.InventoryTetris
             // 取消订阅
             OnInventoryChanged -= ApplyEquipmentModifiers;
 
+            // unsubscribe equipment change subscription used for persistence
+            if (_persistenceEqSubscribed != null)
+            {
+                try { _persistenceEqSubscribed.OnEquipmentChanged -= HandleEquipmentChangedFromEquipment; } catch { }
+                _persistenceEqSubscribed = null;
+            }
+
             // 广播：背包被销毁
             OnAnyInventoryDestroyed?.Invoke(this);
+        }
+
+        private void HandleEquipmentChangedFromEquipment()
+        {
+            // Synchronize equipped instance IDs with current equipment state
+            var eq = GetComponent<CharacterEquipment>()
+                     ?? GetComponentInParent<CharacterEquipment>()
+                     ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eq == null) return;
+            var mh = eq.GetEquipped(EquipmentSlot.MainHand);
+            var ar = eq.GetEquipped(EquipmentSlot.Armor);
+            var sh = eq.GetEquipped(EquipmentSlot.OffHand);
+
+            equippedMainHandId = mh != null ? mh.instanceId : null;
+            equippedArmorId = ar != null ? ar.instanceId : null;
+            equippedShieldId = sh != null ? sh.instanceId : null;
+
+#if UNITY_EDITOR
+            Debug.Log($"[CharacterInventory] HandleEquipmentChangedFromEquipment: 更新持久化装备 ID -> 主手: {equippedMainHandId}, 护甲: {equippedArmorId}, 盾牌: {equippedShieldId}");
+#endif
+        }
+
+        private void RestoreEquippedFromSavedIds(CharacterEquipment eq)
+        {
+            // Restore equipped items based on saved instance IDs
+            ItemInstance toEquipMH = null;
+            ItemInstance toEquipAR = null;
+            ItemInstance toEquipSH = null;
+
+            if (!string.IsNullOrEmpty(equippedMainHandId))
+            {
+                toEquipMH = items.Find(x => x.instanceId == equippedMainHandId);
+                if (toEquipMH == null)
+                {
+                    Debug.LogWarning($"[CharacterInventory] RestoreEquippedFromSavedIds: 未能找到对应的主手实例 ({equippedMainHandId}) 来恢复装备。");
+                }
+            }
+            if (!string.IsNullOrEmpty(equippedArmorId))
+            {
+                toEquipAR = items.Find(x => x.instanceId == equippedArmorId);
+                if (toEquipAR == null)
+                {
+                    Debug.LogWarning($"[CharacterInventory] RestoreEquippedFromSavedIds: 未能找到对应的护甲实例 ({equippedArmorId}) 来恢复装备。");
+                }
+            }
+            if (!string.IsNullOrEmpty(equippedShieldId))
+            {
+                toEquipSH = items.Find(x => x.instanceId == equippedShieldId);
+                if (toEquipSH == null)
+                {
+                    Debug.LogWarning($"[CharacterInventory] RestoreEquippedFromSavedIds: 未能找到对应的盾牌实例 ({equippedShieldId}) 来恢复装备。");
+                }
+            }
+
+            // Equip the found instances to the corresponding slots
+            if (toEquipMH != null) eq.EquipToSlot(EquipmentSlot.MainHand, toEquipMH);
+            if (toEquipAR != null) eq.EquipToSlot(EquipmentSlot.Armor, toEquipAR);
+            if (toEquipSH != null) eq.EquipToSlot(EquipmentSlot.OffHand, toEquipSH);
+        }
+
+        /// <summary>
+        /// Public: restore equipped slots from the saved instance ID fields. Safe to call multiple times.
+        /// </summary>
+        public void RestoreSavedEquipment()
+        {
+            var eq = GetComponent<CharacterEquipment>()
+                     ?? GetComponentInParent<CharacterEquipment>()
+                     ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eq == null) return;
+            RestoreEquippedFromSavedIds(eq);
         }
     }
 }

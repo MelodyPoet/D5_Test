@@ -17,6 +17,7 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 5b12a7802f87a054f82ab149b53e2c73, type: 3}
   description: "\u4E00\u628A\u6734\u7D20\u7684\u77ED\u5251  \n\u6B66\u5668\u719F\u7EC3\u9879:\u7B80\u6613\n\u8FD1\u6218
     \u7075\u5DE7 \n1d6 \u6325\u780D\u6216\u7A7F\u523A\u4F24\u5BB3"
+  isEquippable: 1
   shapeCoords:
   - {x: 0, y: 0}
   - {x: 0, y: 1}

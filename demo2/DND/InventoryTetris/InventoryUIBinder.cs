@@ -61,7 +61,7 @@ namespace demo2.DND.InventoryTetris
         [Header("事件通道（可选，事件化绑定刷新）")]
         [Tooltip("可选：拖入 InventoryChangedChannel 资产；当任意背包通过控制器广播变化时（例如装备变更），若与当前激活来源匹配则刷新 UI。")]
         [SerializeField] private InventoryChangedChannel_SO inventoryChangedChannel; // simplified qualifier
-        [Tooltip("可选：拖入 ActiveCharacterChangedChannel 资产；当当前角色切换时，若该角色具有可用背包則自動切换激活來源。")]
+        [Tooltip("可选：拖入 ActiveCharacterChangedChannel 资产；当当前角色切换时，若该角色具有可用背包則自動切換激活來源。")]
         [SerializeField] private ActiveCharacterChangedChannel_SO activeCharacterChangedChannel; // simplified qualifier
         [Tooltip("是否启用事件通道驱动刷新（为 false 则仅使用直接订阅 CharacterInventory.OnInventoryChanged）。")]
         [SerializeField] private bool enableEventChannels = true;
@@ -408,6 +408,8 @@ namespace demo2.DND.InventoryTetris
                      ?? src.GetComponentInParent<CharacterEquipment>()
                      ?? src.GetComponentInChildren<CharacterEquipment>(true);
             gridView.OverrideEquipment = eq;
+            // 尝试恢复玩家上次操作的装备状态（若 CharacterInventory 中保存了 instanceId）
+            try { src.RestoreSavedEquipment(); } catch (Exception ex) { Debug.LogWarning($"[InventoryUIBinder] RestoreSavedEquipment failed: {ex.Message}"); }
             if (debugLogs && eq == null)
             {
                 Debug.LogWarning("[InventoryUIBinder] 未找到 CharacterEquipment（src 自身/父/子），UI 将无法显示‘已装备’状态。");
@@ -453,6 +455,61 @@ namespace demo2.DND.InventoryTetris
 
             // 新增：统一刷新一次“已装备”标签，避免启动顺序竞态导致首次不显示
             gridView.RefreshAllEquipLabels();
+            // 防御性：在下一帧再次重申视觉状态（处理某些布局/资源初始化后覆盖颜色的问题）
+            if (gridView != null)
+            {
+                StartCoroutine(ReapplyEquipVisualsNextFrame());
+            }
+        }
+
+        private System.Collections.IEnumerator ReapplyEquipVisualsNextFrame()
+        {
+            yield return null; // wait one frame
+            if (gridView != null)
+            {
+                try
+                {
+                    gridView.RefreshAllEquipLabels();
+                    if (debugLogs) Debug.Log("[InventoryUIBinder] Reapplied equip visuals next frame.");
+                    if (debugLogs) DebugLogEquipColors();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"[InventoryUIBinder] ReapplyEquipVisualsNextFrame failed: {ex.Message}");
+                }
+            }
+        }
+
+        private void DebugLogEquipColors()
+        {
+            if (gridView == null) return;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("[DebugLogEquipColors] Dumping equip colors for grid views:");
+            foreach (var kv in gridView.GetType().GetField("_views", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(gridView) as System.Collections.IDictionary)
+            {
+                try
+                {
+                    var pair = (System.Collections.DictionaryEntry)kv;
+                    var item = pair.Key as ItemInstance;
+                    var view = pair.Value as InventoryItemView;
+                    if (item == null || view == null) continue;
+                    sb.AppendLine($"  Item: {(item.data!=null?item.data.displayName:item.instanceId)} id={item.instanceId}");
+                    if (view.iconImage != null) sb.AppendLine($"    iconImage.color = {view.iconImage.color}");
+                    if (view.bgImage != null) sb.AppendLine($"    bgImage.color = {view.bgImage.color}");
+                    if (view.cellContainer != null)
+                    {
+                        int i = 0;
+                        foreach (Transform c in view.cellContainer)
+                        {
+                            var img = c.GetComponent<Image>();
+                            if (img != null) sb.AppendLine($"    cell[{i}].color = {img.color}");
+                            i++;
+                        }
+                    }
+                }
+                catch { }
+            }
+            Debug.Log(sb.ToString());
         }
 
         /// <summary>

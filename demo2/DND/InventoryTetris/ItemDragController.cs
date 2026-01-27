@@ -82,6 +82,13 @@ namespace demo2.DND.InventoryTetris
             var view = go.GetComponentInParent<InventoryItemView>();
             if (view == null || view.BoundItem == null || view.Grid == null) return;
 
+            // 如果该物品当前处于已装备状态，则禁止拿起
+            if (view.IsEquippedForBoundItem())
+            {
+                Debug.Log("[DragCtrl] 拒绝拿起：该物品已装备并被锁定（需先双击卸下才能拿起）。");
+                return;
+            }
+
             BeginHoldInternal(view);
         }
 

@@ -515,6 +515,8 @@ namespace demo2.DND.InventoryTetris
                 if (view != null)
                 {
                     view.RefreshEquipLabel();
+                    // ensure visuals follow label state (defensive; SyncEquipVisual will handle coloring)
+                    try { view.SyncEquipVisual(); } catch { }
                 }
             }
         }
@@ -682,6 +684,9 @@ namespace demo2.DND.InventoryTetris
             {
                 view.bgImage.raycastTarget = true;
             }
+
+            // Ensure equip visuals are applied now that the view is fully configured
+            try { view.SyncEquipVisual(); } catch { }
 
             return view;
         }
