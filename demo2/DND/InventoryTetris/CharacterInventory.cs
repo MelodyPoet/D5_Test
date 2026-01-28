@@ -86,6 +86,7 @@ namespace demo2.DND.InventoryTetris
                          ?? GetComponentInChildren<CharacterEquipment>(true);
             if (eqForRestore != null)
             {
+                Debug.Log($"[CharacterInventory] RestoreEquippedFromSavedIds using eq={eqForRestore.gameObject.name}");
                 RestoreEquippedFromSavedIds(eqForRestore);
                 // Subscribe to equipment change to persist updates
                 try {
@@ -296,19 +297,13 @@ namespace demo2.DND.InventoryTetris
         private CharacterStats GetOrFindStats()
         {
             if (cachedStats != null) return cachedStats;
-
-            // 尝试从自身或父级查找 CharacterStats
-            cachedStats = GetComponent<CharacterStats>();
-            if (cachedStats == null)
-            {
-                cachedStats = GetComponentInParent<CharacterStats>();
-            }
-
+            cachedStats = GetComponent<CharacterStats>()
+                ?? GetComponentInParent<CharacterStats>()
+                ?? GetComponentInChildren<CharacterStats>(true);
             if (cachedStats == null)
             {
                 Debug.LogWarning($"[CharacterInventory] 在 {gameObject.name} 的自身或父级未找到 CharacterStats 组件。某些功能可能无法正常工作.");
             }
-
             return cachedStats;
         }
 

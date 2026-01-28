@@ -40,7 +40,7 @@ namespace demo2.DND.InventoryTetris
 
         private CharacterEquipment eqSubscribed;
 
-        private Vector2 _cellSize; // 新增：用于存储网格的单元格尺寸
+        private Vector2 cachedCellSize; // 新增：用于存储网格的单元格尺寸
 
         public RectTransform Rect => rect;
 
@@ -143,38 +143,8 @@ namespace demo2.DND.InventoryTetris
 
         private CharacterEquipment ResolveEquipment()
         {
-            // 优先 Grid.SourceEquipment
+            // 仅使用当前网格绑定的装备组件，避免跨角色混用
             if (Grid != null && Grid.SourceEquipment != null) return Grid.SourceEquipment;
-
-            CharacterEquipment eq;
-            // 从本节点上下查找
-            eq = GetComponent<CharacterEquipment>()
-                 ?? GetComponentInParent<CharacterEquipment>()
-                 ?? GetComponentInChildren<CharacterEquipment>(true);
-            if (eq != null) return eq;
-
-            // 从 Grid 节点上下查找
-            if (Grid != null)
-            {
-                eq = Grid.GetComponent<CharacterEquipment>()
-                     ?? Grid.GetComponentInParent<CharacterEquipment>()
-                     ?? Grid.GetComponentInChildren<CharacterEquipment>(true);
-                if (eq != null) return eq;
-            }
-
-            // 兜底：在整个场景中查找第一个可用的 CharacterEquipment（含未激活），以防组件挂载在意外位置
-            var all = FindObjectsByType<CharacterEquipment>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (all != null && all.Length > 0)
-            {
-                // 优先选择在场景中有效的实例
-                foreach (var candidate in all)
-                {
-                    if (candidate == null) continue;
-                    if (!candidate.gameObject.scene.IsValid()) continue;
-                    Debug.Log($"[ResolveEquipment] 兜底匹配到 CharacterEquipment: {candidate.gameObject.name} for ItemView on {gameObject.name}");
-                    return candidate;
-                }
-            }
             Debug.LogWarning($"[ResolveEquipment] 未能解析到 CharacterEquipment (Grid={Grid?.gameObject.name ?? "null"}, ItemView={gameObject.name})");
             return null;
         }
@@ -256,7 +226,7 @@ namespace demo2.DND.InventoryTetris
 
         public void SetCellSize(Vector2 cellSize)
         {
-            _cellSize = cellSize;
+            cachedCellSize = cellSize;
         }
 
         private void RebuildVisuals()
@@ -293,19 +263,20 @@ namespace demo2.DND.InventoryTetris
                 // Create new cells
                 foreach (var coord in shape)
                 {
-                    var cellGO = Instantiate(cellPrefab, cellContainer);
-                    cellGO.SetActive(true); // Ensure the instantiated cell is active
-                    var cellRT = cellGO.GetComponent<RectTransform>();
+                    var cellGo = Instantiate(cellPrefab, cellContainer);
+                    cellGo.SetActive(true); // Ensure the instantiated cell is active
+                    var cellRT = cellGo.GetComponent<RectTransform>();
                     if (cellRT != null)
                     {
                         cellRT.anchorMin = new Vector2(0, 1);
                         cellRT.anchorMax = new Vector2(0, 1);
                         cellRT.pivot = new Vector2(0, 1);
-                        cellRT.sizeDelta = Grid.cellSize;
+                        var effectiveCellSize = cachedCellSize != Vector2.zero ? cachedCellSize : Grid.cellSize;
+                        cellRT.sizeDelta = effectiveCellSize;
                         // Position cells relative to the container's top-left, including spacing
                         cellRT.anchoredPosition = new Vector2(
-                            coord.x * (Grid.cellSize.x + Grid.spacing.x),
-                           -coord.y * (Grid.cellSize.y + Grid.spacing.y)
+                            coord.x * (effectiveCellSize.x + Grid.spacing.x),
+                           -coord.y * (effectiveCellSize.y + Grid.spacing.y)
                         );
 
                         if (isFirstCell)
@@ -336,32 +307,6 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
-        private void GenerateShape()
-        {
-            if (cellContainer == null || cellPrefab == null) return;
-
-            // Clear previous cells
-            foreach (Transform child in cellContainer)
-            {
-                Destroy(child.gameObject);
-            }
-
-            var shape = BoundItem.GetCurrentShape();
-            if (shape == null) return;
-
-            foreach (var coord in shape)
-            {
-                var cell = Instantiate(cellPrefab, cellContainer);
-                var rt = cell.transform as RectTransform;
-                rt.anchoredPosition = new Vector2(
-                    coord.x * (_cellSize.x + Grid.spacing.x),
-                   -coord.y * (_cellSize.y + Grid.spacing.y)
-                );
-                rt.sizeDelta = _cellSize;
-                cell.SetActive(true);
-            }
-        }
-
         public void OnPointerClick(PointerEventData eventData)
         {
             if (BoundItem == null || Grid == null) return;
@@ -369,6 +314,7 @@ namespace demo2.DND.InventoryTetris
             // 仅用于调试双击与装备逻辑
             bool hasDragCtrl = ItemDragController.Current != null;
             bool isHolding = ItemDragController.Current?.IsHoldingItem ?? false;
+            Debug.Log($"[ItemView Click] isEquippable={IsEquippable()}, hasGrid={(Grid!=null)}, boundItemNull={(BoundItem==null)}");
             Debug.Log($"[ItemView Click] {BoundItem?.data?.displayName} button={eventData.button} clicks={eventData.clickCount}, hasDragCtrl={hasDragCtrl}, isHolding={isHolding}");
 
             // 左键双击：装备/卸下切换（仅在未拿起时生效）
@@ -393,15 +339,10 @@ namespace demo2.DND.InventoryTetris
                 {
                     if (Grid.TryGetGridPosition(BoundItem, out var pos))
                     {
-                        // 进一步确认当前位置对该物品仍然是合法的放置位置
-                        if (Grid.CanPlaceItemAt(BoundItem, pos.x, pos.y))
-                        {
-                            ToggleEquipState();
-                        }
-                        else
-                        {
-                            Debug.LogWarning($"[ItemView] 双击忽略：物品在网格位置({pos.x},{pos.y})不再是合法放置位置。");
-                        }
+                        Debug.Log($"[ItemView] DoubleClick -> TryGetGridPosition OK (pos={pos.x},{pos.y})");
+                        Debug.Log($"[ItemView] DoubleClick -> ToggleEquipState (pos={pos.x},{pos.y})");
+                        ToggleEquipState();
+                        Debug.Log("[ItemView] DoubleClick -> ToggleEquipState finished");
                     }
                     else
                     {
@@ -429,19 +370,15 @@ namespace demo2.DND.InventoryTetris
 
         private void ToggleEquipState()
         {
-            // Only equippable items can be toggled
-            if (!IsEquippable())
-            {
-                Debug.LogWarning("[ToggleEquipState] 物品不可装备，忽略切换请求。");
-                return;
-            }
-
-            // 防御：仅在物品当前有绑定且位于网格上并且位置合法时才尝试装备/卸下
+            Debug.Log($"[ToggleEquipState] Start processing for {BoundItem?.data?.displayName}");
+            Debug.Log($"[ToggleEquipState] Grid={Grid?.name ?? "null"} BoundItemId={BoundItem?.instanceId ?? "null"}");
             if (BoundItem == null || BoundItem.data == null)
             {
                 Debug.LogWarning("[ToggleEquipState] BoundItem 或 BoundItem.data 为 null，不能切换装备。");
                 return;
             }
+            var data = BoundItem.data;
+            Debug.Log($"[ToggleEquipState] TypeFlags weapon={data.isWeapon} armor={data.isArmor} shield={data.isShield}");
 
             if (Grid == null)
             {
@@ -449,15 +386,9 @@ namespace demo2.DND.InventoryTetris
                 return;
             }
 
-            if (!Grid.TryGetGridPosition(BoundItem, out var currentPos))
+            if (!Grid.TryGetGridPosition(BoundItem, out _))
             {
                 Debug.LogWarning("[ToggleEquipState] 物品当前未放置在网格上（可能正在被拿起），无法装备/卸下。");
-                return;
-            }
-
-            if (!Grid.CanPlaceItemAt(BoundItem, currentPos.x, currentPos.y))
-            {
-                Debug.LogWarning($"[ToggleEquipState] 当前物品在位置({currentPos.x},{currentPos.y})不构成合法放置，禁止装备/卸下。");
                 return;
             }
 
@@ -467,63 +398,108 @@ namespace demo2.DND.InventoryTetris
                 Debug.LogWarning($"[ToggleEquipState] eq 为 null，无法切换装备状态。Item={BoundItem.data.displayName}");
                 return;
             }
+            Debug.Log($"[ToggleEquipState] Using CharacterEquipment={eq.gameObject.name}");
+            var mhSlot = eq.GetEquipped(EquipmentSlot.MainHand);
+            var arSlot = eq.GetEquipped(EquipmentSlot.Armor);
+            var shSlot = eq.GetEquipped(EquipmentSlot.OffHand);
+            Debug.Log($"[ToggleEquipState] Slots before: MH={mhSlot?.instanceId ?? "null"}, AR={arSlot?.instanceId ?? "null"}, SH={shSlot?.instanceId ?? "null"}");
 
+            // Determine equipped state by instanceId to avoid reference mismatches
             bool isEquipped = eq.IsEquipped(BoundItem);
-            Debug.Log($"[ToggleEquipState] {BoundItem.data.displayName} 原状态 isEquipped={isEquipped}");
+            Debug.Log($"[ToggleEquipState] PreToggle isEquipped={isEquipped}");
 
-            if (!isEquipped)
+            if (isEquipped)
             {
-                // 尝试装备
-                if (!eq.CanEquip(BoundItem))
+                // Unequip the exact slot that holds this instance
+                if (data.isWeapon && mhSlot != null && mhSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.MainHand);
+                else if (data.isArmor && arSlot != null && arSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.Armor);
+                else if (data.isShield && shSlot != null && shSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.OffHand);
+                else
                 {
-                    Debug.LogWarning($"[ToggleEquipState] CanEquip 返回 false，无法装备 {BoundItem.data.displayName}");
-                    return;
+                    // Fallback: try to unequip whichever slot matches by instanceId
+                    if (mhSlot != null && mhSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.MainHand);
+                    else if (arSlot != null && arSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.Armor);
+                    else if (shSlot != null && shSlot.instanceId == BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.OffHand);
+                    else
+                    {
+                        Debug.LogWarning("[ToggleEquipState] 未找到可卸下的槽位（实例不匹配）。");
+                    }
                 }
-                if (BoundItem.data.isWeapon) eq.EquipToSlot(EquipmentSlot.MainHand, BoundItem);
-                else if (BoundItem.data.isArmor) eq.EquipToSlot(EquipmentSlot.Armor, BoundItem);
-                else if (BoundItem.data.isShield) eq.EquipToSlot(EquipmentSlot.OffHand, BoundItem);
             }
             else
             {
-                // 尝试卸下
-                var mh = eq.GetEquipped(EquipmentSlot.MainHand);
-                var ar = eq.GetEquipped(EquipmentSlot.Armor);
-                var sh = eq.GetEquipped(EquipmentSlot.OffHand);
-                if (BoundItem.data.isWeapon && ReferenceEquals(mh, BoundItem)) eq.UnequipSlot(EquipmentSlot.MainHand);
-                else if (BoundItem.data.isArmor && ReferenceEquals(ar, BoundItem)) eq.UnequipSlot(EquipmentSlot.Armor);
-                else if (BoundItem.data.isShield && ReferenceEquals(sh, BoundItem)) eq.UnequipSlot(EquipmentSlot.OffHand);
+                // Equip to the correct slot; replace existing item in that slot if needed
+                if (data.isWeapon)
+                {
+                    if (mhSlot != null && mhSlot.instanceId != BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.MainHand);
+                    eq.EquipToSlot(EquipmentSlot.MainHand, BoundItem);
+                }
+                else if (data.isArmor)
+                {
+                    if (arSlot != null && arSlot.instanceId != BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.Armor);
+                    eq.EquipToSlot(EquipmentSlot.Armor, BoundItem);
+                }
+                else if (data.isShield)
+                {
+                    if (shSlot != null && shSlot.instanceId != BoundItem.instanceId) eq.UnequipSlot(EquipmentSlot.OffHand);
+                    eq.EquipToSlot(EquipmentSlot.OffHand, BoundItem);
+                }
+                else
+                {
+                    Debug.LogWarning("[ToggleEquipState] 物品类型标记均为 false，无法确定装备槽位。");
+                }
             }
+
+            Debug.Log($"[ToggleEquipState] PostToggle isEquipped={eq.IsEquipped(BoundItem)}");
+            mhSlot = eq.GetEquipped(EquipmentSlot.MainHand);
+            arSlot = eq.GetEquipped(EquipmentSlot.Armor);
+            shSlot = eq.GetEquipped(EquipmentSlot.OffHand);
+            Debug.Log($"[ToggleEquipState] Slots after: MH={mhSlot?.instanceId ?? "null"}, AR={arSlot?.instanceId ?? "null"}, SH={shSlot?.instanceId ?? "null"}");
 
             // 更新视觉：仅对可装备物品改变 cell 色彩
             UpdateEquipColor();
+            RefreshEquipLabel();
+            if (Grid != null)
+            {
+                Grid.RefreshAllEquipLabels();
+            }
         }
 
         private void UpdateEquipColor()
         {
-            // Only change color for equippable items
-            if (!IsEquippable()) return;
-
-            var eq = ResolveEquipment();
-            bool equipped = false;
-            if (eq != null && BoundItem != null && BoundItem.data != null)
+            // Unity may invoke this callback after the view is queued for destruction while equipment events are still firing.
+            // Guard against touching destroyed objects to avoid MissingReferenceException.
+            if (this == null || gameObject == null)
             {
-                equipped = eq.IsEquipped(BoundItem);
+                return;
             }
-            else
-            {
-                // Fallback: if equipment component not resolvable (timing/scene order), try use CharacterInventory saved equipped IDs
-                if (Grid != null && Grid.SourceInventory != null && BoundItem != null && BoundItem.data != null)
-                {
-                    var inv = Grid.SourceInventory;
-                    string id = BoundItem.instanceId;
-                    if (BoundItem.data.isWeapon && !string.IsNullOrEmpty(inv.equippedMainHandId) && inv.equippedMainHandId == id) equipped = true;
-                    else if (BoundItem.data.isArmor && !string.IsNullOrEmpty(inv.equippedArmorId) && inv.equippedArmorId == id) equipped = true;
-                    else if (BoundItem.data.isShield && !string.IsNullOrEmpty(inv.equippedShieldId) && inv.equippedShieldId == id) equipped = true;
-                }
-            }
-            Color targetColor = equipped ? Color.gray : Color.white;
 
-            Debug.Log($"[UpdateEquipColor] item={BoundItem.data.displayName} id={BoundItem.instanceId} resolvedEq={(eq!=null?eq.gameObject.name:"null")}, isEquipped={equipped}, targetColor={targetColor}");
+             // Only change color for equippable items
+             if (!IsEquippable()) return;
+             if (BoundItem == null || BoundItem.data == null) return;
+             var data = BoundItem.data;
+
+             var eq = ResolveEquipment();
+             bool equipped = false;
+             if (eq != null && BoundItem != null && BoundItem.data != null)
+             {
+                 equipped = eq.IsEquipped(BoundItem);
+             }
+             else
+             {
+                 // Fallback: if equipment component not resolvable (timing/scene order), try use CharacterInventory saved equipped IDs
+                 if (Grid != null && Grid.SourceInventory != null && BoundItem != null && BoundItem.data != null)
+                 {
+                     var inv = Grid.SourceInventory;
+                     string id = BoundItem.instanceId;
+                     if (BoundItem.data.isWeapon && !string.IsNullOrEmpty(inv.equippedMainHandId) && inv.equippedMainHandId == id) equipped = true;
+                     else if (BoundItem.data.isArmor && !string.IsNullOrEmpty(inv.equippedArmorId) && inv.equippedArmorId == id) equipped = true;
+                     else if (BoundItem.data.isShield && !string.IsNullOrEmpty(inv.equippedShieldId) && inv.equippedShieldId == id) equipped = true;
+                 }
+             }
+             Color targetColor = equipped ? Color.gray : Color.white;
+
+            Debug.Log($"[UpdateEquipColor] item={data.displayName} id={BoundItem.instanceId} resolvedEq={(eq!=null?eq.gameObject.name:"null")}, isEquipped={equipped}, targetColor={targetColor}");
 
             bool appliedAny = false;
 

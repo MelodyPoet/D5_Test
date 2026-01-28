@@ -153,16 +153,13 @@ namespace demo2.DND.InventoryTetris
         {
             if (_itemView == null || _item == null) return;
 
-            _item.Rotate();
-
-            // 如果是通过 ItemDragController 持有状态下旋转，需要通知它刷新图标
             if (ItemDragController.Current != null && ItemDragController.Current.IsHoldingItem)
             {
-                ItemDragController.Current.RefreshHoldingItemIcon();
+                ItemDragController.Current.RotateHeld();
             }
             else
             {
-                // 否则，执行原地旋转的刷新
+                _item.Rotate();
                 _itemView.RefreshVisuals();
             }
 

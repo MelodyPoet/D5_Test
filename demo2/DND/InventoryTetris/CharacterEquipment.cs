@@ -63,13 +63,21 @@ namespace demo2.DND.InventoryTetris
             // Note: callers will usually call ReapplyEquippedModifiers/RaiseChanged explicitly; we avoid side-effects here to keep behavior explicit.
         }
 
+        private bool SameInstance(ItemInstance a, ItemInstance b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (string.IsNullOrEmpty(a.instanceId) || string.IsNullOrEmpty(b.instanceId)) return false;
+            return a.instanceId == b.instanceId;
+        }
+
         public bool IsEquipped(ItemInstance inst)
         {
             if (inst == null) return false;
-            // Check dictionary values for the same reference
+            // Check dictionary values for the same reference or same instanceId
             foreach (var kv in slotMap)
             {
-                if (ReferenceEquals(kv.Value, inst))
+                if (SameInstance(kv.Value, inst))
                 {
                     Debug.Log($"[CharacterEquipment] IsEquipped -> item={InstanceName(inst)} found in slot={kv.Key} on {gameObject.name}");
                     return true;
@@ -118,6 +126,16 @@ namespace demo2.DND.InventoryTetris
             return true;
         }
 
+        private string DumpSlots()
+        {
+            var entries = new List<string>();
+            foreach (var kv in slotMap)
+            {
+                entries.Add($"{kv.Key}={(kv.Value?.data?.displayName ?? kv.Value?.instanceId ?? "null")}");
+            }
+            return string.Join(",", entries);
+        }
+
         public bool ToggleEquip(ItemInstance inst)
         {
             if (inst == null || inst.data == null) return false;
@@ -126,9 +144,12 @@ namespace demo2.DND.InventoryTetris
             // If already equipped in any slot, unequip that slot
             foreach (var kv in new List<KeyValuePair<EquipmentSlot, ItemInstance>>(slotMap))
             {
-                if (ReferenceEquals(kv.Value, inst))
+                if (SameInstance(kv.Value, inst))
                 {
-                    return UnequipSlot(kv.Key);
+                    Debug.Log($"[CharacterEquipment] ToggleEquip -> Unequip {InstanceName(inst)} from {kv.Key}");
+                    bool ok = UnequipSlot(kv.Key);
+                    Debug.Log($"[CharacterEquipment] ToggleEquip result={ok} slots=[{DumpSlots()}]");
+                    return ok;
                 }
             }
 
@@ -142,7 +163,12 @@ namespace demo2.DND.InventoryTetris
             if (preferred.HasValue)
             {
                 // try preferred first
-                if (!slotMap.ContainsKey(preferred.Value)) return EquipToSlot(preferred.Value, inst);
+                if (!slotMap.ContainsKey(preferred.Value))
+                {
+                    bool ok = EquipToSlot(preferred.Value, inst);
+                    Debug.Log($"[CharacterEquipment] ToggleEquip -> Equip {InstanceName(inst)} to {preferred.Value} result={ok} slots=[{DumpSlots()}]");
+                    return ok;
+                }
             }
 
             // fallback: first empty slot in enum order
@@ -150,10 +176,13 @@ namespace demo2.DND.InventoryTetris
             {
                 if (!slotMap.ContainsKey(s))
                 {
-                    return EquipToSlot(s, inst);
+                    bool ok = EquipToSlot(s, inst);
+                    Debug.Log($"[CharacterEquipment] ToggleEquip -> Equip {InstanceName(inst)} to {s} result={ok} slots=[{DumpSlots()}]");
+                    return ok;
                 }
             }
 
+            Debug.LogWarning($"[CharacterEquipment] ToggleEquip -> no available slot for {InstanceName(inst)}. slots=[{DumpSlots()}]");
             return false;
         }
 
@@ -240,6 +269,7 @@ namespace demo2.DND.InventoryTetris
             SetSlot(slot, inst);
             ReapplyEquippedModifiers();
             RaiseChanged();
+            Debug.Log($"[CharacterEquipment] EquipToSlot {slot} <- {InstanceName(inst)} slots=[{DumpSlots()}]");
             return true;
         }
 
@@ -258,6 +288,7 @@ namespace demo2.DND.InventoryTetris
                 ReapplyEquippedModifiers();
                 RaiseChanged();
                 RefreshEquipLabel(inst);
+                Debug.Log($"[CharacterEquipment] UnequipSlot {slot} removed {InstanceName(inst)} slots=[{DumpSlots()}]");
                 return true;
             }
             return false;

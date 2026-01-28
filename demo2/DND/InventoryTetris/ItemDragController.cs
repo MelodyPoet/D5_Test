@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
+using System.Collections;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -11,15 +11,22 @@ namespace demo2.DND.InventoryTetris
     {
         public static ItemDragController Current { get; private set; }
 
+        [Header("Input")]
+        [Tooltip("双击判定时间窗（秒），用于延迟拿起以让双击装备逻辑优先生效。")]
+        public float doubleClickThreshold = 0.25f;
+
         private InventoryItemView heldView;
         private ItemInstance heldItem;
         private InventoryGridView sourceGrid;
         private Vector2Int originalPosition;
 
         private Canvas canvas;
-        private RectTransform draggingIcon;
-        private bool isHoldingItem;
+         private bool isHoldingItem;
         public bool IsHoldingItem => isHoldingItem;
+
+        private float lastClickTime;
+        private Coroutine pendingHoldRoutine;
+        private InventoryItemView pendingHoldView;
 
         private void Awake()
         {
@@ -36,7 +43,6 @@ namespace demo2.DND.InventoryTetris
         {
             if (!isHoldingItem) return;
 
-            UpdateHeldItemPosition();
             if (sourceGrid != null && heldItem != null)
             {
                 sourceGrid.ShowPlacementPreview(heldItem, GetGridPosition(Input.mousePosition));
@@ -57,12 +63,12 @@ namespace demo2.DND.InventoryTetris
             {
                 if (!isHoldingItem)
                 {
-                    TryBeginHoldFromPointer(eventData);
-                }
-                else
-                {
-                    TryEndHoldAtPointer(eventData);
-                }
+                    TryScheduleHoldFromPointer(eventData);
+                 }
+                 else
+                 {
+                     TryEndHoldAtPointer(eventData);
+                 }
             }
             else if (eventData.button == PointerEventData.InputButton.Right)
             {
@@ -71,6 +77,45 @@ namespace demo2.DND.InventoryTetris
                     RotateHeld();
                 }
             }
+        }
+
+        private void TryScheduleHoldFromPointer(PointerEventData eventData)
+        {
+            var go = eventData.pointerPressRaycast.gameObject ?? eventData.pointerCurrentRaycast.gameObject;
+            if (go == null) return;
+
+            var view = go.GetComponentInParent<InventoryItemView>();
+            if (view == null || view.BoundItem == null || view.Grid == null) return;
+
+            if (view.IsEquippedForBoundItem())
+            {
+                Debug.Log("[DragCtrl] 拒绝拿起：该物品已装备并被锁定（需先双击卸下才能拿起）。");
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            if (pendingHoldRoutine != null && (now - lastClickTime) <= doubleClickThreshold)
+            {
+                StopCoroutine(pendingHoldRoutine);
+                pendingHoldRoutine = null;
+                pendingHoldView = null;
+                return; // 交由双击逻辑处理
+            }
+
+            lastClickTime = now;
+            pendingHoldView = view;
+            pendingHoldRoutine = StartCoroutine(DelayedBeginHold(doubleClickThreshold));
+        }
+
+        private IEnumerator DelayedBeginHold(float delay)
+        {
+            yield return new WaitForSecondsRealtime(delay);
+            if (pendingHoldView != null && !isHoldingItem)
+            {
+                BeginHoldInternal(pendingHoldView);
+            }
+            pendingHoldView = null;
+            pendingHoldRoutine = null;
         }
 
         private void TryBeginHoldFromPointer(PointerEventData eventData)
@@ -99,22 +144,45 @@ namespace demo2.DND.InventoryTetris
             sourceGrid.ClearPlacementPreview();
             Vector2Int dropPosition = GetGridPosition(eventData.position);
 
+            Vector2Int finalPosition;
             if (sourceGrid.CanPlaceItemAt(heldItem, dropPosition.x, dropPosition.y))
             {
                 sourceGrid.PlaceItemAt(heldItem, dropPosition.x, dropPosition.y);
+                finalPosition = dropPosition;
             }
             else
             {
                 sourceGrid.PlaceItemAt(heldItem, originalPosition.x, originalPosition.y);
+                finalPosition = originalPosition;
             }
 
-            DestroyDraggingIcon();
+            if (heldView != null)
+            {
+                heldView.gameObject.SetActive(true);
+                sourceGrid.PositionViewAtGrid(heldView, finalPosition.x, finalPosition.y);
+                heldItem.view = heldView;
+                heldView.RefreshVisuals();
+                heldView.SyncEquipVisual();
+            }
+
             sourceGrid.RefreshGrid();
+            ForceRefreshEquipmentState();
 
             isHoldingItem = false;
             heldView = null;
             heldItem = null;
             sourceGrid = null;
+        }
+
+        private void ForceRefreshEquipmentState()
+        {
+            if (sourceGrid == null) return;
+            var eq = sourceGrid.SourceEquipment;
+            if (eq != null)
+            {
+                eq.ReapplyEquippedModifiers();
+            }
+            sourceGrid.RefreshAllEquipLabels();
         }
 
         private void BeginHoldInternal(InventoryItemView view)
@@ -128,7 +196,10 @@ namespace demo2.DND.InventoryTetris
             sourceGrid.TryGetGridPosition(heldItem, out originalPosition);
 
             sourceGrid.RemoveItem(heldItem, false);
-            CreateDraggingIcon();
+            if (heldView != null)
+            {
+                heldView.gameObject.SetActive(false);
+            }
         }
 
         public void RotateHeld()
@@ -136,68 +207,9 @@ namespace demo2.DND.InventoryTetris
             if (!isHoldingItem || heldItem == null) return;
 
             heldItem.Rotate();
-            RefreshHoldingItemIcon();
-
-            // 局部刷新：只重建当前物品的视图，而不是整个 Grid
-            if (heldItem.view != null)
+            if (sourceGrid != null)
             {
-                heldItem.view.RefreshVisuals();
-            }
-        }
-
-        private void CreateDraggingIcon()
-        {
-            if (heldView == null) return;
-
-            draggingIcon = new GameObject("DraggingIcon", typeof(RectTransform)).GetComponent<RectTransform>();
-            draggingIcon.SetParent(canvas.transform, false);
-            draggingIcon.SetAsLastSibling();
-
-            var sourceImage = heldView.iconImage;
-            var iconImage = draggingIcon.gameObject.AddComponent<Image>();
-            iconImage.sprite = sourceImage != null ? sourceImage.sprite : null;
-            iconImage.raycastTarget = false; // 不拦截点击
-
-            draggingIcon.localScale = Vector3.one * 1.1f;
-            if (sourceImage != null)
-            {
-                var sourceRect = sourceImage.rectTransform;
-                iconImage.rectTransform.sizeDelta = sourceRect.sizeDelta;
-            }
-
-            UpdateHeldItemPosition();
-        }
-
-        private void DestroyDraggingIcon()
-        {
-            if (draggingIcon != null)
-            {
-                Destroy(draggingIcon.gameObject);
-                draggingIcon = null;
-            }
-        }
-
-        private void UpdateHeldItemPosition()
-        {
-            if (draggingIcon == null) return;
-
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvas.transform as RectTransform,
-                Input.mousePosition,
-                canvas.worldCamera,
-                out Vector2 localPoint);
-
-            draggingIcon.localPosition = localPoint + new Vector2(2, 0);
-        }
-
-        public void RefreshHoldingItemIcon()
-        {
-            if (draggingIcon == null || heldItem == null || heldView == null) return;
-
-            var iconImage = draggingIcon.GetComponent<Image>();
-            if (iconImage != null)
-            {
-                iconImage.sprite = heldView.iconImage.sprite;
+                sourceGrid.ShowPlacementPreview(heldItem, GetGridPosition(Input.mousePosition));
             }
         }
 
