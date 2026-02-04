@@ -129,6 +129,54 @@ namespace demo2.DND.HorizontalFormation
             bool isSpell = attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell;
             var weapon = isSpell ? null : FindEquippedWeapon(attacker);
 
+            // 新增：法术豁免型（无需攻击检定）
+            if (isSpell && attacker.template != null && attacker.template.defaultCantrip != null)
+            {
+                var sd = attacker.template.defaultCantrip;
+                if (!sd.requiresAttackRoll)
+                {
+                    int saveDiceSize, saveRolled;
+                    int fullDamage = CalculateDamageUnified(attacker, false, true, "", out saveDiceSize, out saveRolled, out _, weapon, out _);
+
+                    var asnap = TryGetSnapshot(attacker);
+                    var saveTsnap = TryGetSnapshot(target);
+                    int saveDc = 8 + attacker.ProficiencyBonus + GetAbilityModifierFromSnapshot(asnap, attacker, attacker.template.primarySpellAbility);
+                    int saveMod = GetAbilityModifierFromSnapshot(saveTsnap, target, sd.saveAbility);
+                    int saveRoll = UnityEngine.Random.Range(1, 21) + saveMod;
+                    bool saved = saveRoll >= saveDc;
+
+                    r.isHit = !saved; // 语义上非必需，仅用于日志
+                    r.isCritical = false;
+                    r.damage = saved ? (sd.saveHalvesOnSuccess ? Mathf.Max(0, fullDamage / 2) : 0) : fullDamage;
+                    r.damageType = sd.damageType;
+                    r.description = saved ? $"豁免成功（DC {saveDc}）伤害: {r.damage}" : $"豁免失败（DC {saveDc}）伤害: {r.damage}";
+
+                    try { GameLog.LogHit(attacker.GetDisplayName(), target.GetDisplayName(), sd.spellName, sd.saveAbility, saveRoll, 0, saveRoll, saveDc, !saved); } catch (Exception ex) { Debug.LogWarning($"[HorizontalCombatRules] GameLog.LogHit threw: {ex.Message}"); }
+                    try
+                    {
+                        string saveDiceExpr = $"{sd.GetDamageDiceAtCasterLevel(attacker.Level).diceCount}d{saveDiceSize}";
+                        GameLog.LogDamage(attacker.GetDisplayName(), target.GetDisplayName(), r.damageType.ToString(), saveDiceExpr, saveRolled, saved ? "豁免成功" : "豁免失败", r.damage);
+                    }
+                    catch (Exception ex) { Debug.LogWarning($"[HorizontalCombatRules] GameLog.LogDamage threw: {ex.Message}"); }
+
+                    try
+                    {
+                        var channel = GetDamageEventChannel(attacker, target);
+                        if (channel != null)
+                        {
+                            var info = new DamageInfo(target, attacker, r.damage, false);
+                            channel.RaiseEvent(info);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[HorizontalCombatRules] 发布伤害事件异常: {ex.Message}");
+                    }
+
+                    return r;
+                }
+            }
+
             string hitAbility;
             string attackName;
             int attackBonus = GetAttackBonus(attacker, isMeleeAttack, out hitAbility, out attackName, weapon);

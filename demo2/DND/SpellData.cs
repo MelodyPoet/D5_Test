@@ -78,6 +78,12 @@ namespace demo2.DND
         [Tooltip("是否需要投攻击检定（大多数戏法为 true）")]
         public bool requiresAttackRoll = true;
 
+        [Tooltip("若无需攻击检定，则使用该属性进行豁免（如 dexterity / constitution / wisdom）")]
+        public string saveAbility = "constitution";
+
+        [Tooltip("豁免成功是否减半伤害；为 false 则成功时伤害为 0")]
+        public bool saveHalvesOnSuccess = true;
+
         [Tooltip("攻击类型（如 attack roll 或 saving throw）")]
         public string attackType = "Spell Attack";
 
@@ -95,4 +101,3 @@ namespace demo2.DND
         }
     }
 }
-
