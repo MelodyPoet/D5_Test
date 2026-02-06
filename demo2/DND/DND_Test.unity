@@ -4161,9 +4161,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dee3f8ba14ae48ca9e37e5a1229ca7a9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cursorTexture: {fileID: 2800000, guid: 3a1fd2437fffe8b4eb55068d1cdfc9e8, type: 3}
+  cursorTexture: {fileID: 2800000, guid: c1e27c920eb6c374fa391cb963158cb7, type: 3}
   hotspot: {x: 0.2, y: 0.2}
-  cursorScale: 0.4
+  cursorScale: 1.2
   softwareCursorCanvas: {fileID: 1641010537}
 --- !u!1 &1659868247
 GameObject:
