@@ -974,10 +974,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bfbbef6f065c4694a1e3cee3aad01ab0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  skinConfig: {fileID: 11400000, guid: 3d51549f0e2ec5d4799f0a3bcd0e0774, type: 2}
-  characterPrefab: {fileID: 697682100849589962, guid: be283099bd208094a9ddff7cbeb81b25, type: 3}
-  animationConfig: {fileID: 11400000, guid: a2a5b92965092e546a6a202de0f47665, type: 2}
-  gameCharacter: {fileID: 172138301807029386, guid: be283099bd208094a9ddff7cbeb81b25, type: 3}
+  skinConfig: {fileID: 11400000, guid: 2f3e158c804795a478d74be92337e7c7, type: 2}
+  characterPrefab: {fileID: 4537190158040161229, guid: 77180b56dc2632240a112bcf96957185, type: 3}
+  animationConfig: {fileID: 11400000, guid: 33958c343251dd04f9b666edf512287b, type: 2}
+  gameCharacter: {fileID: 8774157992506457522, guid: 77180b56dc2632240a112bcf96957185, type: 3}
   characterDisplayImage: {fileID: 848709326}
   uiCharacterCamera: {fileID: 1854172971}
   categoryTabsContainer: {fileID: 5171370276724808040}
@@ -986,9 +986,11 @@ MonoBehaviour:
   categoryTabPrefab: {fileID: 2756351410190607613, guid: c4b147f50b160ba4999cfb8bfe11384d, type: 3}
   iconButtonPrefab: {fileID: 5646330853957582681, guid: 7819fe6a38d73ea4eafb83457f51985a, type: 3}
   animationButtonPrefab: {fileID: 6790520207793987259, guid: 74926c495e57137458608d5bf668cb4a, type: 3}
+  sectionHeaderPrefab: {fileID: 0}
   confirmButton: {fileID: 1387202415051149862}
   cancelButton: {fileID: 658100543}
   cameraFitMargin: 1.1
+  showEquipmentPartsInTest: 1
 --- !u!114 &5009361633015395586
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1199,8 +1201,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -289.3067, y: 56.47473}
-  m_SizeDelta: {x: -377.3876, y: 174.8763}
+  m_AnchoredPosition: {x: -295.44214, y: 56.47473}
+  m_SizeDelta: {x: -397.3707, y: 174.8763}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &6616589413232006691
 GameObject:

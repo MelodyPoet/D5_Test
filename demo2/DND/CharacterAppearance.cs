@@ -2,22 +2,21 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
+using demo2.DND.InventoryTetris;
 
 namespace demo2.DND
 {
     /// <summary>
-    /// 角色换装系统 - 外观管理器
+    /// 角色换装系统 - 外观管理器（4层渲染模型）
     ///
-    /// 职责：
-    /// - 维护当前部件组合状态（Dictionary<SkinBodyPartType, skinID>）
-    /// - 动态更新Spine骨架的皮肤配置
-    /// - 发布外观改变事件（OnAppearanceChanged）
+    /// 渲染层级（从底到顶）：
+    ///   Layer 1: baseBody     默认基础身体（紧身衣+躯干+手+脚），由 SkinConfig.defaultBaseBodySkinID 配置
+    ///   Layer 2: cosmetic     装饰部件（头发、眼睛、眼皮、鼻子），由换装面板设置
+    ///   Layer 3: covering     覆盖型装备（头盔/铠甲/护手/靴子/腰带/披风），穿戴时覆盖对应区域
+    ///   Layer 4: overlay      叠加型装备（头环/王冠等），在现有外观上层叠加，不隐藏下层
     ///
-    /// 设计特点：
-    /// - baseSkin：基础皮肤（只有脸和手臂的裸体）
-    /// - combinedSkin：动态创建（baseSkin + 各部件皮肤的组合）
-    /// - 不清理Animation轨道，保持动画连贯
-    /// - 仅修改皮肤，不涉及动画状态
+    /// Spine 的 AddSkin() 后添加的层在同Slot上有附件时会覆盖前一层，
+    /// 因此 Layer3 覆盖型头盔会自然隐藏 Layer2 的头发，Layer4 叠加型头环则不会影响头发。
     /// </summary>
     public class CharacterAppearance : MonoBehaviour
     {
@@ -28,16 +27,19 @@ namespace demo2.DND
         private SkeletonAnimation skeletonAnimation;
 
         /// <summary>
-        /// 基础皮肤名（通常是 skin-base）
-        /// 包含非遮挡区域的人体（脸、手臂等）
+        /// Layer 2: 装饰部件 — 换装面板设置（头发/眼睛/眼皮/鼻子/配饰等）
         /// </summary>
-        private const string BASE_SKIN = "skin-base";
+        private Dictionary<SkinBodyPartType, string> cosmeticParts = new Dictionary<SkinBodyPartType, string>();
 
         /// <summary>
-        /// 当前部件组合：每个部件类型 → 对应的皮肤ID
-        /// 例如：Hair → "hair/blue", Clothes → "clothes/dress-blue"
+        /// Layer 3: 覆盖型装备 — 装备系统驱动（头盔/铠甲/护手/靴子/腰带/披风）
         /// </summary>
-        private Dictionary<SkinBodyPartType, string> currentParts = new Dictionary<SkinBodyPartType, string>();
+        private Dictionary<EquipmentSlot, string> coveringEquipment = new Dictionary<EquipmentSlot, string>();
+
+        /// <summary>
+        /// Layer 4: 叠加型装备 — 装备系统驱动（头环/王冠等饰品）
+        /// </summary>
+        private Dictionary<EquipmentSlot, string> overlayEquipment = new Dictionary<EquipmentSlot, string>();
 
         /// <summary>
         /// 当前应用在骨架上的组合皮肤的名称
@@ -50,9 +52,14 @@ namespace demo2.DND
         /// </summary>
         public event Action<SkinBodyPartType, string> OnAppearanceChanged;
 
+        /// <summary>
+        /// 装备外观改变事件
+        /// 参数：变更的装备槽位
+        /// </summary>
+        public event Action<EquipmentSlot> OnEquipmentAppearanceChanged;
+
         private void OnEnable()
         {
-            // 如果未在Inspector中设置，尝试自动获取
             if (skeletonAnimation == null)
             {
                 skeletonAnimation = GetComponent<SkeletonAnimation>();
@@ -81,149 +88,185 @@ namespace demo2.DND
                 return;
             }
 
-            currentParts.Clear();
+            cosmeticParts.Clear();
+            coveringEquipment.Clear();
+            overlayEquipment.Clear();
 
-            // 遍历SkinConfig中的所有部件，为每种部件类型初始化第一个皮肤
+            // 遍历SkinConfig中的所有部件，为每种装饰部件类型初始化第一个皮肤
             var allParts = skinConfig.GetAllParts();
 
             foreach (var part in allParts)
             {
-                // 为每个部件类型选择第一个可用的皮肤
-                // 跳过 FullSkin 和 SkinBase（它们有特殊处理）
-                if (part.partType != SkinBodyPartType.FullSkin &&
-                    part.partType != SkinBodyPartType.SkinBase)
-                {
-                    // 如果该部件类型还未初始化，就使用这个皮肤
-                    if (!currentParts.ContainsKey(part.partType))
-                    {
-                        currentParts[part.partType] = part.skinID;
-                    }
-                }
-            }
-
-            // 应用初始外观配置到骨架
-            ApplyAppearanceToSkeleton();
-
-            Debug.Log($"[CharacterAppearance] 初始化完成，已加载 {currentParts.Count} 个部件");
-        }
-
-        /// <summary>
-        /// 设置指定部位的皮肤
-        /// 调用此方法会触发外观更新和事件
-        /// </summary>
-        public void SetPart(SkinBodyPartType partType, string skinID)
-        {
-            // 验证皮肤ID的有效性
-            if (!IsSkinValid(partType, skinID)) return;
-
-            // --- 规则引擎 ---
-
-            // 规则 3: 当应用一个 FullSkin 时，它会替换掉所有散件
-            if (partType == SkinBodyPartType.FullSkin)
-            {
-                currentParts.Clear();
-                currentParts[partType] = skinID;
-            }
-            // 规则 4 (新): 当从 FullSkin 切换回散件时
-            else if (currentParts.ContainsKey(SkinBodyPartType.FullSkin))
-            {
-                // 1. 穿上所有分类的默认部件
-                ApplyDefaultParts();
-                // 2. 再应用玩家选择的那个特定散件
-                currentParts[partType] = skinID;
-            }
-            // 规则 2: 常规散件叠加
-            else
-            {
-                currentParts[partType] = skinID;
-            }
-
-            // 应用最终的外观组合到骨架
-            ApplyAppearanceToSkeleton();
-
-            // 发布事件
-            OnAppearanceChanged?.Invoke(partType, skinID);
-
-            Debug.Log($"[CharacterAppearance] 部件已更新: {partType} → {skinID}");
-        }
-
-        /// <summary>
-        /// 应用一套默认的散件组合（每个分类的第一个）
-        /// </summary>
-        private void ApplyDefaultParts()
-        {
-            if (skinConfig == null) return;
-
-            currentParts.Clear();
-            var allParts = skinConfig.GetAllParts();
-            foreach (var part in allParts)
-            {
-                // 跳过特殊类型
-                if (part.partType == SkinBodyPartType.FullSkin || part.partType == SkinBodyPartType.SkinBase)
+                // 跳过 FullSkin、SkinBase 和装备部位（装备部位由装备系统驱动）
+                if (part.partType == SkinBodyPartType.FullSkin ||
+                    part.partType == SkinBodyPartType.SkinBase ||
+                    IsEquipmentPart(part.partType))
                 {
                     continue;
                 }
 
-                // 如果该部件类型还未被赋值，就使用这个（作为该分类的第一个）
-                if (!currentParts.ContainsKey(part.partType))
+                if (!cosmeticParts.ContainsKey(part.partType))
                 {
-                    currentParts[part.partType] = part.skinID;
+                    cosmeticParts[part.partType] = part.skinID;
                 }
             }
-            Debug.Log($"[CharacterAppearance] 已应用默认散件组合，共 {currentParts.Count} 个部件。");
+
+            ApplyAppearanceToSkeleton();
+            Debug.Log($"[CharacterAppearance] 初始化完成，已加载 {cosmeticParts.Count} 个装饰部件");
         }
 
+        // ==================== 装饰部件接口（换装面板使用） ====================
+
         /// <summary>
-        /// 验证皮肤ID是否有效
+        /// 设置指定部位的皮肤
+        /// - 内层装饰部位（SkinBase/Hair/Eyes/Mouth）写入 cosmeticParts
+        /// - 外层装备部位（Helmet/Armor/Gloves/Boots/Belt/Cloak/MainHandWeapon/OffHandShield/OffHandWeapon）
+        ///   写入 coveringEquipment（测试期直接调用；正式版由 CharacterEquipment 驱动）
+        /// - FullSkin 清空所有部位
         /// </summary>
-        private bool IsSkinValid(SkinBodyPartType partType, string skinID)
+        public void SetPart(SkinBodyPartType partType, string skinID)
         {
-            if (skinConfig == null) return true; // 如果没有配置，则不进行验证
+            if (!IsSkinValid(partType, skinID)) return;
 
-            var entry = skinConfig.GetPartBySkinID(skinID);
-            if (entry == null)
+            if (partType == SkinBodyPartType.FullSkin)
             {
-                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 在SkinConfig中未找到");
-                return false;
+                // FullSkin 清空所有装饰散件和装备外观
+                cosmeticParts.Clear();
+                coveringEquipment.Clear();
+                overlayEquipment.Clear();
+                cosmeticParts[partType] = skinID;
+            }
+            else if (IsEquipmentPart(partType))
+            {
+                // 外层装备部位 → 写入 coveringEquipment（测试期由面板直接操作）
+                // 后续正式版此处应由 CharacterEquipment.SyncAppearance() 驱动
+                var slot = MapPartTypeToEquipmentSlot(partType);
+                if (slot.HasValue)
+                {
+                    coveringEquipment[slot.Value] = skinID;
+                }
+            }
+            else if (cosmeticParts.ContainsKey(SkinBodyPartType.FullSkin))
+            {
+                // 从 FullSkin 切换回散件：先加载默认散件，再应用目标
+                ApplyDefaultCosmeticParts();
+                cosmeticParts[partType] = skinID;
+            }
+            else
+            {
+                // 内层装饰部位
+                cosmeticParts[partType] = skinID;
             }
 
-            if (entry.partType != partType)
-            {
-                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 的部件类型不匹配（期望：{partType}，实际：{entry.partType}）");
-                return false;
-            }
-            return true;
+            ApplyAppearanceToSkeleton();
+            OnAppearanceChanged?.Invoke(partType, skinID);
+            Debug.Log($"[CharacterAppearance] 部件已更新: {partType} → {skinID}");
         }
 
         /// <summary>
-        /// 获取指定部位的当前皮肤ID
+        /// 获取指定部位的当前皮肤ID（包括装备部位）
         /// </summary>
         public string GetCurrentPart(SkinBodyPartType partType)
         {
-            if (currentParts.TryGetValue(partType, out var skinID))
+            // 先查装饰部件
+            cosmeticParts.TryGetValue(partType, out var skinID);
+            if (!string.IsNullOrEmpty(skinID)) return skinID;
+
+            // 再查装备部位
+            var slot = MapPartTypeToEquipmentSlot(partType);
+            if (slot.HasValue)
             {
-                return skinID;
+                if (coveringEquipment.TryGetValue(slot.Value, out var equipSkin))
+                    return equipSkin;
+                if (overlayEquipment.TryGetValue(slot.Value, out equipSkin))
+                    return equipSkin;
             }
 
             return null;
         }
 
         /// <summary>
-        /// 获取所有当前部件的组合信息
+        /// 获取所有当前装饰部件 + 装备外观的完整映射
+        /// （测试期用；后续装备外观由 CharacterEquipment 驱动）
         /// </summary>
         public Dictionary<SkinBodyPartType, string> GetAllCurrentParts()
         {
-            return new Dictionary<SkinBodyPartType, string>(currentParts);
+            var result = new Dictionary<SkinBodyPartType, string>(cosmeticParts);
+
+            // 合并装备外观
+            foreach (var kv in coveringEquipment)
+            {
+                var partType = MapEquipmentSlotToPartType(kv.Key);
+                if (partType.HasValue)
+                    result[partType.Value] = kv.Value;
+            }
+            foreach (var kv in overlayEquipment)
+            {
+                var partType = MapEquipmentSlotToPartType(kv.Key);
+                if (partType.HasValue)
+                    result[partType.Value] = kv.Value;
+            }
+
+            return result;
+        }
+
+        // ==================== 装备外观接口（装备系统驱动） ====================
+
+        /// <summary>
+        /// 根据当前装备状态同步外观（Layer 3 + Layer 4）
+        /// 由 CharacterEquipment 在装备/卸下物品后调用。
+        /// </summary>
+        /// <param name="slotMap">当前所有已装备槽位 → ItemInstance 的映射</param>
+        public void SyncFromEquipment(Dictionary<EquipmentSlot, ItemInstance> slotMap)
+        {
+            if (slotMap == null) return;
+
+            // 先清空当前装备外观状态
+            coveringEquipment.Clear();
+            overlayEquipment.Clear();
+
+            // 遍历所有已装备物品，收集有外观配置的物品
+            foreach (var kv in slotMap)
+            {
+                var item = kv.Value;
+                if (item == null || item.data == null) continue;
+                if (string.IsNullOrEmpty(item.data.appearanceSkinID)) continue;
+                if (item.data.appearanceBehavior == EquipmentAppearanceBehavior.None) continue;
+
+                var slot = item.data.appearanceSlot;
+                var skinID = item.data.appearanceSkinID;
+
+                switch (item.data.appearanceBehavior)
+                {
+                    case EquipmentAppearanceBehavior.Cover:
+                        coveringEquipment[slot] = skinID;
+                        break;
+                    case EquipmentAppearanceBehavior.Overlay:
+                        overlayEquipment[slot] = skinID;
+                        break;
+                }
+            }
+
+            ApplyAppearanceToSkeleton();
+            Debug.Log($"[CharacterAppearance] 装备外观已同步: Cover={coveringEquipment.Count}, Overlay={overlayEquipment.Count}");
         }
 
         /// <summary>
-        /// 应用外观配置到Spine骨架
-        ///
-        /// 逻辑：
-        /// 1. 从基础皮肤（skin-base）开始
-        /// 2. 遍历currentParts中的所有部件皮肤
-        /// 3. 将各部件皮肤的附件逐个附加到骨架的对应槽位上
-        /// 4. 最终应用到骨架
+        /// 获取指定装备槽位的外观皮肤ID
+        /// </summary>
+        public string GetEquipmentSkin(EquipmentSlot slot)
+        {
+            if (coveringEquipment.TryGetValue(slot, out var skinID)) return skinID;
+            if (overlayEquipment.TryGetValue(slot, out skinID)) return skinID;
+            return null;
+        }
+
+        // ==================== 核心渲染引擎 ====================
+
+        /// <summary>
+        /// 4层模型的外观组合算法
+        /// 将 Layer1(baseBody) + Layer2(cosmetic) + Layer3(covering) + Layer4(overlay)
+        /// 按顺序组合为一个 Spine Skin 并应用到骨架。
         /// </summary>
         private void ApplyAppearanceToSkeleton()
         {
@@ -238,50 +281,74 @@ namespace demo2.DND
                 var skeleton = skeletonAnimation.Skeleton;
                 var skeletonData = skeletonAnimation.skeletonDataAsset.GetSkeletonData(false);
 
-                // 关键修复：在组合皮肤前，将骨架完全重置到“设置姿势”
                 skeleton.SetToSetupPose();
 
-                // 第1步：创建一个临时的、用于组合的皮肤
                 var combinedSkin = new Spine.Skin("combined-skin");
 
-                // 第2步：首先添加基础皮肤
-                var baseSkin = skeletonData.FindSkin(BASE_SKIN);
-                if (baseSkin != null)
+                // ===== Layer 1: 基础身体 =====
+                string baseBodyID = skinConfig != null ? skinConfig.defaultBaseBodySkinID : "base-skin";
+                var baseBodySkin = skeletonData.FindSkin(baseBodyID);
+                if (baseBodySkin != null)
                 {
-                    combinedSkin.AddSkin(baseSkin);
+                    combinedSkin.AddSkin(baseBodySkin);
                 }
                 else
                 {
-                    Debug.LogWarning($"[CharacterAppearance] 基础皮肤 '{BASE_SKIN}' 在SkeletonData中未找到");
+                    Debug.LogWarning($"[CharacterAppearance] 基础身体皮肤 '{baseBodyID}' 在SkeletonData中未找到");
                 }
 
-                // 第3步：遍历当前部件��合，叠加部件皮肤的附件
-                foreach (var kvp in currentParts)
+                // ===== Layer 2: 装饰部件 =====
+                foreach (var kvp in cosmeticParts)
                 {
-                    var skinID = kvp.Value;
-                    var skin = skeletonData.FindSkin(skinID);
+                    var skin = skeletonData.FindSkin(kvp.Value);
                     if (skin != null)
                     {
                         combinedSkin.AddSkin(skin);
                     }
                     else
                     {
-                        Debug.LogWarning($"[CharacterAppearance] 皮肤 '{skinID}' 在SkeletonData中未找到");
+                        Debug.LogWarning($"[CharacterAppearance] 装饰皮肤 '{kvp.Value}' 在SkeletonData中未找到");
                     }
                 }
 
-                // 第4步：将组合好的新皮肤应用到骨架
+                // ===== Layer 3: 覆盖型装备 =====
+                foreach (var kvp in coveringEquipment)
+                {
+                    var skin = skeletonData.FindSkin(kvp.Value);
+                    if (skin != null)
+                    {
+                        combinedSkin.AddSkin(skin);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[CharacterAppearance] 覆盖型装备皮肤 '{kvp.Value}' 在SkeletonData中未找到");
+                    }
+                }
+
+                // ===== Layer 4: 叠加型装备 =====
+                foreach (var kvp in overlayEquipment)
+                {
+                    var skin = skeletonData.FindSkin(kvp.Value);
+                    if (skin != null)
+                    {
+                        combinedSkin.AddSkin(skin);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[CharacterAppearance] 叠加型装备皮肤 '{kvp.Value}' 在SkeletonData中未找到");
+                    }
+                }
+
+                // 应用组合皮肤到骨架
                 skeleton.SetSkin(combinedSkin);
                 skeleton.SetSlotsToSetupPose();
 
-                // 关键修复：强制刷新骨架状态和网格，以确保更改立即生效
+                // 强制刷新
                 skeletonAnimation.Update(0);
                 skeletonAnimation.LateUpdate();
 
-                // 记录当前组合皮肤名称（用于调试）
                 currentCombinedSkinName = "combined-skin";
-
-                Debug.Log($"[CharacterAppearance] 外观已应用到骨架: {currentCombinedSkinName}");
+                Debug.Log($"[CharacterAppearance] 外观已应用到骨架: {currentCombinedSkinName} (L1+{cosmeticParts.Count}+{coveringEquipment.Count}+{overlayEquipment.Count})");
             }
             catch (Exception ex)
             {
@@ -289,19 +356,136 @@ namespace demo2.DND
             }
         }
 
+        // ==================== 内部辅助 ====================
+
+        /// <summary>
+        /// 判断是否为外层装备部位（非内层装饰）
+        /// </summary>
+        private bool IsEquipmentPart(SkinBodyPartType partType)
+        {
+            switch (partType)
+            {
+                case SkinBodyPartType.Helmet:
+                case SkinBodyPartType.Armor:
+                case SkinBodyPartType.Gloves:
+                case SkinBodyPartType.Boots:
+                case SkinBodyPartType.Belt:
+                case SkinBodyPartType.Cloak:
+                case SkinBodyPartType.MainHandWeapon:
+                case SkinBodyPartType.OffHandShield:
+                case SkinBodyPartType.OffHandWeapon:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// SkinBodyPartType → EquipmentSlot 映射
+        /// </summary>
+        private EquipmentSlot? MapPartTypeToEquipmentSlot(SkinBodyPartType partType)
+        {
+            switch (partType)
+            {
+                case SkinBodyPartType.Helmet: return EquipmentSlot.Helmet;
+                case SkinBodyPartType.Armor: return EquipmentSlot.Armor;
+                case SkinBodyPartType.Gloves: return EquipmentSlot.Gauntlets;
+                case SkinBodyPartType.Boots: return EquipmentSlot.Boots;
+                case SkinBodyPartType.Belt: return EquipmentSlot.Belt;
+                case SkinBodyPartType.Cloak: return EquipmentSlot.Cloak;
+                case SkinBodyPartType.MainHandWeapon: return EquipmentSlot.MainHand;
+                case SkinBodyPartType.OffHandShield: return EquipmentSlot.OffHand;
+                case SkinBodyPartType.OffHandWeapon: return EquipmentSlot.OffHand;
+                default: return null;
+            }
+        }
+
+        /// <summary>
+        /// EquipmentSlot → SkinBodyPartType 反向映射
+        /// </summary>
+        private SkinBodyPartType? MapEquipmentSlotToPartType(EquipmentSlot slot)
+        {
+            switch (slot)
+            {
+                case EquipmentSlot.Helmet: return SkinBodyPartType.Helmet;
+                case EquipmentSlot.Armor: return SkinBodyPartType.Armor;
+                case EquipmentSlot.Gauntlets: return SkinBodyPartType.Gloves;
+                case EquipmentSlot.Boots: return SkinBodyPartType.Boots;
+                case EquipmentSlot.Belt: return SkinBodyPartType.Belt;
+                case EquipmentSlot.Cloak: return SkinBodyPartType.Cloak;
+                case EquipmentSlot.MainHand: return SkinBodyPartType.MainHandWeapon;
+                case EquipmentSlot.OffHand: return SkinBodyPartType.OffHandShield; // 默认映射为盾牌
+                default: return null;
+            }
+        }
+
+        /// <summary>
+        /// 应用默认装饰散件组合（每个分类的第一个）
+        /// </summary>
+        private void ApplyDefaultCosmeticParts()
+        {
+            if (skinConfig == null) return;
+
+            cosmeticParts.Clear();
+            var allParts = skinConfig.GetAllParts();
+            foreach (var part in allParts)
+            {
+                // 跳过 FullSkin、SkinBase 和装备部位
+                if (part.partType == SkinBodyPartType.FullSkin ||
+                    part.partType == SkinBodyPartType.SkinBase ||
+                    IsEquipmentPart(part.partType))
+                    continue;
+
+                if (!cosmeticParts.ContainsKey(part.partType))
+                {
+                    cosmeticParts[part.partType] = part.skinID;
+                }
+            }
+            Debug.Log($"[CharacterAppearance] 已应用默认装饰散件组合，共 {cosmeticParts.Count} 个部件。");
+        }
+
+        /// <summary>
+        /// 验证皮肤ID是否有效
+        /// </summary>
+        private bool IsSkinValid(SkinBodyPartType partType, string skinID)
+        {
+            if (skinConfig == null) return true;
+
+            var entry = skinConfig.GetPartBySkinID(skinID);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 在SkinConfig中未找到");
+                return false;
+            }
+
+            // 装备部位允许从 SkinConfig 中查找到任意类型（因测试期面板直接操作）
+            if (IsEquipmentPart(partType))
+            {
+                // 装备部位宽松匹配：只要 SkinConfig 中有此 skinID 即可
+                return true;
+            }
+
+            if (entry.partType != partType)
+            {
+                Debug.LogWarning($"[CharacterAppearance] 皮肤ID '{skinID}' 的部件类型不匹配（期望：{partType}，实际：{entry.partType}）");
+                return false;
+            }
+            return true;
+        }
+
+        // ==================== 公共工具方法 ====================
+
         /// <summary>
         /// 确保皮肤已应用（用于与动画系统同步）
-        /// 当播放动画时，可能需要确认皮肤配置是否已正确应用
         /// </summary>
         public void EnsureSkinApplied()
         {
             if (skeletonAnimation == null) return;
 
-            // 如果当前骨架的皮肤与基础皮肤不符，重新应用
             try
             {
                 var currentSkin = skeletonAnimation.Skeleton.Skin;
-                if (currentSkin == null || currentSkin.Name != BASE_SKIN)
+                if (currentSkin == null || currentSkin.Name != currentCombinedSkinName)
                 {
                     ApplyAppearanceToSkeleton();
                     Debug.Log("[CharacterAppearance] 皮肤已重新应用（通过EnsureSkinApplied）");
@@ -314,17 +498,18 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 重置为默认外观（仅基础皮肤）
+        /// 重置为仅基础身体（清空所有装饰和装备外观）
         /// </summary>
         public void ResetToDefault()
         {
             if (skeletonAnimation == null) return;
 
-            currentParts.Clear();
-            skeletonAnimation.Skeleton.SetSkin(BASE_SKIN);
-            currentCombinedSkinName = BASE_SKIN;
+            cosmeticParts.Clear();
+            coveringEquipment.Clear();
+            overlayEquipment.Clear();
+            ApplyAppearanceToSkeleton();
 
-            Debug.Log("[CharacterAppearance] 外观已重置为默认");
+            Debug.Log("[CharacterAppearance] 外观已重置为基础身体");
         }
 
         /// <summary>
@@ -332,12 +517,15 @@ namespace demo2.DND
         /// </summary>
         public void DebugLogCurrentAppearance()
         {
-            Debug.Log("[CharacterAppearance] 当前外观配置：");
-            Debug.Log($"  基础皮肤: {BASE_SKIN}");
-            foreach (var kvp in currentParts)
-            {
-                Debug.Log($"  {kvp.Key}: {kvp.Value}");
-            }
+            string baseBodyID = skinConfig != null ? skinConfig.defaultBaseBodySkinID : "base-skin";
+            Debug.Log("[CharacterAppearance] 当前外观配置（4层模型）：");
+            Debug.Log($"  Layer 1 (基础身体): {baseBodyID}");
+            foreach (var kvp in cosmeticParts)
+                Debug.Log($"  Layer 2 (装饰): {kvp.Key}={kvp.Value}");
+            foreach (var kvp in coveringEquipment)
+                Debug.Log($"  Layer 3 (覆盖装备): {kvp.Key}={kvp.Value}");
+            foreach (var kvp in overlayEquipment)
+                Debug.Log($"  Layer 4 (叠加装备): {kvp.Key}={kvp.Value}");
             Debug.Log($"  组合结果: {currentCombinedSkinName}");
         }
     }

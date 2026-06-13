@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using demo2.DND;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -26,6 +27,7 @@ namespace demo2.DND.InventoryTetris
         public event Action OnEquipmentChanged;
 
         private CharacterStats stats; // 修改字段命名
+        private CharacterAppearance appearance; // 外观管理器引用
 
         private void Awake()
         {
@@ -33,6 +35,11 @@ namespace demo2.DND.InventoryTetris
             stats = GetComponent<CharacterStats>()
                 ?? GetComponentInParent<CharacterStats>()
                 ?? GetComponentInChildren<CharacterStats>(true);
+
+            // 缓存 CharacterAppearance（装备变化后需通知外观刷新）
+            appearance = GetComponent<CharacterAppearance>()
+                ?? GetComponentInParent<CharacterAppearance>()
+                ?? GetComponentInChildren<CharacterAppearance>(true);
         }
 
         // 新增：启动时根据当前槽位立即应用一次修饰，确保开局就生效（非仅战斗）。
@@ -248,6 +255,17 @@ namespace demo2.DND.InventoryTetris
             inst.view.RefreshEquipLabel();
         }
 
+        /// <summary>
+        /// 同步外观：将当前装备状态推送给 CharacterAppearance 以触发换装渲染
+        /// </summary>
+        private void SyncAppearance()
+        {
+            if (appearance != null)
+            {
+                appearance.SyncFromEquipment(slotMap);
+            }
+        }
+
         // Public slot-based API for new enum/dictionary model
         public ItemInstance GetEquipped(EquipmentSlot slot)
         {
@@ -269,6 +287,7 @@ namespace demo2.DND.InventoryTetris
             SetSlot(slot, inst);
             ReapplyEquippedModifiers();
             RaiseChanged();
+            SyncAppearance();
             Debug.Log($"[CharacterEquipment] EquipToSlot {slot} <- {InstanceName(inst)} slots=[{DumpSlots()}]");
             return true;
         }
@@ -288,6 +307,7 @@ namespace demo2.DND.InventoryTetris
                 ReapplyEquippedModifiers();
                 RaiseChanged();
                 RefreshEquipLabel(inst);
+                SyncAppearance();
                 Debug.Log($"[CharacterEquipment] UnequipSlot {slot} removed {InstanceName(inst)} slots=[{DumpSlots()}]");
                 return true;
             }

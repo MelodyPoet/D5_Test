@@ -689,6 +689,10 @@ namespace demo2.DND.Editor
         /// 加载默认的映射规则
         /// 规则来源：Assets/demo2/DND/HorizontalFormation/DEVELOPMENT_STANDARDS.md
         ///
+        /// 支持多种素材命名规则：
+        /// A. 旧规则（mix-and-match-pro）：hair/、clothes/、legs/、eyes/、helm/ 等目录前缀
+        /// B. 新规则（war03Test）：e5_helm、e5_armor、p7_glove 等角色前缀+下划线+部位后缀
+        ///
         /// 换装系统支持两种方式：
         /// 1. 部件组合式：基础 SkinBase + 附加多个部件皮肤组合
         /// 2. 全身套装式：一键替换 FullSkin，不需要自定义组装
@@ -699,6 +703,7 @@ namespace demo2.DND.Editor
         {
             importRules = new List<SkinImportRule>
             {
+                // === 规则集 A：旧素材命名（目录前缀，保留兼容） ===
                 // 优先级 0: FullSkin（整套服装）
                 new SkinImportRule {
                     pattern = "^full-skins/",
@@ -707,49 +712,43 @@ namespace demo2.DND.Editor
                     priority = 0
                 },
 
-                // 优先级 1-8: 部件皮肤（按文档 DEVELOPMENT_STANDARDS.md 指定的前缀）
+                // 旧装饰部件（hair/、clothes/、legs/、eyes/、eyelids/、nose/、accessories/）
                 new SkinImportRule {
                     pattern = "hair/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Hair,
                     priority = 1
                 },
-
                 new SkinImportRule {
                     pattern = "clothes/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Clothes,
                     priority = 2
                 },
-
                 new SkinImportRule {
                     pattern = "legs/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Legs,
                     priority = 3
                 },
-
                 new SkinImportRule {
                     pattern = "eyes/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Eyes,
                     priority = 4
                 },
-
                 new SkinImportRule {
                     pattern = "eyelids/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Eyelids,
                     priority = 5
                 },
-
                 new SkinImportRule {
                     pattern = "nose/",
                     ruleType = SkinImportRuleType.Prefix,
                     partType = SkinBodyPartType.Nose,
                     priority = 6
                 },
-
                 new SkinImportRule {
                     pattern = "accessories/",
                     ruleType = SkinImportRuleType.Prefix,
@@ -757,13 +756,132 @@ namespace demo2.DND.Editor
                     priority = 7
                 },
 
-                // 优先级 8: SkinBase（真实基础皮肤，保留导入）
+                // 旧装备外观部位（目录前缀 helm/、armor/、glove/、boots/、belt/、cloak/）
+                new SkinImportRule {
+                    pattern = "helm/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Helmet,
+                    priority = 10
+                },
+                new SkinImportRule {
+                    pattern = "armor/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Armor,
+                    priority = 11
+                },
+                new SkinImportRule {
+                    pattern = "glove/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Gloves,
+                    priority = 12
+                },
+                new SkinImportRule {
+                    pattern = "boots/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Boots,
+                    priority = 13
+                },
+                new SkinImportRule {
+                    pattern = "belt/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Belt,
+                    priority = 14
+                },
+                new SkinImportRule {
+                    pattern = "cloak/",
+                    ruleType = SkinImportRuleType.Prefix,
+                    partType = SkinBodyPartType.Cloak,
+                    priority = 15
+                },
+
+                // === 规则集 B：新素材命名（角色前缀_部位后缀） ===
+                // 优先级 20-29: 新格式装备部位（Regex 匹配 *_helm、*_armor 等）
+                new SkinImportRule {
+                    pattern = ".*_helm$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Helmet,
+                    priority = 20
+                },
+                new SkinImportRule {
+                    pattern = ".*_armor$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Armor,
+                    priority = 21
+                },
+                new SkinImportRule {
+                    pattern = ".*_glove$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Gloves,
+                    priority = 22
+                },
+                new SkinImportRule {
+                    pattern = ".*_boots$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Boots,
+                    priority = 23
+                },
+                new SkinImportRule {
+                    pattern = ".*_belt$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Belt,
+                    priority = 24
+                },
+                new SkinImportRule {
+                    pattern = ".*_cloak$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.Cloak,
+                    priority = 25
+                },
+                new SkinImportRule {
+                    pattern = ".*_weapon_s$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.MainHandWeapon,
+                    priority = 26
+                },
+                // 主手武器双持变体 _weapon_d
+                new SkinImportRule {
+                    pattern = ".*_weapon_d$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.MainHandWeapon,
+                    priority = 27
+                },
+                // 盾牌
+                new SkinImportRule {
+                    pattern = ".*_shield$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.OffHandShield,
+                    priority = 28
+                },
+                // 副手武器
+                new SkinImportRule {
+                    pattern = ".*_weapon_o$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.OffHandWeapon,
+                    priority = 29
+                },
+
+                // === 优先级 8-9: SkinBase（基础身体） ===
+                // 旧命名
                 new SkinImportRule {
                     pattern = "^skin-base$",
                     ruleType = SkinImportRuleType.Regex,
                     partType = SkinBodyPartType.SkinBase,
                     priority = 8
-                }
+                },
+                new SkinImportRule {
+                    pattern = "^base-skin$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.SkinBase,
+                    priority = 9
+                },
+
+                // === 新格式: *_alignment 可能是基础/阵营皮肤，先归为 SkinBase ===
+                new SkinImportRule {
+                    pattern = ".*_alignment$",
+                    ruleType = SkinImportRuleType.Regex,
+                    partType = SkinBodyPartType.SkinBase,
+                    priority = 19
+                },
 
                 // 注意：default 虽然也在 Spine 的皮肤列表中，但是虚拟皮肤，会在 GeneratePreview 中被过滤掉
             };
@@ -856,14 +974,27 @@ namespace demo2.DND.Editor
 
         /// <summary>
         /// 格式化皮肤名为显示名称
-        /// 例如：head_red → Red Head，body_armor → Armor
+        /// 例如：head_red → Red Head，e5_helm → E5 Helm，p7_armor → P7 Armor
         /// </summary>
         private string FormatDisplayName(string skinName)
         {
-            // 移除常见前缀
+            // 移除旧素材的目录前缀（如 hair/、helm/ 等）
             string result = skinName;
-            string[] prefixes = { "head_", "body_", "clothes_", "leg_", "eye_" };
-            foreach (var prefix in prefixes)
+            string[] dirPrefixes = { "hair/", "clothes/", "legs/", "eyes/", "eyelids/", "nose/", "accessories/",
+                                     "helm/", "armor/", "glove/", "boots/", "belt/", "cloak/",
+                                     "full-skins/" };
+            foreach (var prefix in dirPrefixes)
+            {
+                if (result.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result.Substring(prefix.Length);
+                    break;
+                }
+            }
+
+            // 处理旧格式的下划线命名
+            string[] bodyPrefixes = { "head_", "body_", "clothes_", "leg_", "eye_" };
+            foreach (var prefix in bodyPrefixes)
             {
                 if (result.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 {

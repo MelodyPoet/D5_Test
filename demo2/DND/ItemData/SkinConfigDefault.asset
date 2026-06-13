@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4472c074635842448ebe3de17f59b999, type: 3}
   m_Name: SkinConfigDefault
   m_EditorClassIdentifier: 
+  defaultBaseBodySkinID: skin-base
   skinParts:
   - skinID: accessories/backpack
     partType: 7

@@ -11,12 +11,18 @@ namespace demo2.DND.UI
     ///
     /// 职责：
     /// 1. 创建 UI 预览角色（副本）
-    /// 2. 显示部件分类标签页（从 SkinConfig 读取）
+    /// 2. 显示部件分类标签页（内层装饰 + 外层装备，分两区）
     /// 3. 显示分类下的所有皮肤 icon（可点击）
     /// 4. 处理玩家交互（点击 icon 更新预览）
     /// 5. 提供动画预览（从 CharacterAnimationConfig 读取）
     /// 6. 同步皮肤配置到游戏角色（确认按钮）
     /// 7. 支持外部调用：直接设置某个角色的皮肤
+    ///
+    /// 分层：
+    ///   内层（基础装饰层，仅外观）：SkinBase、Hair、Eyes、Mouth
+    ///   外层（装备外观层，与游戏逻辑关联）：Helmet、Armor、Gloves、Boots、Belt、Cloak、
+    ///     MainHandWeapon、OffHandShield
+    ///   注意：测试期外层也在面板中显示，后续正式版由背包系统驱动
     /// </summary>
     public class CharacterCustomizationPanel : MonoBehaviour
     {
@@ -38,6 +44,9 @@ namespace demo2.DND.UI
         [SerializeField] private Button iconButtonPrefab;    // icon 按钮预制体
         [SerializeField] private Button animationButtonPrefab; // 动画按钮预制体
 
+        [Header("区域标题预制体（可选，用于分组）")]
+        [SerializeField] private GameObject sectionHeaderPrefab;  // 区域标题文本预制体（如 "=== 内层装饰 ==="）
+
         [Header("确认/取消按钮")]
         [SerializeField] private Button confirmButton;
         [SerializeField] private Button cancelButton;
@@ -46,15 +55,20 @@ namespace demo2.DND.UI
         [SerializeField, Tooltip("摄像机自动缩放时的边距，1.0 表示无边距，1.1 表示 10% 的边距。值越小，角色越大。")]
         private float cameraFitMargin = 1.1f;
 
+        [Header("测试开关")]
+        [SerializeField, Tooltip("测试期启用：勾选后在换装面板中显示装备外观部位（后续正式版由背包系统驱动）")]
+        private bool showEquipmentPartsInTest = true;
+
         // 内部引用
         private SkeletonAnimation uiCharacter;
         private CharacterAppearance uiCharacterAppearance;
         private DND_CharacterAdapter uiCharacterAdapter;
 
         // UI 状态
-        private SkinBodyPartType currentCategory = SkinBodyPartType.FullSkin;
+        private SkinBodyPartType currentCategory = SkinBodyPartType.SkinBase;
         private Dictionary<Button, SkinBodyPartType> categoryTabMap = new Dictionary<Button, SkinBodyPartType>();
         private List<Button> activeCategoryTabs = new List<Button>();
+        private List<GameObject> activeSectionHeaders = new List<GameObject>();
         private List<Button> activeIconButtons = new List<Button>();
         private List<Button> activeAnimationButtons = new List<Button>();
 
@@ -83,8 +97,8 @@ namespace demo2.DND.UI
                 if (cancelButton != null)
                     cancelButton.onClick.AddListener(OnCancelClicked);
 
-                // 默认显示第一个分类
-                ShowCategory(SkinBodyPartType.FullSkin);
+                // 默认显示第一个分类（SkinBase）
+                ShowCategory(SkinBodyPartType.SkinBase);
 
                 Debug.Log("[CharacterCustomizationPanel] 初始化完成");
             }
@@ -112,6 +126,14 @@ namespace demo2.DND.UI
                     if (tab != null)
                         tab.onClick.RemoveAllListeners();
                 }
+
+                // 清理区域标题
+                foreach (var header in activeSectionHeaders)
+                {
+                    if (header != null)
+                        Destroy(header);
+                }
+                activeSectionHeaders.Clear();
 
                 // 清理 icon 按钮
                 foreach (var btn in activeIconButtons)
@@ -270,7 +292,7 @@ namespace demo2.DND.UI
         }
 
         /// <summary>
-        /// 初始化分类标签页
+        /// 初始化分类标签页（分两区：内层装饰 + 外层装备）
         /// </summary>
         private void InitializeCategoryTabs()
         {
@@ -292,41 +314,88 @@ namespace demo2.DND.UI
                 if (tab != null)
                     Destroy(tab.gameObject);
             }
+            foreach (var header in activeSectionHeaders)
+            {
+                if (header != null)
+                    Destroy(header);
+            }
             activeCategoryTabs.Clear();
+            activeSectionHeaders.Clear();
             categoryTabMap.Clear();
 
-            // 获取所有部件类型
-            var partTypes = new[]
+            // === 内层：基础装饰层（仅外观） ===
+            CreateSectionHeader("=== 内层装饰 ===");
+
+            var innerParts = new[]
             {
-                SkinBodyPartType.FullSkin,
+                SkinBodyPartType.SkinBase,
                 SkinBodyPartType.Hair,
-                SkinBodyPartType.Clothes,
-                SkinBodyPartType.Legs,
                 SkinBodyPartType.Eyes,
-                SkinBodyPartType.Eyelids,
-                SkinBodyPartType.Nose,
-                SkinBodyPartType.Accessory
+                SkinBodyPartType.Mouth,
             };
-
-            // 为每个部件类型创建标签页按钮
-            foreach (var partType in partTypes)
+            foreach (var partType in innerParts)
             {
-                var tabBtn = Instantiate(categoryTabPrefab, categoryTabsContainer);
-                tabBtn.name = $"Tab_{partType}";
-
-                // 设置按钮文本
-                var text = tabBtn.GetComponentInChildren<Text>();
-                if (text != null)
-                    text.text = GetCategoryDisplayName(partType);
-
-                // 添加点击事件
-                tabBtn.onClick.AddListener(() => OnCategoryTabClicked(partType));
-
-                activeCategoryTabs.Add(tabBtn);
-                categoryTabMap[tabBtn] = partType;
+                CreateCategoryTab(partType);
             }
 
-            Debug.Log($"[CharacterCustomizationPanel] 创建了 {activeCategoryTabs.Count} 个分类标签页");
+            // === 外层：装备外观层（测试期可见；后续正式版由背包系统驱动） ===
+            if (showEquipmentPartsInTest)
+            {
+                CreateSectionHeader("=== 外层装备（测试） ===");
+
+                var outerParts = new[]
+                {
+                    SkinBodyPartType.Helmet,
+                    SkinBodyPartType.Armor,
+                    SkinBodyPartType.Gloves,
+                    SkinBodyPartType.Boots,
+                    SkinBodyPartType.Belt,
+                    SkinBodyPartType.Cloak,
+                    SkinBodyPartType.MainHandWeapon,
+                    SkinBodyPartType.OffHandShield,
+                };
+                foreach (var partType in outerParts)
+                {
+                    CreateCategoryTab(partType);
+                }
+            }
+
+            Debug.Log($"[CharacterCustomizationPanel] 创建了 {activeCategoryTabs.Count} 个分类标签页 (内层+{(showEquipmentPartsInTest ? "外层" : "仅内层")})");
+        }
+
+        /// <summary>
+        /// 创建区域分隔标题
+        /// </summary>
+        private void CreateSectionHeader(string title)
+        {
+            if (sectionHeaderPrefab != null)
+            {
+                var header = Instantiate(sectionHeaderPrefab, categoryTabsContainer);
+                header.name = $"Header_{title}";
+                var text = header.GetComponentInChildren<Text>();
+                if (text != null) text.text = title;
+                activeSectionHeaders.Add(header);
+            }
+        }
+
+        /// <summary>
+        /// 创建单个分类标签按钮
+        /// </summary>
+        private void CreateCategoryTab(SkinBodyPartType partType)
+        {
+            var tabBtn = Instantiate(categoryTabPrefab, categoryTabsContainer);
+            tabBtn.name = $"Tab_{partType}";
+
+            // 设置按钮文本
+            var text = tabBtn.GetComponentInChildren<Text>();
+            if (text != null)
+                text.text = GetCategoryDisplayName(partType);
+
+            // 添加点击事件
+            tabBtn.onClick.AddListener(() => OnCategoryTabClicked(partType));
+
+            activeCategoryTabs.Add(tabBtn);
+            categoryTabMap[tabBtn] = partType;
         }
 
         /// <summary>
@@ -388,16 +457,37 @@ namespace demo2.DND.UI
         /// </summary>
         private string GetCategoryDisplayName(SkinBodyPartType partType)
         {
-            if (partType == SkinBodyPartType.FullSkin) return "整套";
-            if (partType == SkinBodyPartType.Hair) return "头发";
-            if (partType == SkinBodyPartType.Clothes) return "衣服";
-            if (partType == SkinBodyPartType.Legs) return "腿";
-            if (partType == SkinBodyPartType.Eyes) return "眼睛";
-            if (partType == SkinBodyPartType.Eyelids) return "眼皮";
-            if (partType == SkinBodyPartType.Nose) return "鼻子";
-            if (partType == SkinBodyPartType.Accessory) return "配件";
-            if (partType == SkinBodyPartType.SkinBase) return "基础";
-            return partType.ToString();
+            switch (partType)
+            {
+                // 内层装饰
+                case SkinBodyPartType.SkinBase: return "基础身体";
+                case SkinBodyPartType.Hair: return "头发";
+                case SkinBodyPartType.Eyes: return "眼睛";
+                case SkinBodyPartType.Mouth: return "嘴";
+
+                // 外层装备
+                case SkinBodyPartType.Helmet: return "头盔";
+                case SkinBodyPartType.Armor: return "躯干护甲";
+                case SkinBodyPartType.Gloves: return "护腕/手套";
+                case SkinBodyPartType.Boots: return "靴子";
+                case SkinBodyPartType.Belt: return "腰带";
+                case SkinBodyPartType.Cloak: return "披风";
+                case SkinBodyPartType.MainHandWeapon: return "主手武器";
+                case SkinBodyPartType.OffHandShield: return "副手盾牌";
+                case SkinBodyPartType.OffHandWeapon: return "副手武器";
+
+                // 特殊
+                case SkinBodyPartType.FullSkin: return "整套";
+
+                // 向后兼容（已废弃）
+                case SkinBodyPartType.Clothes: return "衣服(旧)";
+                case SkinBodyPartType.Legs: return "腿(旧)";
+                case SkinBodyPartType.Eyelids: return "眼皮(旧)";
+                case SkinBodyPartType.Nose: return "鼻子(旧)";
+                case SkinBodyPartType.Accessory: return "配件(旧)";
+
+                default: return partType.ToString();
+            }
         }
 
         /// <summary>
@@ -603,7 +693,7 @@ namespace demo2.DND.UI
         }
 
         /// <summary>
-        /// 同步 UI 角色的皮肤配置到游戏角色
+        /// 同步 UI 角色的皮肤配置到游戏角色（包括内层装饰和外层装备）
         /// </summary>
         private void SyncToGameCharacter()
         {
@@ -626,7 +716,7 @@ namespace demo2.DND.UI
                 return;
             }
 
-            // 获取 UI 角色的当前皮肤配置
+            // 获取 UI 角色的当前皮肤配置（包括内层装饰 + 外层装备）
             var currentParts = uiCharacterAppearance.GetAllCurrentParts();
 
             // 同步到游戏角色

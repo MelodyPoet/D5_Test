@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System;
 using demo2.DND.Stats;
+using demo2.DND;
 
 namespace demo2.DND.InventoryTetris
 {
@@ -54,6 +55,16 @@ namespace demo2.DND.InventoryTetris
         public bool isShield;
         [Tooltip("盾牌AC加值（标准+2）")]
         public int shieldACBonus = 2;
+
+        [Header("外观换装（可选）")]
+        [Tooltip("穿戴此物品时应用到角色身上的Spine皮肤ID（对应Spine中的皮肤名）。为空则不改变外观。")]
+        public string appearanceSkinID;
+
+        [Tooltip("此物品影响的外观部位。用于确定覆盖范围，以及卸下时的回退处理。")]
+        public EquipmentSlot appearanceSlot;
+
+        [Tooltip("外观行为：Cover（覆盖型，如头盔/铠甲）或 Overlay（叠加型，如头环/王冠）")]
+        public EquipmentAppearanceBehavior appearanceBehavior = EquipmentAppearanceBehavior.None;
 
         [Header("属性加成（装备在背包中即生效，按 WhileEquipped 层应用）")]
         [Tooltip("为该物品配置若干条属性修饰，进入背包后在战斗中生效；移出背包即移除。")]

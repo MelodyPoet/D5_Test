@@ -38,6 +38,10 @@ namespace demo2.DND
     [CreateAssetMenu(fileName = "SkinConfig", menuName = "DND/Skin Config", order = 100)]
     public class SkinConfig : ScriptableObject
     {
+        [Header("默认基础外观")]
+        [Tooltip("角色默认的基础身体皮肤ID（紧身衣+躯干+手+脚），所有外观组合的底层基准。后续可替换为商业化时装（情人节/万圣节主题等）。")]
+        public string defaultBaseBodySkinID = "base-skin";
+
         [SerializeField]
         private List<SkinPartEntry> skinParts = new List<SkinPartEntry>();
 
