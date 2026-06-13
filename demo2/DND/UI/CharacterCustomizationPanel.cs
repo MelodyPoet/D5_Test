@@ -55,6 +55,13 @@ namespace demo2.DND.UI
         [SerializeField, Tooltip("摄像机自动缩放时的边距，1.0 表示无边距，1.1 表示 10% 的边距。值越小，角色越大。")]
         private float cameraFitMargin = 1.1f;
 
+        /// <summary>
+        /// 锁定后的摄像机参数（初始化时计算一次，后续不再动态变化，保证预览大小一致）
+        /// </summary>
+        private float lockedOrthographicSize;
+        private Vector3 lockedCameraPosition;
+        private bool cameraLocked = false;
+
         [Header("测试开关")]
         [SerializeField, Tooltip("测试期启用：勾选后在换装面板中显示装备外观部位（后续正式版由背包系统驱动）")]
         private bool showEquipmentPartsInTest = true;
@@ -79,6 +86,9 @@ namespace demo2.DND.UI
         private void OnEnable()
         {
             Debug.Log("[CharacterCustomizationPanel] UI 面板打开");
+
+            // 每次打开面板时重置摄像机锁定，让首次 FitCamera 重新计算
+            cameraLocked = false;
 
             try
             {
@@ -254,14 +264,31 @@ namespace demo2.DND.UI
         }
 
         /// <summary>
-        /// 自动调整摄像机，使其正好能容纳整个角色
+        /// 调整摄像机以容纳角色（仅在首次调用时计算并锁定，后续调用直接复用锁定值）
+        /// 这样无论用户怎么切换部件，预览中的角色大小始终保持一致。
         /// </summary>
         private void FitCameraToCharacter(SkeletonAnimation character, Camera cam)
         {
             if (character == null || cam == null) return;
 
+            // 已锁定则直接应用锁定值，不再重新计算
+            if (cameraLocked)
+            {
+                cam.orthographicSize = lockedOrthographicSize;
+                cam.transform.position = lockedCameraPosition;
+                return;
+            }
+
             // 延迟一帧获取包围盒，确保Spine网格已更新
             StartCoroutine(DelayedFitCamera(character, cam));
+        }
+
+        /// <summary>
+        /// 强制重新计算并锁定摄像机参数（例如角色预制体更换时需要调用）
+        /// </summary>
+        public void ResetCameraLock()
+        {
+            cameraLocked = false;
         }
 
         private System.Collections.IEnumerator DelayedFitCamera(SkeletonAnimation character, Camera cam)
@@ -279,16 +306,19 @@ namespace demo2.DND.UI
             Bounds bounds = meshRenderer.bounds;
 
             // 对于正交摄像机，根据模型高度调整 Orthographic Size
-            // 增加指定的边距
             float verticalSize = bounds.size.y;
-            cam.orthographicSize = verticalSize / 2f * cameraFitMargin;
+            lockedOrthographicSize = verticalSize / 2f * cameraFitMargin;
 
             // 将摄像机移动到模型中心点，并保持原有的Z轴距离
-            Vector3 newCamPos = bounds.center;
-            newCamPos.z = cam.transform.position.z;
-            cam.transform.position = newCamPos;
+            lockedCameraPosition = bounds.center;
+            lockedCameraPosition.z = cam.transform.position.z;
 
-            Debug.Log($"[CharacterCustomizationPanel] 自动调整正交摄像机完成。角色高度: {verticalSize}, 新 Orthographic Size: {cam.orthographicSize}");
+            // 应用锁定值
+            cam.orthographicSize = lockedOrthographicSize;
+            cam.transform.position = lockedCameraPosition;
+            cameraLocked = true;
+
+            Debug.Log($"[CharacterCustomizationPanel] 摄像机参数已锁定。角色高度: {verticalSize:F2}, OrthographicSize: {lockedOrthographicSize:F2}, 位置: {lockedCameraPosition}");
         }
 
         /// <summary>
