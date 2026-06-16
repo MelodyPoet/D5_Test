@@ -140,7 +140,7 @@ namespace demo2.DND.HorizontalFormation
 
                     var asnap = TryGetSnapshot(attacker);
                     var saveTsnap = TryGetSnapshot(target);
-                    int saveDc = 8 + attacker.ProficiencyBonus + GetAbilityModifierFromSnapshot(asnap, attacker, attacker.template.primarySpellAbility);
+                    int saveDc = 8 + attacker.ProficiencyBonus + GetAbilityModifierFromSnapshot(asnap, attacker, attacker.template.PrimarySpellAbilityString);
                     int saveMod = GetAbilityModifierFromSnapshot(saveTsnap, target, sd.saveAbility);
                     int saveRoll = UnityEngine.Random.Range(1, 21) + saveMod;
                     bool saved = saveRoll >= saveDc;
@@ -267,7 +267,7 @@ namespace demo2.DND.HorizontalFormation
             if (isSpell)
             {
                 attackTypeName = (c.template != null && c.template.defaultCantrip != null && !string.IsNullOrEmpty(c.template.defaultCantrip.spellName)) ? c.template.defaultCantrip.spellName : "法术普通攻击";
-                abilityNameForHit = NormalizeAbilityName(c.template != null ? c.template.primarySpellAbility : "intelligence");
+                abilityNameForHit = NormalizeAbilityName(c.template != null ? c.template.PrimarySpellAbilityString : "intelligence");
                 int mod = GetAbilityModifierFromSnapshot(snap, c, abilityNameForHit);
                 int prof = (c.template != null && c.template.IsProficientForAttack(true, isMelee)) ? c.template.GetProficiencyBonusByLevel(c.Level) : 0;
                 return mod + prof;

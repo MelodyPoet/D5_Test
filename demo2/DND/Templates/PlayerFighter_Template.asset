@@ -23,18 +23,18 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 12
   charisma: 9
-  pointBuyStr: 0
-  pointBuyDex: 0
-  pointBuyCon: 0
-  pointBuyInt: 0
-  pointBuyWis: 0
-  pointBuyCha: 0
+  pointBuyStr: 15
+  pointBuyDex: 14
+  pointBuyCon: 13
+  pointBuyInt: 8
+  pointBuyWis: 10
+  pointBuyCha: 12
   hitDie: 10
   baseArmorClass: 10
   immunities: 
   resistances: 
   vulnerabilities: 
-  primarySpellAbility: intelligence
+  primarySpellAbility: 1
   defaultAttackType: 0
   defaultCantrip: {fileID: 0}
   unarmedDamageDice:

@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: "\u827E\u62C9"
   characterClass: 1
+  race: 0
   level: 1
   defaultSide: 0
   strength: 8
@@ -22,6 +23,12 @@ MonoBehaviour:
   intelligence: 16
   wisdom: 13
   charisma: 10
+  pointBuyStr: 8
+  pointBuyDex: 12
+  pointBuyCon: 13
+  pointBuyInt: 15
+  pointBuyWis: 14
+  pointBuyCha: 10
   hitDie: 6
   baseArmorClass: 10
   immunities: 

@@ -3,6 +3,16 @@ using UnityEngine;
 
 namespace demo2.DND {
 
+    /// <summary>
+    /// 主施法属性（仅限 DND5e 的三种施法属性：智力/感知/魅力）
+    /// </summary>
+    public enum PrimarySpellAbility
+    {
+        Intelligence,
+        Wisdom,
+        Charisma
+    }
+
 [CreateAssetMenu(fileName = "New Character Template", menuName = "DND/Character Template")]
 public class CharacterTemplate : ScriptableObject {
 
@@ -65,7 +75,25 @@ public class CharacterTemplate : ScriptableObject {
     public List<DamageType> vulnerabilities = new List<DamageType>();
 
     [Header("其它模板设置")]
-    public string primarySpellAbility = "intelligence";
+    [Tooltip("主施法属性：决定法术攻击检定和法术豁免DC使用哪个属性的调整值（智力/感知/魅力）")]
+    public PrimarySpellAbility primarySpellAbility = PrimarySpellAbility.Intelligence;
+
+    /// <summary>
+    /// 以字符串形式获取主施法属性名（兼容旧代码，用于战斗规则中读取）
+    /// </summary>
+    public string PrimarySpellAbilityString
+    {
+        get
+        {
+            switch (primarySpellAbility)
+            {
+                case PrimarySpellAbility.Intelligence: return "intelligence";
+                case PrimarySpellAbility.Wisdom: return "wisdom";
+                case PrimarySpellAbility.Charisma: return "charisma";
+                default: return "intelligence";
+            }
+        }
+    }
 
     [Header("战斗/伤害 (模板配置)")]
     [Tooltip("默认普通攻击类型：物理或法术（用于决定法术普通攻击/物理普通攻击的处理）")]
@@ -146,23 +174,7 @@ public class CharacterTemplate : ScriptableObject {
         /// 在编辑器中校验并规范字段，降低配置出错概率。
         /// </summary>
         private void OnValidate() {
-            // 规范化 primarySpellAbility，仅允许 intelligence / wisdom / charisma
-            if (string.IsNullOrWhiteSpace(primarySpellAbility)) {
-                primarySpellAbility = "intelligence";
-            } else {
-                string val = primarySpellAbility.Trim().ToLowerInvariant();
-                switch (val) {
-                    case "int": val = "intelligence"; break;
-                    case "wis": val = "wisdom"; break;
-                    case "cha": val = "charisma"; break;
-                }
-                if (val == "intelligence" || val == "wisdom" || val == "charisma") {
-                    primarySpellAbility = val;
-                } else {
-                    Debug.LogWarning($"[CharacterTemplate] 不支持的 primarySpellAbility: '{primarySpellAbility}', 已回退为 intelligence（只允许 intelligence / wisdom / charisma）");
-                    primarySpellAbility = "intelligence";
-                }
-            }
+            // primarySpellAbility 已改为枚举，无需手动校验
         }
 
         public List<Skill> proficientSkills = new List<Skill>();
