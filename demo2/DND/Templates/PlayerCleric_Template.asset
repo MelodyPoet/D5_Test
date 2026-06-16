@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: "\u73A9\u5BB6\u7267\u5E08"
   characterClass: 3
+  race: 0
   level: 3
   defaultSide: 0
   strength: 12
@@ -21,7 +22,13 @@ MonoBehaviour:
   constitution: 14
   intelligence: 10
   wisdom: 16
-  charisma: 13
+  charisma: 11
+  pointBuyStr: 0
+  pointBuyDex: 0
+  pointBuyCon: 0
+  pointBuyInt: 0
+  pointBuyWis: 0
+  pointBuyCha: 0
   hitDie: 8
   baseArmorClass: 10
   immunities: 
@@ -33,6 +40,7 @@ MonoBehaviour:
   unarmedDamageDice:
     diceCount: 1
     diceSize: 1
+    modifier: 0
   unarmedDamageAbilityMode: 0
   unarmedProficient: 1
   unarmedDamageType: 0

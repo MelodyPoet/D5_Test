@@ -9,16 +9,49 @@ public class CharacterTemplate : ScriptableObject {
     [Header("基本信息")]
     public string characterName = "New Character";
     public CharacterClass characterClass = CharacterClass.Fighter;
+    public PointBuySystem.RaceType race = PointBuySystem.RaceType.Human;
     [Min(1)] public int level = 1;
     public BattleSide defaultSide = BattleSide.Player;
 
-    [Header("属性 (默认值)")]
+    [Header("属性 (默认值，购点前的基础值)")]
     public int strength = 10;
     public int dexterity = 10;
     public int constitution = 10;
     public int intelligence = 10;
     public int wisdom = 10;
     public int charisma = 10;
+
+    [Header("购点推荐属性（27点购点法的职业推荐，会作为创建角色时的初始分配）")]
+    [Tooltip("若全为0则使用上方默认值；否则按此值预分配购点（总和点数≤27）")]
+    public int pointBuyStr = 0;
+    public int pointBuyDex = 0;
+    public int pointBuyCon = 0;
+    public int pointBuyInt = 0;
+    public int pointBuyWis = 0;
+    public int pointBuyCha = 0;
+
+    /// <summary>
+    /// 获取购点推荐的六维属性数组 [STR, DEX, CON, INT, WIS, CHA]
+    /// 若推荐值全为0，则使用默认值（但默认值可能超过购点上限15，会做钳制）
+    /// </summary>
+    public int[] GetPointBuyDefaults()
+    {
+        if (pointBuyStr == 0 && pointBuyDex == 0 && pointBuyCon == 0 &&
+            pointBuyInt == 0 && pointBuyWis == 0 && pointBuyCha == 0)
+        {
+            // 使用默认值但钳制到购点范围
+            return new int[]
+            {
+                Mathf.Clamp(strength, 8, 15),
+                Mathf.Clamp(dexterity, 8, 15),
+                Mathf.Clamp(constitution, 8, 15),
+                Mathf.Clamp(intelligence, 8, 15),
+                Mathf.Clamp(wisdom, 8, 15),
+                Mathf.Clamp(charisma, 8, 15)
+            };
+        }
+        return new int[] { pointBuyStr, pointBuyDex, pointBuyCon, pointBuyInt, pointBuyWis, pointBuyCha };
+    }
 
     [Header("生命/护甲")]
     [Tooltip("生命骰 (如 d8 -> 8)")]

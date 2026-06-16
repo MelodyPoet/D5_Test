@@ -1,8 +1,10 @@
 ﻿﻿﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Spine.Unity;
+using demo2.DND.InventoryTetris;
 
 namespace demo2.DND.UI
 {
@@ -15,14 +17,21 @@ namespace demo2.DND.UI
     /// 3. 显示分类下的所有皮肤 icon（可点击）
     /// 4. 处理玩家交互（点击 icon 更新预览）
     /// 5. 提供动画预览（从 CharacterAnimationConfig 读取）
-    /// 6. 同步皮肤配置到游戏角色（确认按钮）
-    /// 7. 支持外部调用：直接设置某个角色的皮肤
+    /// 6. 提供属性调整区（六维属性 + 等级）
+    /// 7. 同步皮肤配置 + 属性 + 装备物品到游戏角色（确认按钮）
+    /// 8. 支持外部调用：直接设置某个角色的皮肤
     ///
     /// 分层：
     ///   内层（基础装饰层，仅外观）：SkinBase、Hair、Eyes、Mouth
     ///   外层（装备外观层，与游戏逻辑关联）：Helmet、Armor、Gloves、Boots、Belt、Cloak、
     ///     MainHandWeapon、OffHandShield
     ///   注意：测试期外层也在面板中显示，后续正式版由背包系统驱动
+    ///
+    /// 确认时同步内容：
+    ///   - 外观皮肤 → gameCharacter.CharacterAppearance
+    ///   - 属性值 → gameCharacter.CharacterStats（直接修改运行时字段 + RequestRecalculateStats）
+    ///   - 装备物品 → gameCharacter.CharacterInventory（创建 ItemInstance 加入背包）
+    ///                → gameCharacter.CharacterEquipment（装备到对应槽位）
     /// </summary>
     public class CharacterCustomizationPanel : MonoBehaviour
     {
@@ -66,6 +75,32 @@ namespace demo2.DND.UI
         [SerializeField, Tooltip("测试期启用：勾选后在换装面板中显示装备外观部位（后续正式版由背包系统驱动）")]
         private bool showEquipmentPartsInTest = true;
 
+        [Header("职业选择")]
+        [SerializeField, Tooltip("可选的职业模板列表（拖入不同职业的 CharacterTemplate SO）")]
+        private List<CharacterTemplate> availableClasses = new List<CharacterTemplate>();
+        [SerializeField, Tooltip("职业按钮容器（用于放置职业选择按钮）")]
+        private Transform classButtonContainer;
+        [SerializeField, Tooltip("职业按钮预制体")]
+        private Button classButtonPrefab;
+        [SerializeField, Tooltip("当前选中职业的显示文本")]
+        private Text selectedClassText;
+
+        [Header("属性调整区（27点购点法）")]
+        [SerializeField, Tooltip("属性调整区根节点（包含六维属性+/-按钮和剩余点数显示）")]
+        private GameObject statsAdjustPanel;
+        [SerializeField, Tooltip("剩余可分配点数显示文本")]
+        private Text availablePointsText;
+
+        [Header("属性行 - 共用预制体（一行包含：属性名Text + 值Text + 减号Btn + 加号Btn + 调整值Text）")]
+        [SerializeField, Tooltip("属性行预制体（需挂 StatRow 组件）")]
+        private StatRow statRowPrefab;
+        [SerializeField, Tooltip("属性行父容器")]
+        private Transform statRowsContainer;
+
+        [Header("等级设置")]
+        [SerializeField, Tooltip("等级显示文本（创建角色固定为1级，后续游戏进程升级）")]
+        private Text levelLabelText;
+
         // 内部引用
         private SkeletonAnimation uiCharacter;
         private CharacterAppearance uiCharacterAppearance;
@@ -78,6 +113,21 @@ namespace demo2.DND.UI
         private List<GameObject> activeSectionHeaders = new List<GameObject>();
         private List<Button> activeIconButtons = new List<Button>();
         private List<Button> activeAnimationButtons = new List<Button>();
+        private List<Button> activeClassButtons = new List<Button>();
+
+        // 购点系统（核心）
+        private PointBuySystem pointBuy;
+        private CharacterTemplate selectedTemplate; // 当前选中的职业模板
+
+        // 运行时生成的 6 行属性控件
+        private List<StatRow> activeStatRows = new List<StatRow>();
+
+        // 初始等级固定为1（后续由游戏进程升级，创建角色时不输入）
+        private const int StartLevel = 1;
+
+        // 装备→物品映射（用户在面板中选择装备外观后，缓存对应的 ItemBaseSO；确认时创建 ItemInstance）
+        // Key = SkinBodyPartType (装备部位), Value = 关联的 ItemBaseSO（从 SkinPartEntry.linkedItemSO 获取）
+        private Dictionary<SkinBodyPartType, ItemBaseSO> pendingEquipmentItems = new Dictionary<SkinBodyPartType, ItemBaseSO>();
 
         // 事件
         public event Action OnConfirm;
@@ -100,6 +150,12 @@ namespace demo2.DND.UI
 
                 // 初始化动画按钮
                 InitializeAnimationButtons();
+
+                // 初始化职业选择区
+                InitializeClassSelection();
+
+                // 初始化属性调整区（27点购点法）
+                InitializePointBuyPanel();
 
                 // 初始化确认/取消按钮
                 if (confirmButton != null)
@@ -130,6 +186,27 @@ namespace demo2.DND.UI
                 if (cancelButton != null)
                     cancelButton.onClick.RemoveListener(OnCancelClicked);
 
+                // 清理属性行（销毁实例化的 StatRow）
+                foreach (var row in activeStatRows)
+                {
+                    if (row != null) Destroy(row.gameObject);
+                }
+                activeStatRows.Clear();
+
+                // 清理购点事件
+                if (pointBuy != null)
+                {
+                    pointBuy.OnStatChanged -= OnPointBuyStatChanged;
+                    pointBuy.OnPointsChanged -= OnPointBuyPointsChanged;
+                    pointBuy.OnRacialBonusChanged -= OnPointBuyRacialBonusChanged;
+                }
+
+                // 清理职业按钮
+                foreach (var btn in activeClassButtons)
+                {
+                    if (btn != null) btn.onClick.RemoveAllListeners();
+                }
+
                 // 清理标签页
                 foreach (var tab in activeCategoryTabs)
                 {
@@ -158,6 +235,9 @@ namespace demo2.DND.UI
                     if (btn != null)
                         btn.onClick.RemoveAllListeners();
                 }
+
+                // 清空装备物品缓存
+                pendingEquipmentItems.Clear();
 
                 // 销毁 UI 角色
                 if (uiCharacter != null)
@@ -482,6 +562,369 @@ namespace demo2.DND.UI
             Debug.Log($"[CharacterCustomizationPanel] 创建了 {activeAnimationButtons.Count} 个动画按钮");
         }
 
+        // ==================== 职业选择区 ====================
+
+        /// <summary>
+        /// 初始化职业选择区：为每个可用职业创建按钮
+        /// </summary>
+        private void InitializeClassSelection()
+        {
+            if (classButtonContainer == null || classButtonPrefab == null) return;
+
+            // 清理旧按钮
+            foreach (var btn in activeClassButtons)
+            {
+                if (btn != null) Destroy(btn.gameObject);
+            }
+            activeClassButtons.Clear();
+
+            if (availableClasses == null || availableClasses.Count == 0)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] availableClasses 为空，跳过职业选择初始化");
+                return;
+            }
+
+            // 默认选中第一个职业
+            if (selectedTemplate == null && availableClasses.Count > 0)
+                SelectClass(availableClasses[0]);
+
+            foreach (var template in availableClasses)
+            {
+                if (template == null) continue;
+                var btn = Instantiate(classButtonPrefab, classButtonContainer);
+                btn.name = $"ClassBtn_{template.characterClass}";
+
+                var text = btn.GetComponentInChildren<Text>();
+                if (text != null) text.text = GetClassName(template.characterClass);
+
+                btn.onClick.AddListener(() => SelectClass(template));
+                activeClassButtons.Add(btn);
+            }
+
+            Debug.Log($"[CharacterCustomizationPanel] 创建了 {activeClassButtons.Count} 个职业选择按钮");
+        }
+
+        /// <summary>
+        /// 选择职业：切换 CharacterTemplate，重置购点并刷新属性显示
+        /// </summary>
+        private void SelectClass(CharacterTemplate template)
+        {
+            if (template == null) return;
+            selectedTemplate = template;
+
+            if (selectedClassText != null)
+                selectedClassText.text = GetClassName(template.characterClass);
+
+            Debug.Log($"[CharacterCustomizationPanel] 选择职业: {template.characterClass}");
+
+            // 如果面板还没初始化（首次选择），先初始化
+            if (pointBuy == null)
+            {
+                InitializePointBuyPanel();
+                return;
+            }
+
+            // 重置购点系统并加载职业推荐属性
+            pointBuy.Reset();
+            var defaults = template.GetPointBuyDefaults();
+            pointBuy.LoadFromDefaults(defaults[0], defaults[1], defaults[2], defaults[3], defaults[4], defaults[5]);
+
+            // 应用种族加成（变体人类：自选两个不同属性各+1）
+            pointBuy.ApplyRacialBonus(template.race);
+
+            // 确保属性行已创建
+            if (activeStatRows.Count == 0)
+                CreateStatRows();
+
+            // 刷新属性面板 UI
+            RefreshAllStatDisplays();
+            UpdatePointsDisplay(pointBuy.AvailablePoints);
+        }
+
+        /// <summary>
+        /// 获取职业中文名
+        /// </summary>
+        private string GetClassName(CharacterClass cls)
+        {
+            switch (cls)
+            {
+                case CharacterClass.Fighter: return "战士";
+                case CharacterClass.Wizard: return "法师";
+                case CharacterClass.Rogue: return "盗贼";
+                case CharacterClass.Cleric: return "牧师";
+                case CharacterClass.Ranger: return "游侠";
+                case CharacterClass.Barbarian: return "野蛮人";
+                case CharacterClass.Paladin: return "圣骑士";
+                case CharacterClass.Warlock: return "术士";
+                case CharacterClass.Sorcerer: return "术士(蓝)";
+                case CharacterClass.Bard: return "诗人";
+                case CharacterClass.Druid: return "德鲁伊";
+                case CharacterClass.Monk: return "武僧";
+                default: return cls.ToString();
+            }
+        }
+
+        // ==================== 27点购点法属性调整区 ====================
+
+        /// <summary>
+        /// 初始化购点属性面板 —— 动态实例化 6 行 StatRow 并绑定
+        /// </summary>
+        private void InitializePointBuyPanel()
+        {
+            if (pointBuy == null)
+            {
+                pointBuy = new PointBuySystem();
+                if (selectedTemplate != null)
+                {
+                    var defaults = selectedTemplate.GetPointBuyDefaults();
+                    pointBuy.LoadFromDefaults(defaults[0], defaults[1], defaults[2], defaults[3], defaults[4], defaults[5]);
+                }
+                else if (gameCharacter != null)
+                {
+                    var stats = gameCharacter.GetComponent<CharacterStats>();
+                    if (stats != null)
+                    {
+                        pointBuy.LoadFromDefaults(stats.strength, stats.dexterity, stats.constitution,
+                            stats.intelligence, stats.wisdom, stats.charisma);
+                    }
+                }
+
+                // 立即应用种族加成（变体人类：自选两个不同属性各+1，玩家需手动点击分配）
+                // 面板上显示未分配的提示，确认时同步到角色
+                if (selectedTemplate != null)
+                    pointBuy.ApplyRacialBonus(selectedTemplate.race);
+                else
+                    pointBuy.ApplyRacialBonus(PointBuySystem.RaceType.Human);
+            }
+
+            // 订阅购点事件
+            pointBuy.OnStatChanged += OnPointBuyStatChanged;
+            pointBuy.OnPointsChanged += OnPointBuyPointsChanged;
+            pointBuy.OnRacialBonusChanged += OnPointBuyRacialBonusChanged;
+
+            // ---- 动态实例化 6 行属性控件 ----
+            CreateStatRows();
+
+            // 等级固定为1（后续游戏进程升级，创建角色时不输入）
+            if (levelLabelText != null)
+                levelLabelText.text = $"等级: {StartLevel}";
+
+            // 刷新 UI 显示
+            RefreshAllStatDisplays();
+            UpdatePointsDisplay(pointBuy.AvailablePoints);
+
+            if (gameCharacter == null && statsAdjustPanel != null)
+            {
+                statsAdjustPanel.SetActive(false);
+                Debug.Log("[CharacterCustomizationPanel] gameCharacter 未设置，隐藏属性调整面板");
+            }
+        }
+
+        /// <summary>
+        /// 创建 6 行属性行（STR/DEX/CON/INT/WIS/CHA），绑定 +/- 事件 和 种族加成选择按钮
+        /// </summary>
+        private void CreateStatRows()
+        {
+            if (statRowPrefab == null || statRowsContainer == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] statRowPrefab 或 statRowsContainer 未设置，跳过属性行创建");
+                return;
+            }
+
+            // 清理旧行
+            foreach (var row in activeStatRows)
+            {
+                if (row != null) Destroy(row.gameObject);
+            }
+            activeStatRows.Clear();
+
+            // 六维属性的顺序和显示名
+            var statDefs = new (StatType type, string name)[]
+            {
+                (StatType.Strength,     "力量"),
+                (StatType.Dexterity,    "敏捷"),
+                (StatType.Constitution, "体质"),
+                (StatType.Intelligence, "智力"),
+                (StatType.Wisdom,       "感知"),
+                (StatType.Charisma,     "魅力"),
+            };
+
+            foreach (var def in statDefs)
+            {
+                var row = Instantiate(statRowPrefab, statRowsContainer);
+                row.statType = def.type;
+
+                if (row.labelText != null) row.labelText.text = def.name;
+                if (row.minusBtn != null)
+                    row.minusBtn.onClick.AddListener(() => pointBuy.DecreaseStat(def.type));
+                if (row.plusBtn != null)
+                    row.plusBtn.onClick.AddListener(() => pointBuy.IncreaseStat(def.type));
+
+                // 绑定种族加成选择按钮（变体人类：点击分配+1到该属性）
+                if (row.racialBonusBtn != null)
+                {
+                    var capturedType = def.type;
+                    row.racialBonusBtn.onClick.AddListener(() => OnRacialBonusBtnClicked(capturedType));
+                }
+
+                activeStatRows.Add(row);
+            }
+        }
+
+        /// <summary>
+        /// 根据 StatType 查找对应的 StatRow
+        /// </summary>
+        private StatRow FindStatRow(StatType type)
+        {
+            foreach (var row in activeStatRows)
+            {
+                if (row != null && row.statType == type) return row;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 购点属性值变化回调
+        /// </summary>
+        private void OnPointBuyStatChanged(StatType statType, int newValue)
+        {
+            RefreshStatDisplay(statType);
+        }
+
+        /// <summary>
+        /// 剩余点数变化回调
+        /// </summary>
+        private void OnPointBuyPointsChanged(int availablePoints)
+        {
+            UpdatePointsDisplay(availablePoints);
+            // 点数变化影响所有属性的 +/- 按钮状态
+            RefreshAllPlusMinusInteractable();
+        }
+
+        /// <summary>
+        /// 种族加成选择变化回调
+        /// </summary>
+        private void OnPointBuyRacialBonusChanged()
+        {
+            RefreshAllStatDisplays();
+        }
+
+        /// <summary>
+        /// 种族加成按钮被点击：切换该属性的+1分配状态
+        /// 变体人类规则：最多选2个不同属性，再次点击取消选择
+        /// </summary>
+        private void OnRacialBonusBtnClicked(StatType statType)
+        {
+            if (pointBuy == null) return;
+
+            bool isSelected = pointBuy.RacialBonusChoices.Contains(statType);
+            if (isSelected)
+            {
+                // 取消选择
+                pointBuy.TryRemoveRacialBonusChoice(statType);
+                Debug.Log($"[CharacterCustomizationPanel] 取消种族加成: {statType}");
+            }
+            else
+            {
+                // 尝试选择
+                bool success = pointBuy.TryAddRacialBonusChoice(statType);
+                if (success)
+                    Debug.Log($"[CharacterCustomizationPanel] 分配种族加成: {statType} (已选{pointBuy.RacialBonusChoices.Count}/2)");
+                else
+                    Debug.Log($"[CharacterCustomizationPanel] 无法分配种族加成到 {statType}（已选满或重复）");
+            }
+        }
+
+        /// <summary>
+        /// 刷新单个属性的显示（值 + 种族加成 + 调整值 + 按钮状态 + 种族选择高亮）
+        /// 
+        /// 显示逻辑（变体人类）：
+        ///   - valueText 显示购点基础值，若该属性被选为种族加成则追加绿色 (+1种族) 提示
+        ///   - modText 始终基于最终值（基础+种族）计算调整值
+        ///   - racialBonusSelectedMark 高亮当前已选的种族加成属性
+        ///   - racialBonusHintText 提示"点击分配+1"或"已选(+1)"
+        /// </summary>
+        private void RefreshStatDisplay(StatType statType)
+        {
+            var row = FindStatRow(statType);
+            if (row == null) return;
+
+            int baseVal = pointBuy.GetStat(statType);
+            int racialBonus = pointBuy.GetRacialBonus(statType);
+            int finalVal = baseVal + racialBonus;
+            int mod = PointBuySystem.GetModifier(finalVal);
+            string modStr = mod >= 0 ? $"+{mod}" : mod.ToString();
+
+            bool isRacialSelected = pointBuy.RacialBonusChoices.Contains(statType);
+            bool canSelectMore = !pointBuy.RacialBonusChoicesFull || isRacialSelected;
+
+            if (row.valueText != null)
+            {
+                // 购点基础值 + 种族加成提示（仅已选属性显示）
+                row.valueText.text = racialBonus > 0
+                    ? $"{baseVal} <color=#4CAF50>(+{racialBonus}种族)</color>"
+                    : baseVal.ToString();
+            }
+            if (row.modText != null) row.modText.text = modStr;
+            if (row.minusBtn != null) row.minusBtn.interactable = pointBuy.CanDecrease(statType);
+            if (row.plusBtn != null) row.plusBtn.interactable = pointBuy.CanIncrease(statType);
+
+            // 种族加成选中标记
+            if (row.racialBonusSelectedMark != null)
+                row.racialBonusSelectedMark.SetActive(isRacialSelected);
+
+            // 种族加成按钮可点击状态
+            if (row.racialBonusBtn != null)
+                row.racialBonusBtn.interactable = canSelectMore;
+
+            // 种族加成提示文本
+            if (row.racialBonusHintText != null)
+            {
+                if (isRacialSelected)
+                    row.racialBonusHintText.text = "<color=#4CAF50>种族+1 ✓</color>";
+                else if (pointBuy.RacialBonusChoicesFull)
+                    row.racialBonusHintText.text = "<color=#888888>已满</color>";
+                else
+                    row.racialBonusHintText.text = "<color=#FFD54F>点击分配+1</color>";
+            }
+        }
+
+        /// <summary>
+        /// 刷新所有属性显示
+        /// </summary>
+        private void RefreshAllStatDisplays()
+        {
+            RefreshStatDisplay(StatType.Strength);
+            RefreshStatDisplay(StatType.Dexterity);
+            RefreshStatDisplay(StatType.Constitution);
+            RefreshStatDisplay(StatType.Intelligence);
+            RefreshStatDisplay(StatType.Wisdom);
+            RefreshStatDisplay(StatType.Charisma);
+        }
+
+        /// <summary>
+        /// 刷新所有 +/- 按钮状态
+        /// </summary>
+        private void RefreshAllPlusMinusInteractable()
+        {
+            foreach (var row in activeStatRows)
+            {
+                if (row == null) continue;
+                if (row.minusBtn != null) row.minusBtn.interactable = pointBuy.CanDecrease(row.statType);
+                if (row.plusBtn != null) row.plusBtn.interactable = pointBuy.CanIncrease(row.statType);
+            }
+        }
+
+        /// <summary>
+        /// 更新剩余点数显示
+        /// </summary>
+        private void UpdatePointsDisplay(int points)
+        {
+            if (availablePointsText != null)
+                availablePointsText.text = $"剩余点数: {points}";
+        }
+
+        /// <summary>
         /// <summary>
         /// 获取分类的显示名称
         /// </summary>
@@ -642,7 +1085,19 @@ namespace demo2.DND.UI
             // 更新 UI 角色的皮肤
             uiCharacterAppearance.SetPart(part.partType, part.skinID);
 
-            // 关键修复：更换部件后，重新调整摄像机以适应新的模型边界
+            // 如果该部位关联了 ItemBaseSO（装备→物品映射），缓存下来，确认时同步到背包/装备栏
+            if (part.linkedItemSO != null)
+            {
+                pendingEquipmentItems[part.partType] = part.linkedItemSO;
+                Debug.Log($"[CharacterCustomizationPanel] 装备映射已缓存: {part.partType} → {part.linkedItemSO.displayName}");
+            }
+            else if (pendingEquipmentItems.ContainsKey(part.partType))
+            {
+                // 用户换成了一个不关联物品的皮肤（如"卸下"），清除缓存
+                pendingEquipmentItems.Remove(part.partType);
+            }
+
+            // 更换部件后，重新调整摄像机以适应新的模型边界
             FitCameraToCharacter(uiCharacter, uiCharacterCamera);
         }
 
@@ -733,6 +1188,23 @@ namespace demo2.DND.UI
                 return;
             }
 
+            // ---- 1. 同步外观皮肤 ----
+            SyncAppearanceToGameCharacter();
+
+            // ---- 2. 同步属性值 ----
+            SyncStatsToGameCharacter();
+
+            // ---- 3. 同步装备物品到背包/装备栏 ----
+            SyncEquipmentItemsToGameCharacter();
+
+            Debug.Log("[CharacterCustomizationPanel] 全部同步完成（外观 + 属性 + 装备物品）");
+        }
+
+        /// <summary>
+        /// 同步外观皮肤到游戏角色
+        /// </summary>
+        private void SyncAppearanceToGameCharacter()
+        {
             var gameAppearance = gameCharacter.GetComponent<CharacterAppearance>();
             if (gameAppearance == null)
             {
@@ -746,20 +1218,169 @@ namespace demo2.DND.UI
                 return;
             }
 
-            // 获取 UI 角色的当前皮肤配置（包括内层装饰 + 外层装备）
             var currentParts = uiCharacterAppearance.GetAllCurrentParts();
-
-            // 同步到游戏角色
             foreach (var kvp in currentParts)
             {
                 var partType = kvp.Key;
                 var skinID = kvp.Value;
-
                 Debug.Log($"[CharacterCustomizationPanel] 同步皮肤：{partType} = {skinID}");
                 gameAppearance.SetPart(partType, skinID);
             }
-
             Debug.Log("[CharacterCustomizationPanel] 皮肤同步完成");
+        }
+
+        /// <summary>
+        /// 同步属性值到游戏角色的 CharacterStats（使用购点结果+种族加成）
+        /// CharacterStats 是运行时实际属性决定者（CharacterTemplate 只是静态蓝图）
+        /// </summary>
+        private void SyncStatsToGameCharacter()
+        {
+            var gameStats = gameCharacter.GetComponent<CharacterStats>();
+            if (gameStats == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] gameCharacter 不包含 CharacterStats 组件，跳过属性同步");
+                return;
+            }
+
+            if (pointBuy == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] 购点系统未初始化，跳过属性同步");
+                return;
+            }
+
+            // 使用购点系统的最终值（基础值 + 种族加成）
+            int finalStr = pointBuy.FinalStrength;
+            int finalDex = pointBuy.FinalDexterity;
+            int finalCon = pointBuy.FinalConstitution;
+            int finalInt = pointBuy.FinalIntelligence;
+            int finalWis = pointBuy.FinalWisdom;
+            int finalCha = pointBuy.FinalCharisma;
+
+            // 如果选定了职业模板，使用 InitializeFromPointBuy（含种族加成+自选列表）
+            if (selectedTemplate != null)
+            {
+                gameStats.template = selectedTemplate;
+                // 传递自选的种族加成属性列表（变体人类）
+                var racialChoices = new List<StatType>(pointBuy.RacialBonusChoices);
+                gameStats.InitializeFromPointBuy(
+                    pointBuy.Strength, pointBuy.Dexterity, pointBuy.Constitution,
+                    pointBuy.Intelligence, pointBuy.Wisdom, pointBuy.Charisma,
+                    selectedTemplate.race, racialChoices);
+            }
+            else
+            {
+                // 无模板时直接设置属性
+                gameStats.strength = pointBuy.Strength;
+                gameStats.dexterity = pointBuy.Dexterity;
+                gameStats.constitution = pointBuy.Constitution;
+                gameStats.intelligence = pointBuy.Intelligence;
+                gameStats.wisdom = pointBuy.Wisdom;
+                gameStats.charisma = pointBuy.Charisma;
+                // 传递自选列表
+                var racialChoices = new List<StatType>(pointBuy.RacialBonusChoices);
+                gameStats.SetRacialBonuses(PointBuySystem.RaceType.Human, racialChoices);
+                gameStats.RequestRecalculateStats();
+            }
+
+            // 设置等级（创建角色固定为1级）
+            gameStats.SetLevel(StartLevel, healToFull: true);
+
+            Debug.Log($"[CharacterCustomizationPanel] 属性同步完成(购点+种族): STR={finalStr} DEX={finalDex} CON={finalCon} " +
+                      $"INT={finalInt} WIS={finalWis} CHA={finalCha} LVL={StartLevel}");
+        }
+
+        /// <summary>
+        /// 同步装备物品到游戏角色的 CharacterInventory 和 CharacterEquipment
+        ///
+        /// 流程：
+        ///   1. 根据 pendingEquipmentItems（用户在面板中选中的装备外观 → ItemBaseSO 映射）
+        ///      为每个 ItemBaseSO 创建 ItemInstance
+        ///   2. 将 ItemInstance 加入 gameCharacter 的 CharacterInventory（背包）
+        ///   3. 将 ItemInstance 装备到 gameCharacter 的 CharacterEquipment 对应槽位
+        ///   4. CharacterEquipment.EquipToSlot 会自动触发：
+        ///      - ReapplyEquippedModifiers() → 属性修正生效
+        ///      - SyncAppearance() → 通知 CharacterAppearance 换装（与第1步外观同步协同）
+        /// </summary>
+        private void SyncEquipmentItemsToGameCharacter()
+        {
+            if (pendingEquipmentItems.Count == 0)
+            {
+                Debug.Log("[CharacterCustomizationPanel] 没有待同步的装备物品");
+                return;
+            }
+
+            // 查找游戏角色上的背包和装备组件
+            var gameInventory = gameCharacter.GetComponent<CharacterInventory>();
+            if (gameInventory == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] gameCharacter 不包含 CharacterInventory 组件，跳过装备物品同步");
+                return;
+            }
+
+            var gameEquipment = gameCharacter.GetComponent<CharacterEquipment>();
+            if (gameEquipment == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] gameCharacter 不包含 CharacterEquipment 组件，跳过装备物品同步");
+                return;
+            }
+
+            // SkinBodyPartType → EquipmentSlot 映射（与 CharacterAppearance.MapPartTypeToEquipmentSlot 一致）
+            foreach (var kvp in pendingEquipmentItems)
+            {
+                var partType = kvp.Key;
+                var itemSO = kvp.Value;
+                if (itemSO == null) continue;
+
+                // 映射到装备槽位
+                EquipmentSlot? slot = MapSkinPartToEquipmentSlot(partType);
+                if (!slot.HasValue)
+                {
+                    Debug.LogWarning($"[CharacterCustomizationPanel] 无法映射 {partType} 到 EquipmentSlot，跳过");
+                    continue;
+                }
+
+                // 创建 ItemInstance
+                var itemInst = new ItemInstance(itemSO);
+                Debug.Log($"[CharacterCustomizationPanel] 创建物品实例: {itemSO.displayName} (ID: {itemInst.instanceId})");
+
+                // 加入背包
+                gameInventory.AddInstance(itemInst);
+
+                // 装备到对应槽位（CharacterEquipment.EquipToSlot 会触发属性修正 + 外观同步）
+                if (gameEquipment.CanEquip(itemInst))
+                {
+                    bool equipped = gameEquipment.EquipToSlot(slot.Value, itemInst);
+                    Debug.Log($"[CharacterCustomizationPanel] 装备物品到 {slot.Value}: {(equipped ? "成功" : "失败")}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[CharacterCustomizationPanel] 角色无法装备 {itemSO.displayName}（熟练度不足或类型不匹配），已放入背包但未装备");
+                }
+            }
+
+            // 清空待处理列表
+            pendingEquipmentItems.Clear();
+            Debug.Log("[CharacterCustomizationPanel] 装备物品同步完成");
+        }
+
+        /// <summary>
+        /// SkinBodyPartType → EquipmentSlot 映射（与 CharacterAppearance 保持一致）
+        /// </summary>
+        private static EquipmentSlot? MapSkinPartToEquipmentSlot(SkinBodyPartType partType)
+        {
+            switch (partType)
+            {
+                case SkinBodyPartType.Helmet: return EquipmentSlot.Helmet;
+                case SkinBodyPartType.Armor: return EquipmentSlot.Armor;
+                case SkinBodyPartType.Gloves: return EquipmentSlot.Gauntlets;
+                case SkinBodyPartType.Boots: return EquipmentSlot.Boots;
+                case SkinBodyPartType.Belt: return EquipmentSlot.Belt;
+                case SkinBodyPartType.Cloak: return EquipmentSlot.Cloak;
+                case SkinBodyPartType.MainHandWeapon: return EquipmentSlot.MainHand;
+                case SkinBodyPartType.OffHandShield: return EquipmentSlot.OffHand;
+                case SkinBodyPartType.OffHandWeapon: return EquipmentSlot.OffHand;
+                default: return null;
+            }
         }
 
         /// <summary>

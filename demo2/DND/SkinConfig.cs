@@ -1,5 +1,6 @@
 ﻿﻿using System.Collections.Generic;
 using UnityEngine;
+using demo2.DND.InventoryTetris;
 
 namespace demo2.DND
 {
@@ -23,6 +24,10 @@ namespace demo2.DND
 
         [Tooltip("UI预览图标（可选）")]
         public Sprite previewIcon;
+
+        [Header("装备→物品映射（仅外层装备部位需要）")]
+        [Tooltip("关联的 ItemBaseSO（选择此皮肤时，自动创建 ItemInstance 并添加到角色背包+装备栏）。仅外层装备部位（Helmet/Armor/Gloves等）需要配置。")]
+        public ItemBaseSO linkedItemSO;
     }
 
     /// <summary>

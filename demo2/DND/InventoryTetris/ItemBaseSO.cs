@@ -73,7 +73,7 @@ namespace demo2.DND.InventoryTetris
         [Serializable]
         public struct ModifierData
         {
-            public StatType stat;
+            public demo2.DND.Stats.StatType stat;
             public ModifierOp op;
             public float value;
             public string stackKey;

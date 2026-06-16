@@ -36,7 +36,7 @@ namespace demo2.DND
         // 标记：是否已经进入死亡表现（用于阵型清理与诊断） - 只读属性对外提供
         public bool HasPlayedDeath { get; private set; }
 
-        // 从模板初始化时的属性值
+        // 从模板初始化时的属性值（购点后的基础值，不含种族加成）
         [HideInInspector] public int strength = 10;
         [HideInInspector] public int dexterity = 10;
         [HideInInspector] public int constitution = 10;
@@ -44,13 +44,21 @@ namespace demo2.DND
         [HideInInspector] public int wisdom = 10;
         [HideInInspector] public int charisma = 10;
 
-        // 属性调整值
-        public int StrMod => (strength - 10) / 2;
-        public int DexMod => (dexterity - 10) / 2;
-        public int ConMod => (constitution - 10) / 2;
-        public int IntMod => (intelligence - 10) / 2;
-        public int WisMod => (wisdom - 10) / 2;
-        public int ChaMod => (charisma - 10) / 2;
+        // 种族加成（变体人类：自选两个不同属性各+1，叠加到基础值上形成最终属性）
+        [HideInInspector] public int racialStrBonus = 0;
+        [HideInInspector] public int racialDexBonus = 0;
+        [HideInInspector] public int racialConBonus = 0;
+        [HideInInspector] public int racialIntBonus = 0;
+        [HideInInspector] public int racialWisBonus = 0;
+        [HideInInspector] public int racialChaBonus = 0;
+
+        // 属性调整值（基于基础值+种族加成）
+        public int StrMod => (strength + racialStrBonus - 10) / 2;
+        public int DexMod => (dexterity + racialDexBonus - 10) / 2;
+        public int ConMod => (constitution + racialConBonus - 10) / 2;
+        public int IntMod => (intelligence + racialIntBonus - 10) / 2;
+        public int WisMod => (wisdom + racialWisBonus - 10) / 2;
+        public int ChaMod => (charisma + racialChaBonus - 10) / 2;
 
         // 新增：对外只读访问器（运行时值）
         public int CurrentHitPoints => currentHitPoints;
@@ -559,7 +567,7 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 从模板初始化角色数据
+        /// 从模板初始化角色数据（使用模板默认属性，不走购点流程时调用）
         /// </summary>
         public void InitializeFromTemplate() {
             if (template == null) return;
@@ -570,7 +578,7 @@ namespace demo2.DND
             characterLevel = template.level;
             battleSide = template.defaultSide;
 
-            // 复制属性
+            // 复制属性（模板默认值）
             strength = template.strength;
             dexterity = template.dexterity;
             constitution = template.constitution;
@@ -578,12 +586,105 @@ namespace demo2.DND
             wisdom = template.wisdom;
             charisma = template.charisma;
 
+            // 应用种族加成
+            ApplyRacialBonusesFromTemplate();
+
             // 计算战斗属性（显式按当前角色等级计算HP）
             maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel);
             currentHitPoints = maxHitPoints;
             armorClass = template.baseArmorClass;
 
             Debug.Log($"{characterName} 从模板初始化完成 - 等级{characterLevel} - 血量{maxHitPoints} - AC{armorClass}");
+        }
+
+        /// <summary>
+        /// 从购点结果初始化属性（创建角色流程用）
+        /// 传入六维基础值（购点结果）+ 种族类型 + 种族加成自选列表，自动叠加种族加成
+        /// </summary>
+        public void InitializeFromPointBuy(int str, int dex, int con, int intel, int wis, int cha,
+            PointBuySystem.RaceType race = PointBuySystem.RaceType.Human,
+            List<StatType> racialChoices = null)
+        {
+            if (template == null) return;
+
+            // 复制基本信息
+            characterName = template.characterName;
+            characterClass = template.characterClass;
+            characterLevel = template.level;
+            battleSide = template.defaultSide;
+
+            // 设置购点后的基础属性
+            strength = str;
+            dexterity = dex;
+            constitution = con;
+            intelligence = intel;
+            wisdom = wis;
+            charisma = cha;
+
+            // 应用种族加成（变体人类：按自选列表）
+            SetRacialBonuses(race, racialChoices);
+
+            // 计算战斗属性
+            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel);
+            currentHitPoints = maxHitPoints;
+            armorClass = template.baseArmorClass;
+
+            Debug.Log($"[CharacterStats] 购点初始化完成: STR={strength}(+{racialStrBonus}) DEX={dexterity}(+{racialDexBonus}) " +
+                      $"CON={constitution}(+{racialConBonus}) INT={intelligence}(+{racialIntBonus}) " +
+                      $"WIS={wisdom}(+{racialWisBonus}) CHA={charisma}(+{racialChaBonus})");
+        }
+
+        /// <summary>
+        /// 根据模板中的种族字段设置种族加成
+        /// </summary>
+        private void ApplyRacialBonusesFromTemplate()
+        {
+            if (template == null) return;
+            SetRacialBonuses(template.race);
+        }
+
+        /// <summary>
+        /// 设置种族加成值（变体人类：根据自选的属性列表设置加成）
+        /// </summary>
+        public void SetRacialBonuses(PointBuySystem.RaceType race, List<StatType> chosenStats = null)
+        {
+            racialStrBonus = 0; racialDexBonus = 0; racialConBonus = 0;
+            racialIntBonus = 0; racialWisBonus = 0; racialChaBonus = 0;
+
+            switch (race)
+            {
+                case PointBuySystem.RaceType.Human:
+                    // 变体人类：仅对已选属性各+1
+                    if (chosenStats != null)
+                    {
+                        foreach (var stat in chosenStats)
+                        {
+                            switch (stat)
+                            {
+                                case StatType.Strength: racialStrBonus = 1; break;
+                                case StatType.Dexterity: racialDexBonus = 1; break;
+                                case StatType.Constitution: racialConBonus = 1; break;
+                                case StatType.Intelligence: racialIntBonus = 1; break;
+                                case StatType.Wisdom: racialWisBonus = 1; break;
+                                case StatType.Charisma: racialChaBonus = 1; break;
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            Debug.Log($"[CharacterStats] 种族加成已设置: {race} → STR+{racialStrBonus} DEX+{racialDexBonus} CON+{racialConBonus} " +
+                      $"INT+{racialIntBonus} WIS+{racialWisBonus} CHA+{racialChaBonus}");
+        }
+
+        /// <summary>
+        /// 设置种族加成值（无自选列表时使用默认逻辑，兼容旧调用）
+        /// </summary>
+        public void SetRacialBonuses(PointBuySystem.RaceType race)
+        {
+            SetRacialBonuses(race, null);
         }
 
         /// <summary>
