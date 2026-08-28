@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 87658170871744161}
   - component: {fileID: 5430830410344171456}
   - component: {fileID: 4151220816459980106}
-  - component: {fileID: 2292933989955792237}
   - component: {fileID: 2314389909368802487}
   - component: {fileID: 465055944579507523}
   - component: {fileID: 8656571433496126432}
@@ -19,6 +18,7 @@ GameObject:
   - component: {fileID: 1994949910500310956}
   - component: {fileID: 4186642456316316154}
   - component: {fileID: 5012542204290718736}
+  - component: {fileID: 5231861480884208999}
   m_Layer: 6
   m_Name: PlayerTemplate01
   m_TagString: Player
@@ -36,7 +36,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.7, y: 0.7, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -69,7 +69,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: f10dc4d468695bb4b9d1ca9b4e8cc64d, type: 2}
+  - {fileID: 2100000, guid: a6edac9e66d871e419d8aa630a561a22, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -91,27 +91,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!95 &2292933989955792237
-Animator:
-  serializedVersion: 5
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7984810970041705236}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 08c6a590709694a429bcc51055b77bc9, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!70 &2314389909368802487
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -186,8 +165,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d247ba06193faa74d9335f5481b2b56c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  skeletonDataAsset: {fileID: 11400000, guid: f1b2b17030a282b4a9bd25bf12a5ba04, type: 2}
-  initialSkinName: 
+  skeletonDataAsset: {fileID: 11400000, guid: 50575f18e42df8d4d9ab6d86834d9f5a, type: 2}
+  initialSkinName: p7_alignment
   initialFlipX: 0
   initialFlipY: 0
   updateWhenInvisible: 3
@@ -208,7 +187,7 @@ MonoBehaviour:
     materialsInsideMask: []
     materialsOutsideMask: []
   disableRenderingOnOverride: 1
-  _animationName: Wait
+  _animationName: idle
   loop: 1
   timeScale: 1
 --- !u!114 &4286918360062315237
@@ -235,6 +214,12 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 10
   charisma: 10
+  racialStrBonus: 0
+  racialDexBonus: 0
+  racialConBonus: 0
+  racialIntBonus: 0
+  racialWisBonus: 0
+  racialChaBonus: 0
   armorClass: 10
 --- !u!114 &1994949910500310956
 MonoBehaviour:
@@ -250,7 +235,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterStats: {fileID: 4286918360062315237}
   skeletonAnimation: {fileID: 8656571433496126432}
-  animationConfig: {fileID: 11400000, guid: bb320f815c92c8c48aa4a2b5c15566d9, type: 2}
+  animationConfig: {fileID: 11400000, guid: 33958c343251dd04f9b666edf512287b, type: 2}
 --- !u!114 &4186642456316316154
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -268,6 +253,9 @@ MonoBehaviour:
   initialItems:
   - {fileID: 11400000, guid: 88f110266ff0b3e42971dcf276867948, type: 2}
   - {fileID: 11400000, guid: d1013dc7f2c4b604ea152fbcba89b66e, type: 2}
+  equippedMainHandId: 
+  equippedArmorId: 
+  equippedShieldId: 
 --- !u!114 &5012542204290718736
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -280,3 +268,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a867f4e59d3b405ea6ae81ebded743d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &5231861480884208999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7984810970041705236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 290b54b03ed14ea2997c430651eafb6e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  skinConfig: {fileID: 11400000, guid: 2f3e158c804795a478d74be92337e7c7, type: 2}
+  skeletonAnimation: {fileID: 8774157992506457522, guid: 77180b56dc2632240a112bcf96957185, type: 3}

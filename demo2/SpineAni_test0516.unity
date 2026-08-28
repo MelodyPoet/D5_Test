@@ -1408,6 +1408,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a1fd7e528de1a754bbaf49cc66bb0178, type: 2}
   - {fileID: 11400000, guid: b948e3645430f5f4997cf3ac444fa3ba, type: 2}
   - {fileID: 11400000, guid: a85a66d0e405a3649984eba84cdb51e1, type: 2}
+  battleSceneName: DND_Test
   classButtonContainer: {fileID: 1563538375}
   classButtonPrefab: {fileID: 2756351410190607613, guid: 8b96720323e3b4343a1fa2563c53542e, type: 3}
   selectedClassText: {fileID: 2105089818}

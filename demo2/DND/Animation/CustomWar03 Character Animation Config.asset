@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bc10dc282f16455db5c68c870f95587b, type: 3}
   m_Name: CustomWar03 Character Animation Config
   m_EditorClassIdentifier: 
-  characterId: 
+  characterId: player01
   idleAnimation: idle
-  walkAnimation: walk
+  walkAnimation: run
   runAnimation: run
   attackAnimation: attack
   hitAnimation: hit

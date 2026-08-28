@@ -40,4 +40,7 @@ MonoBehaviour:
   armorBaseAC: 14
   isShield: 0
   shieldACBonus: 2
+  appearanceSkinID: 
+  appearanceSlot: 2
+  appearanceBehavior: 0
   modifiers: []

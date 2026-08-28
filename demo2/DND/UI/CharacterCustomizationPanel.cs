@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Spine.Unity;
 using demo2.DND.InventoryTetris;
@@ -78,6 +79,10 @@ namespace demo2.DND.UI
         [Header("职业选择")]
         [SerializeField, Tooltip("可选的职业模板列表（拖入不同职业的 CharacterTemplate SO）")]
         private List<CharacterTemplate> availableClasses = new List<CharacterTemplate>();
+
+        [Header("确认后进入的战斗场景")]
+        [SerializeField, Tooltip("确认定制后加载的战斗场景名（需加入 Build Settings）")]
+        private string battleSceneName = "DND_Test";
         [SerializeField, Tooltip("职业按钮容器（用于放置职业选择按钮）")]
         private Transform classButtonContainer;
         [SerializeField, Tooltip("职业按钮预制体")]
@@ -1133,7 +1138,7 @@ namespace demo2.DND.UI
         }
 
         /// <summary>
-        /// 确认按钮被点击 - 同步皮肤配置到游戏角色
+        /// 确认按钮被点击 - 同步皮肤配置到游戏角色，并将定制后的角色交付桥接器，加载战斗场景
         /// </summary>
         private void OnConfirmClicked()
         {
@@ -1141,19 +1146,80 @@ namespace demo2.DND.UI
 
             try
             {
-                // 同步 UI 角色的皮肤配置到游戏角色
+                // 同步 UI 角色的皮肤配置到游戏角色（属性/外观/装备全部写入 gameCharacter）
                 SyncToGameCharacter();
 
-                // 触发事件
+                // 将定制完成的角色实例交给跨场景桥接器，供战斗场景消费
+                DeliverCharacterToBattle();
+
+                // 触发事件（外部监听者，例如关闭面板等）
                 OnConfirm?.Invoke();
 
-                // 关闭 UI
+                // 关闭 UI（本对象留在场景，即将被场景切换销毁；角色实例已被桥接器接管）
                 gameObject.SetActive(false);
+
+                // 加载战斗场景
+                if (!string.IsNullOrEmpty(battleSceneName))
+                {
+                    Debug.Log($"[CharacterCustomizationPanel] 加载战斗场景：{battleSceneName}");
+                    SceneManager.LoadScene(battleSceneName);
+                }
+                else
+                {
+                    Debug.LogWarning("[CharacterCustomizationPanel] battleSceneName 为空，未加载战斗场景");
+                }
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[CharacterCustomizationPanel] 确认失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 将定制后的角色实例交付给跨场景桥接器 CharacterCustomizationBridge。
+        /// 实例（gameCharacter）已承载全部属性/外观/装备同步结果，并带有战斗中所需的
+        /// 全套组件；模板引用（characterPrefab，即 PlayerTemplate01）用于战斗场景在
+        /// 阵型 prefab 数组中动态定位玩家主控槽位（玩家可把该模板拖到任意阵型位置）。
+        /// 模板 prefab 本身保持纯净，不被改写。
+        /// </summary>
+        private void DeliverCharacterToBattle()
+        {
+            if (gameCharacter == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] gameCharacter 为空，无法交付角色到战斗场景");
+                return;
+            }
+            if (characterPrefab == null)
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] characterPrefab 为空，无法定位玩家主控模板");
+                return;
+            }
+
+            // 确保桥接器单例存在（惰性创建）
+            var bridge = FindObjectOfType<CharacterCustomizationBridge>();
+            if (bridge == null)
+            {
+                var bridgeGO = new GameObject("CharacterCustomizationBridge");
+                bridgeGO.AddComponent<CharacterCustomizationBridge>();
+                bridge = bridgeGO.GetComponent<CharacterCustomizationBridge>();
+            }
+
+            // 将角色实例移出 UICharacter 层（如有），恢复为默认层，避免战斗摄像机剔除
+            var go = gameCharacter.gameObject;
+            foreach (var t in go.GetComponentsInChildren<Transform>())
+            {
+                if (t.gameObject.layer == LayerMask.NameToLayer("UICharacter"))
+                {
+                    t.gameObject.layer = 0; // Default 层
+                }
+            }
+
+            // 关键：标记实例跨场景存活，否则 SceneManager.LoadScene 会销毁当前场景所有对象
+            // （含本实例），导致桥接器持有已销毁引用、战斗场景无法生成主角。
+            DontDestroyOnLoad(go);
+
+            bridge.SetPlayer(go, characterPrefab);
+            Debug.Log($"[CharacterCustomizationPanel] 已交付角色到桥接器，模板 prefab：{characterPrefab.name}");
         }
 
         /// <summary>

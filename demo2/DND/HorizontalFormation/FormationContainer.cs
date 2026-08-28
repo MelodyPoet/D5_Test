@@ -25,7 +25,7 @@ namespace demo2.DND.HorizontalFormation
             "null值表示该位置无角色";
 
         [Header("玩家阵型预制体")]
-        [Tooltip("玩家阵型6个位置的角色预制体，按索引顺序配置")]
+        [Tooltip("玩家阵型6个位置的角色预制体，按索引顺序配置。玩家可把 PlayerTemplate01 拖到任意位置作为主控")]
         [SerializeField] private GameObject[] playerFormationPrefabs = new GameObject[6];
 
         [Header("敌人波次配置")]

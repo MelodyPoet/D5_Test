@@ -3,6 +3,7 @@ using UnityEngine;
 using Spine.Unity;
 using DG.Tweening;
 using System;
+using demo2.DND;
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -15,6 +16,11 @@ namespace demo2.DND.HorizontalFormation
         [Header("阵型容器配置")]
         [Tooltip("阵型配置容器 - 统一管理所有预制体")]
         [SerializeField] private FormationContainer formationContainer;
+
+        /// <summary>
+        /// 对外暴露阵型容器（只读），供 IdleGameManager 等写入自定义角色覆盖槽位。
+        /// </summary>
+        public FormationContainer FormationContainer => formationContainer;
 
         [Space(15)]
         [Header("阵型参数设置")]
@@ -123,10 +129,26 @@ namespace demo2.DND.HorizontalFormation
                 {
                     activePlayerCharacters.Add(null);
                 }
+
+                // 检查是否有来自自定义场景的玩家角色实例
+                var bridge = CharacterCustomizationBridge.Instance;
+                bool hasCustomPlayer = bridge != null && bridge.HasPlayer;
+
                 for (int i = 0; i < 6; i++)
                 {
                     GameObject prefab = formationContainer.GetPlayerPrefab(i);
-                    InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
+
+                    // 若该槽位的 prefab 引用与桥接器中的模板 prefab 相同
+                    // （即玩家把 PlayerTemplate01 拖到了这个阵型位置），则使用
+                    // 自定义角色实例替换默认生成的角色，实现"玩家主控位置动态定位"。
+                    if (hasCustomPlayer && prefab != null && prefab == bridge.SourcePrefab)
+                    {
+                        PlaceCustomPlayerCharacter(bridge.PlayerInstance, playerSpawnPoints[i], i);
+                    }
+                    else
+                    {
+                        InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
+                    }
                 }
                 SetPlayerFormationWalkingState();
                 Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
@@ -356,6 +378,60 @@ namespace demo2.DND.HorizontalFormation
             activePlayerCharacters[index] = instance;
 
             Debug.Log($"玩家角色 {prefab.name} 已生成在索引{index}，缩放值: {instance.transform.localScale}");
+        }
+
+        /// <summary>
+        /// 放置来自自定义场景的玩家角色实例（直接复用，不再 Instantiate）。
+        /// 该实例由 CharacterCustomizationBridge 跨场景传递，已承载定制的
+        /// 属性/外观/装备，并带有战斗所需的全套组件。
+        /// 配置逻辑与 InstantiatePlayerCharacterAtIndex 保持一致。
+        /// </summary>
+        private void PlaceCustomPlayerCharacter(GameObject customInstance, Transform spawnPoint, int index)
+        {
+            if (customInstance == null || spawnPoint == null)
+            {
+                Debug.LogWarning($"自定义玩家角色索引{index}的实例或spawn点为null，保持null占位");
+                return;
+            }
+
+            // 将实例移动到阵型 spawn 点（恢复为场景内普通对象，取消 DontDestroyOnLoad 标记）
+            customInstance.transform.SetParent(null);
+            customInstance.transform.position = spawnPoint.position;
+            customInstance.transform.rotation = spawnPoint.rotation;
+            customInstance.transform.localScale = customInstance.transform.localScale; // 保留定制角色原始缩放
+
+            // 配置阵营 + 血条
+            CharacterStats stats = customInstance.GetComponent<CharacterStats>();
+            if (stats != null)
+            {
+                stats.battleSide = BattleSide.Player;
+                CreateHealthBarForCharacter(stats);
+            }
+            else
+            {
+                Debug.LogError($"自定义玩家角色 {customInstance.name} 缺少 CharacterStats 组件！");
+                return;
+            }
+
+            // 位置组件
+            BattlePositionComponent positionComponent = customInstance.GetComponent<BattlePositionComponent>();
+            if (positionComponent == null)
+            {
+                positionComponent = customInstance.AddComponent<BattlePositionComponent>();
+            }
+            positionComponent.currentPosition = (HorizontalPosition)index;
+            positionComponent.isOccupied = true;
+
+            activePlayerCharacters[index] = customInstance;
+
+            // 消费完毕后复位桥接器，避免下次进入战斗时残留
+            var bridge = CharacterCustomizationBridge.Instance;
+            if (bridge != null)
+            {
+                bridge.Clear();
+            }
+
+            Debug.Log($"自定义玩家角色 {customInstance.name} 已放置到索引{index}");
         }
 
         /// <summary>

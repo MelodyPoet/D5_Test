@@ -433,6 +433,9 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
+            // 若存在来自自定义场景的玩家角色，HorizontalBattleFormationManager 会
+            // 按模板 prefab 引用（PlayerTemplate01）在阵型中动态定位玩家主控槽位，
+            // 无需此处额外同步槽位。
             formationManager.GeneratePlayerFormation();
             Debug.Log($"✅ 队伍生成完成");
         }

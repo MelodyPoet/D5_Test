@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 6322044990418971160}
   - component: {fileID: 3698178677760924982}
   - component: {fileID: 6306979204397228521}
+  - component: {fileID: -4924890632717491985}
   m_Layer: 0
   m_Name: CustomWar03
   m_TagString: Untagged
@@ -34,8 +35,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4537190158040161229}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -2.7, y: -2.4, z: -0.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -177,16 +178,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   template: {fileID: 11400000, guid: a1fd7e528de1a754bbaf49cc66bb0178, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
-  characterName: "\u89D2\u8272"
+  characterName: "\u65CB\u5F8B\u8BD7\u4EBA"
   characterClass: 0
   characterLevel: 1
   battleSide: 0
-  strength: 10
-  dexterity: 10
-  constitution: 10
-  intelligence: 10
+  strength: 15
+  dexterity: 14
+  constitution: 13
+  intelligence: 8
   wisdom: 10
-  charisma: 10
+  charisma: 12
+  racialStrBonus: 0
+  racialDexBonus: 0
+  racialConBonus: 0
+  racialIntBonus: 0
+  racialWisBonus: 0
+  racialChaBonus: 0
   armorClass: 10
 --- !u!114 &7865967803855529796
 MonoBehaviour:
@@ -276,3 +283,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a867f4e59d3b405ea6ae81ebded743d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &-4924890632717491985
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4537190158040161229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bc25b0f9044543a5312bc1b179558c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentPosition: 1
+  rowPosition: 0
+  isOccupied: 1
+  showDebugInfo: 0
