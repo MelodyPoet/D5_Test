@@ -1176,26 +1176,54 @@ namespace demo2.DND.UI
         }
 
         /// <summary>
-        /// 将定制后的角色实例交付给跨场景桥接器 CharacterCustomizationBridge。
-        /// 实例（gameCharacter）已承载全部属性/外观/装备同步结果，并带有战斗中所需的
-        /// 全套组件；模板引用（characterPrefab，即 PlayerTemplate01）用于战斗场景在
-        /// 阵型 prefab 数组中动态定位玩家主控槽位（玩家可把该模板拖到任意阵型位置）。
-        /// 模板 prefab 本身保持纯净，不被改写。
+        /// 将玩家定制结果序列化为数据包，交付给跨场景桥接器 CharacterCustomizationBridge。
+        /// 不再跨场景传递活 GameObject 实例（规避 DontDestroyOnLoad 时序/场景卸载导致的丢失）；
+        /// 改为传递纯数据（外观部件 + 属性）。战斗场景基于模板 prefab（PlayerTemplate01）
+        /// 实例化玩家后，再把数据包"叠加"到实例上（把玩家选的各个部件 skin 添加到模板
+        /// 默认底子 p7_alignment 之上），并应用属性值。模板 prefab 本身保持纯净，不被改写。
         /// </summary>
         private void DeliverCharacterToBattle()
         {
-            if (gameCharacter == null)
-            {
-                Debug.LogWarning("[CharacterCustomizationPanel] gameCharacter 为空，无法交付角色到战斗场景");
-                return;
-            }
             if (characterPrefab == null)
             {
                 Debug.LogWarning("[CharacterCustomizationPanel] characterPrefab 为空，无法定位玩家主控模板");
                 return;
             }
 
-            // 确保桥接器单例存在（惰性创建）
+            // 构建可序列化的定制数据包（外观 + 属性），跨场景传递给战斗场景。
+            var data = new CharacterCustomizationData();
+
+            if (uiCharacterAppearance != null)
+            {
+                var parts = uiCharacterAppearance.GetAllCurrentParts();
+                foreach (var kvp in parts)
+                {
+                    data.appearanceParts.Add(new AppearancePartEntry { partType = kvp.Key, skinID = kvp.Value });
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] uiCharacterAppearance 为空，外观数据将为空");
+            }
+
+            if (pointBuy != null)
+            {
+                data.strength = pointBuy.FinalStrength;
+                data.dexterity = pointBuy.FinalDexterity;
+                data.constitution = pointBuy.FinalConstitution;
+                data.intelligence = pointBuy.FinalIntelligence;
+                data.wisdom = pointBuy.FinalWisdom;
+                data.charisma = pointBuy.FinalCharisma;
+            }
+            else
+            {
+                Debug.LogWarning("[CharacterCustomizationPanel] 购点系统未初始化，属性数据将为空");
+            }
+
+            data.level = StartLevel;
+
+            // 确保桥接器单例存在（惰性创建），并立即标记跨场景存活，
+            // 避免 SceneManager.LoadScene 时桥接器随 SpineAni 场景被销毁。
             var bridge = FindObjectOfType<CharacterCustomizationBridge>();
             if (bridge == null)
             {
@@ -1203,23 +1231,11 @@ namespace demo2.DND.UI
                 bridgeGO.AddComponent<CharacterCustomizationBridge>();
                 bridge = bridgeGO.GetComponent<CharacterCustomizationBridge>();
             }
+            DontDestroyOnLoad(bridge.gameObject);
 
-            // 将角色实例移出 UICharacter 层（如有），恢复为默认层，避免战斗摄像机剔除
-            var go = gameCharacter.gameObject;
-            foreach (var t in go.GetComponentsInChildren<Transform>())
-            {
-                if (t.gameObject.layer == LayerMask.NameToLayer("UICharacter"))
-                {
-                    t.gameObject.layer = 0; // Default 层
-                }
-            }
-
-            // 关键：标记实例跨场景存活，否则 SceneManager.LoadScene 会销毁当前场景所有对象
-            // （含本实例），导致桥接器持有已销毁引用、战斗场景无法生成主角。
-            DontDestroyOnLoad(go);
-
-            bridge.SetPlayer(go, characterPrefab);
-            Debug.Log($"[CharacterCustomizationPanel] 已交付角色到桥接器，模板 prefab：{characterPrefab.name}");
+            bridge.SetPlayerData(data, characterPrefab);
+            Debug.Log($"[CharacterCustomizationPanel] 已交付定制数据包到桥接器，模板 prefab：{characterPrefab.name}，" +
+                      $"外观部件数={data.appearanceParts.Count}，HasPlayer={bridge.HasPlayer}");
         }
 
         /// <summary>

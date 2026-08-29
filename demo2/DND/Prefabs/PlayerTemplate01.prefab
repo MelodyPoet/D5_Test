@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 4186642456316316154}
   - component: {fileID: 5012542204290718736}
   - component: {fileID: 5231861480884208999}
+  - component: {fileID: -2065424714280392054}
   m_Layer: 6
   m_Name: PlayerTemplate01
   m_TagString: Player
@@ -34,8 +35,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7984810970041705236}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -2.7, y: -2.4, z: -0.1}
   m_LocalScale: {x: 0.7, y: 0.7, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -208,12 +209,12 @@ MonoBehaviour:
   characterClass: 0
   characterLevel: 1
   battleSide: 0
-  strength: 10
-  dexterity: 10
-  constitution: 10
-  intelligence: 10
+  strength: 15
+  dexterity: 14
+  constitution: 13
+  intelligence: 8
   wisdom: 10
-  charisma: 10
+  charisma: 12
   racialStrBonus: 0
   racialDexBonus: 0
   racialConBonus: 0
@@ -235,7 +236,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterStats: {fileID: 4286918360062315237}
   skeletonAnimation: {fileID: 8656571433496126432}
-  animationConfig: {fileID: 11400000, guid: 33958c343251dd04f9b666edf512287b, type: 2}
+  animationConfig: {fileID: 11400000, guid: bb320f815c92c8c48aa4a2b5c15566d9, type: 2}
 --- !u!114 &4186642456316316154
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -280,5 +281,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 290b54b03ed14ea2997c430651eafb6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  skinConfig: {fileID: 11400000, guid: 2f3e158c804795a478d74be92337e7c7, type: 2}
-  skeletonAnimation: {fileID: 8774157992506457522, guid: 77180b56dc2632240a112bcf96957185, type: 3}
+  skinConfig: {fileID: 11400000, guid: a652147d2d6238448bc253555107a440, type: 2}
+  skeletonAnimation: {fileID: 8656571433496126432}
+--- !u!114 &-2065424714280392054
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7984810970041705236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04bc25b0f9044543a5312bc1b179558c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  currentPosition: 1
+  rowPosition: 0
+  isOccupied: 1
+  showDebugInfo: 0

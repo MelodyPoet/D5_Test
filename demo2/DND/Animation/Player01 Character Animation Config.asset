@@ -13,20 +13,20 @@ MonoBehaviour:
   m_Name: Player01 Character Animation Config
   m_EditorClassIdentifier: 
   characterId: player01
-  idleAnimation: Wait
-  walkAnimation: Walk
+  idleAnimation: idle
+  walkAnimation: run
   runAnimation: run
-  attackAnimation: Atk01
-  hitAnimation: Dmg
-  deathAnimation: Lose
+  attackAnimation: attack
+  hitAnimation: hit
+  deathAnimation: death
   skillAnimation: skill
   defendAnimation: defend
   dodgeAnimation: dodge
-  unconsciousAnimation: Down
-  attackHitEvent: s.Attack
+  unconsciousAnimation: unconscious
+  attackHitEvent: attack_hit
   footstepEvent: footstep
   stateChangeEvent: state_change
-  moveSpeed: 5
+  moveSpeed: 2
   attackDistance: 1.5
   moveEase: 9
   animations: []

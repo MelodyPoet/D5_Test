@@ -1,23 +1,54 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace demo2.DND
 {
     /// <summary>
+    /// 单个外观部件条目（用于序列化跨场景传递）。
+    /// </summary>
+    [System.Serializable]
+    public class AppearancePartEntry
+    {
+        public SkinBodyPartType partType;
+        public string skinID;
+    }
+
+    /// <summary>
+    /// 玩家定制数据包：跨场景传递的纯数据快照。
+    /// 战斗场景基于 PlayerTemplate01 模板实例化玩家后，把本数据包"叠加"到实例上
+    /// （即把玩家选的各个部件 skin 添加到模板默认底子（如 p7_alignment）之上），
+    /// 并应用属性值。模板 prefab 保持纯净、不被改写。
+    /// </summary>
+    [System.Serializable]
+    public class CharacterCustomizationData
+    {
+        /// <summary>外观部件（头发/眼睛/装备外观等），在模板底子之上叠加</summary>
+        public List<AppearancePartEntry> appearanceParts = new List<AppearancePartEntry>();
+
+        /// <summary>六维属性（已含种族加成的最终值）</summary>
+        public int strength, dexterity, constitution, intelligence, wisdom, charisma;
+
+        /// <summary>角色等级</summary>
+        public int level = 1;
+    }
+
+    /// <summary>
     /// 跨场景角色定制桥接单例。
     ///
-    /// 设计定位（方案 X：模板只读 + 实例跨场景）：
+    /// 设计定位（方案 X：模板只读 + 数据跨场景）：
     ///   模板（如 PlayerTemplate01.prefab）保持纯净、永不改写。玩家在 SpineAni_test0516
-    ///   场景中基于模板实例化并定制（外观/属性/装备/状态），得到"玩家角色实例"。
-    ///   确认后该实例交给本桥接器（DontDestroyOnLoad 跨场景存活）。
+    ///   场景中完成定制（外观/属性），确认时把结果序列化为 CharacterCustomizationData
+    ///   交给本桥接器（DontDestroyOnLoad 跨场景存活）。
     ///
     ///   战斗场景 DND_Test 生成玩家阵型时，通过 SourcePrefab 引用在 FormationContainer
     ///   的 playerFormationPrefabs 数组中动态定位"玩家主控槽位"（玩家可把 PlayerTemplate01
-    ///   拖到任意阵型位置），再用本桥接器提供的实例替换该槽位默认生成的角色。
+    ///   拖到任意阵型位置），然后基于该模板 prefab 实例化玩家，并把数据包的外观/属性
+    ///   叠加到实例上，得到"玩家角色实例"。
     ///
     /// 这样：
+    ///   - 不再跨场景传递活 GameObject 实例，规避 DontDestroyOnLoad 时序/场景卸载导致的丢失；
     ///   - 模板 prefab 不被污染，可反复用于不同玩家/重新定制；
-    ///   - 玩家随时改变阵型中 PlayerTemplate01 的位置，战斗逻辑自动对齐，无需写死索引；
-    ///   - 实例在战斗中随 RPG 成长不断更新，与模板解耦。
+    ///   - 玩家随时改变阵型中 PlayerTemplate01 的位置，战斗逻辑自动对齐，无需写死索引。
     /// </summary>
     public class CharacterCustomizationBridge : MonoBehaviour
     {
@@ -27,10 +58,9 @@ namespace demo2.DND
         [SerializeField] private bool dontDestroy = true;
 
         /// <summary>
-        /// 定制后的玩家角色实例（已包含属性/外观/装备，带有完整战斗组件）。
-        /// 战斗场景消费前有效。
+        /// 定制数据包（外观 + 属性）。战斗场景消费前有效。
         /// </summary>
-        private GameObject playerCharacterInstance;
+        private CharacterCustomizationData customizationData;
 
         /// <summary>
         /// 该实例所基于的模板 prefab 引用（如 PlayerTemplate01）。
@@ -41,12 +71,12 @@ namespace demo2.DND
         /// <summary>
         /// 本次是否有自定义角色待消费。
         /// </summary>
-        public bool HasPlayer => playerCharacterInstance != null && sourcePrefab != null;
+        public bool HasPlayer => customizationData != null && sourcePrefab != null;
 
         /// <summary>
-        /// 获取自定义角色实例（消费方直接复用，不再 Instantiate 该实例本身）。
+        /// 获取定制数据包。
         /// </summary>
-        public GameObject PlayerInstance => playerCharacterInstance;
+        public CharacterCustomizationData Data => customizationData;
 
         /// <summary>
         /// 获取模板 prefab 引用，用于在阵型 prefab 数组中定位玩家主控槽位。
@@ -68,13 +98,13 @@ namespace demo2.DND
         }
 
         /// <summary>
-        /// 由自定义面板在确认时调用：提交定制后的角色实例及其来源模板 prefab。
+        /// 由自定义面板在确认时调用：提交定制数据包及其来源模板 prefab。
         /// </summary>
-        /// <param name="instance">承载定制结果的角色 GameObject</param>
+        /// <param name="data">承载定制结果的纯数据（外观部件 + 属性）</param>
         /// <param name="templatePrefab">该角色所基于的模板 prefab（如 PlayerTemplate01）</param>
-        public void SetPlayer(GameObject instance, GameObject templatePrefab)
+        public void SetPlayerData(CharacterCustomizationData data, GameObject templatePrefab)
         {
-            playerCharacterInstance = instance;
+            customizationData = data;
             sourcePrefab = templatePrefab;
         }
 
@@ -83,7 +113,7 @@ namespace demo2.DND
         /// </summary>
         public void Clear()
         {
-            playerCharacterInstance = null;
+            customizationData = null;
             sourcePrefab = null;
         }
 

@@ -1388,9 +1388,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   skinConfig: {fileID: 11400000, guid: 2f3e158c804795a478d74be92337e7c7, type: 2}
-  characterPrefab: {fileID: 4537190158040161229, guid: 77180b56dc2632240a112bcf96957185, type: 3}
-  animationConfig: {fileID: 11400000, guid: 33958c343251dd04f9b666edf512287b, type: 2}
-  gameCharacter: {fileID: 8774157992506457522, guid: 77180b56dc2632240a112bcf96957185, type: 3}
+  characterPrefab: {fileID: 7984810970041705236, guid: 68434df3ed361f441a0f418d9205a7ed, type: 3}
+  animationConfig: {fileID: 11400000, guid: bb320f815c92c8c48aa4a2b5c15566d9, type: 2}
+  gameCharacter: {fileID: 8656571433496126432, guid: 68434df3ed361f441a0f418d9205a7ed, type: 3}
   characterDisplayImage: {fileID: 848709326}
   uiCharacterCamera: {fileID: 1854172971}
   categoryTabsContainer: {fileID: 5171370276724808040}

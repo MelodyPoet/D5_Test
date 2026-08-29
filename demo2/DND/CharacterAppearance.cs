@@ -164,6 +164,16 @@ namespace demo2.DND
         }
 
         /// <summary>
+        /// 重新把当前已设置的部件组合（base + cosmetic + equipment）应用到骨架。
+        /// 用于跨场景生成后：SkeletonAnimation 在 Start 阶段会按 initialSkinName 重新应用
+        /// 默认皮肤，覆盖掉同帧同步设置的 combined skin；延迟一帧再调用本方法即可保住玩家定制。
+        /// </summary>
+        public void ReapplyAppearance()
+        {
+            ApplyAppearanceToSkeleton();
+        }
+
+        /// <summary>
         /// 获取指定部位的当前皮肤ID（包括装备部位）
         /// </summary>
         public string GetCurrentPart(SkinBodyPartType partType)
@@ -276,14 +286,27 @@ namespace demo2.DND
                 return;
             }
 
+            var skeletonDataAsset = skeletonAnimation.skeletonDataAsset;
+            if (skeletonDataAsset == null)
+            {
+                Debug.LogError("[CharacterAppearance] SkeletonDataAsset为空，无法应用外观");
+                return;
+            }
+
             try
             {
                 var skeleton = skeletonAnimation.Skeleton;
-                var skeletonData = skeletonAnimation.skeletonDataAsset.GetSkeletonData(false);
+                var skeletonData = skeletonDataAsset.GetSkeletonData(false);
+                if (skeletonData == null)
+                {
+                    Debug.LogError($"[CharacterAppearance] SkeletonDataAsset '{skeletonDataAsset.name}' 未能加载SkeletonData");
+                    return;
+                }
 
                 skeleton.SetToSetupPose();
 
                 var combinedSkin = new Spine.Skin("combined-skin");
+                bool anySkinAdded = false;
 
                 // ===== Layer 1: 基础身体 =====
                 string baseBodyID = skinConfig != null ? skinConfig.defaultBaseBodySkinID : "base-skin";
@@ -291,10 +314,14 @@ namespace demo2.DND
                 if (baseBodySkin != null)
                 {
                     combinedSkin.AddSkin(baseBodySkin);
+                    anySkinAdded = true;
                 }
                 else
                 {
-                    Debug.LogWarning($"[CharacterAppearance] 基础身体皮肤 '{baseBodyID}' 在SkeletonData中未找到");
+                    Debug.LogWarning(
+                        $"[CharacterAppearance] 基础身体皮肤 '{baseBodyID}' 在SkeletonData中未找到。" +
+                        $" 当前SkeletonDataAsset={skeletonDataAsset.name}。" +
+                        $" 可用皮肤=[{string.Join(", ", GetAllSkinNames(skeletonData))}]");
                 }
 
                 // ===== Layer 2: 装饰部件 =====
@@ -304,6 +331,7 @@ namespace demo2.DND
                     if (skin != null)
                     {
                         combinedSkin.AddSkin(skin);
+                        anySkinAdded = true;
                     }
                     else
                     {
@@ -318,6 +346,7 @@ namespace demo2.DND
                     if (skin != null)
                     {
                         combinedSkin.AddSkin(skin);
+                        anySkinAdded = true;
                     }
                     else
                     {
@@ -332,11 +361,23 @@ namespace demo2.DND
                     if (skin != null)
                     {
                         combinedSkin.AddSkin(skin);
+                        anySkinAdded = true;
                     }
                     else
                     {
                         Debug.LogWarning($"[CharacterAppearance] 叠加型装备皮肤 '{kvp.Value}' 在SkeletonData中未找到");
                     }
+                }
+
+                // 防御性逻辑：没有任何皮肤被成功加载时，跳过 SetSkin，保留骨架默认皮肤，
+                // 避免角色因空组合皮肤被清空所有附件而变成空骨骼/材质丢失不可见。
+                if (!anySkinAdded)
+                {
+                    Debug.LogWarning(
+                        $"[CharacterAppearance] 所有外观皮肤均未在SkeletonData中找到，已跳过组合皮肤应用并保留默认皮肤。" +
+                        $" 当前SkeletonDataAsset={skeletonDataAsset.name}。" +
+                        $" 可用皮肤=[{string.Join(", ", GetAllSkinNames(skeletonData))}]");
+                    return;
                 }
 
                 // 应用组合皮肤到骨架
@@ -354,6 +395,20 @@ namespace demo2.DND
             {
                 Debug.LogError($"[CharacterAppearance] 应用外观到骨架时出错: {ex.Message}\n{ex.StackTrace}");
             }
+        }
+
+        /// <summary>
+        /// 列出 SkeletonData 中所有可用皮肤名称，用于诊断"皮肤找不到"的问题。
+        /// </summary>
+        private static System.Collections.Generic.List<string> GetAllSkinNames(Spine.SkeletonData data)
+        {
+            var names = new System.Collections.Generic.List<string>();
+            if (data?.Skins == null) return names;
+            foreach (var s in data.Skins)
+            {
+                if (s != null) names.Add(s.Name);
+            }
+            return names;
         }
 
         // ==================== 内部辅助 ====================

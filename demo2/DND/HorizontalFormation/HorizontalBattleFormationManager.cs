@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using Spine.Unity;
 using DG.Tweening;
@@ -130,25 +131,44 @@ namespace demo2.DND.HorizontalFormation
                     activePlayerCharacters.Add(null);
                 }
 
-                // 检查是否有来自自定义场景的玩家角色实例
+                // 检查是否有来自自定义场景的玩家角色定制数据
                 var bridge = CharacterCustomizationBridge.Instance;
                 bool hasCustomPlayer = bridge != null && bridge.HasPlayer;
+                CharacterCustomizationData customData = hasCustomPlayer ? bridge.Data : null;
+                int customPartCount = (customData != null && customData.appearanceParts != null) ? customData.appearanceParts.Count : 0;
+                Debug.Log($"[GenPlayerFormation] START hasCustomPlayer={hasCustomPlayer} " +
+                          (hasCustomPlayer ? $"sourcePrefab={(bridge.SourcePrefab != null ? bridge.SourcePrefab.name : "null")} " +
+                                           $"外观部件数={customPartCount}"
+                                         : ""));
 
+                int placedCustomSlot = -1;
                 for (int i = 0; i < 6; i++)
                 {
                     GameObject prefab = formationContainer.GetPlayerPrefab(i);
+                    bool match = hasCustomPlayer && prefab != null && bridge.SourcePrefab != null && prefab == bridge.SourcePrefab;
+                    Debug.Log($"[GenPlayerFormation] slot[{i}] prefab={(prefab != null ? prefab.name : "null")} matchCustom={match}");
 
                     // 若该槽位的 prefab 引用与桥接器中的模板 prefab 相同
-                    // （即玩家把 PlayerTemplate01 拖到了这个阵型位置），则使用
-                    // 自定义角色实例替换默认生成的角色，实现"玩家主控位置动态定位"。
-                    if (hasCustomPlayer && prefab != null && prefab == bridge.SourcePrefab)
+                    // （即玩家把 PlayerTemplate01 拖到了这个阵型位置），则基于该模板
+                    // 实例化玩家，并把定制数据包"叠加"到实例上（外观 + 属性），
+                    // 实现"玩家主控位置动态定位 + 套用玩家定制"。
+                    if (match)
                     {
-                        PlaceCustomPlayerCharacter(bridge.PlayerInstance, playerSpawnPoints[i], i);
+                        SpawnCustomizedPlayer(prefab, playerSpawnPoints[i], i, bridge.Data);
+                        placedCustomSlot = i;
                     }
                     else
                     {
                         InstantiatePlayerCharacterAtIndex(prefab, playerSpawnPoints[i], BattleSide.Player, i);
                     }
+                }
+
+                Debug.Log($"[GenPlayerFormation] END placedCustomSlot={placedCustomSlot}");
+
+                // 消费完毕后复位桥接器（循环结束统一 Clear，避免重入时数据丢失）
+                if (bridge != null && placedCustomSlot >= 0)
+                {
+                    bridge.Clear();
                 }
                 SetPlayerFormationWalkingState();
                 Debug.Log($"玩家阵型完成，列表状态: {GetFormationDebugInfo(activePlayerCharacters)}");
@@ -381,57 +401,114 @@ namespace demo2.DND.HorizontalFormation
         }
 
         /// <summary>
-        /// 放置来自自定义场景的玩家角色实例（直接复用，不再 Instantiate）。
-        /// 该实例由 CharacterCustomizationBridge 跨场景传递，已承载定制的
-        /// 属性/外观/装备，并带有战斗所需的全套组件。
-        /// 配置逻辑与 InstantiatePlayerCharacterAtIndex 保持一致。
+        /// 基于模板 prefab 实例化玩家，并叠加来自自定义场景的定制数据包
+        /// （把玩家选的各个部件 skin 添加到模板默认底子之上，并应用属性值）。
+        /// 复用 InstantiatePlayerCharacterAtIndex 的阵营/血条/位置配置逻辑。
         /// </summary>
-        private void PlaceCustomPlayerCharacter(GameObject customInstance, Transform spawnPoint, int index)
+        private void SpawnCustomizedPlayer(GameObject prefab, Transform spawnPoint, int index, CharacterCustomizationData data)
         {
-            if (customInstance == null || spawnPoint == null)
+            if (prefab == null || spawnPoint == null)
             {
-                Debug.LogWarning($"自定义玩家角色索引{index}的实例或spawn点为null，保持null占位");
+                Debug.LogWarning($"自定义玩家角色索引{index}的预制体或spawn点为null，保持null占位");
                 return;
             }
 
-            // 将实例移动到阵型 spawn 点（恢复为场景内普通对象，取消 DontDestroyOnLoad 标记）
-            customInstance.transform.SetParent(null);
-            customInstance.transform.position = spawnPoint.position;
-            customInstance.transform.rotation = spawnPoint.rotation;
-            customInstance.transform.localScale = customInstance.transform.localScale; // 保留定制角色原始缩放
+            // 复用与常规生成一致的实例化流程（缩放、阵营、血条、位置组件）
+            Vector3 originalScale = prefab.transform.localScale;
+            GameObject instance = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
+            instance.transform.localScale = originalScale;
 
-            // 配置阵营 + 血条
-            CharacterStats stats = customInstance.GetComponent<CharacterStats>();
+            // ---- 1. 应用定制外观：把各部件 skin 添加到模板默认底子（如 p7_alignment）之上 ----
+            var appearance = instance.GetComponent<CharacterAppearance>();
+            if (appearance != null)
+            {
+                if (data != null && data.appearanceParts != null && data.appearanceParts.Count > 0)
+                {
+                    foreach (var p in data.appearanceParts)
+                    {
+                        if (p != null && !string.IsNullOrEmpty(p.skinID))
+                        {
+                            appearance.SetPart(p.partType, p.skinID);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.Log($"自定义玩家角色 {prefab.name} 无外观定制数据，使用模板默认外观");
+                }
+
+                // 关键修复：SkeletonAnimation 在实例的 Start 阶段会按 initialSkinName(p7_alignment)
+                // 重新应用默认皮肤，覆盖掉上面同帧同步设置的 combined skin（base + 玩家定制部件）。
+                // 延迟一帧，待 Start 执行完毕后再把玩家定制部件重新叠加到骨架，确保定制外观生效。
+                if (data != null && data.appearanceParts != null && data.appearanceParts.Count > 0)
+                {
+                    StartCoroutine(ReapplyCustomAppearanceDeferred(appearance, data));
+                }
+            }
+            else
+            {
+                Debug.LogError($"自定义玩家角色 {prefab.name} 缺少 CharacterAppearance 组件！");
+            }
+
+            // ---- 2. 应用定制属性 ----
+            CharacterStats stats = instance.GetComponent<CharacterStats>();
             if (stats != null)
             {
+                if (data != null)
+                {
+                    stats.strength = data.strength;
+                    stats.dexterity = data.dexterity;
+                    stats.constitution = data.constitution;
+                    stats.intelligence = data.intelligence;
+                    stats.wisdom = data.wisdom;
+                    stats.charisma = data.charisma;
+                    stats.RequestRecalculateStats();
+                    stats.SetLevel(data.level, healToFull: true);
+                }
                 stats.battleSide = BattleSide.Player;
                 CreateHealthBarForCharacter(stats);
             }
             else
             {
-                Debug.LogError($"自定义玩家角色 {customInstance.name} 缺少 CharacterStats 组件！");
+                Debug.LogError($"角色预制体 {prefab.name} 缺少 CharacterStats 组件！");
+                DestroyImmediate(instance);
                 return;
             }
 
             // 位置组件
-            BattlePositionComponent positionComponent = customInstance.GetComponent<BattlePositionComponent>();
+            BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
             if (positionComponent == null)
             {
-                positionComponent = customInstance.AddComponent<BattlePositionComponent>();
+                positionComponent = instance.AddComponent<BattlePositionComponent>();
             }
             positionComponent.currentPosition = (HorizontalPosition)index;
             positionComponent.isOccupied = true;
 
-            activePlayerCharacters[index] = customInstance;
+            activePlayerCharacters[index] = instance;
 
-            // 消费完毕后复位桥接器，避免下次进入战斗时残留
-            var bridge = CharacterCustomizationBridge.Instance;
-            if (bridge != null)
+            Debug.Log($"自定义玩家角色 {prefab.name} 已生成在索引{index}（外观部件数={(data != null ? data.appearanceParts.Count : 0)}）");
+        }
+
+        /// <summary>
+        /// 延迟一帧重新叠加玩家定制外观，规避 SkeletonAnimation.Start 按 initialSkinName 覆盖 combined skin 的问题。
+        /// </summary>
+        private IEnumerator ReapplyCustomAppearanceDeferred(CharacterAppearance appearance, CharacterCustomizationData data)
+        {
+            // 等待一帧，确保刚实例化的角色其 SkeletonAnimation.Start 已执行（它会按 initialSkinName 重新应用默认皮肤）
+            yield return null;
+
+            if (appearance == null) yield break;
+            if (data == null || data.appearanceParts == null) yield break;
+
+            foreach (var p in data.appearanceParts)
             {
-                bridge.Clear();
+                if (p != null && !string.IsNullOrEmpty(p.skinID))
+                {
+                    appearance.SetPart(p.partType, p.skinID);
+                }
             }
 
-            Debug.Log($"自定义玩家角色 {customInstance.name} 已放置到索引{index}");
+            Debug.Log($"[ReapplyCustomAppearance] 已延迟重新叠加玩家定制外观，部件数={data.appearanceParts.Count}");
         }
 
         /// <summary>
