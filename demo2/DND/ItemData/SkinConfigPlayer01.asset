@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4472c074635842448ebe3de17f59b999, type: 3}
   m_Name: SkinConfigPlayer01
   m_EditorClassIdentifier: 
-  defaultBaseBodySkinID: p7_alignment
+  defaultBaseBodySkinID: B_default01
   skinParts:
   - skinID: e5_armor
     partType: 5
@@ -103,4 +103,64 @@ MonoBehaviour:
     displayName: P7 Weapon S
     overlayColor: {r: 1, g: 1, b: 1, a: 1}
     previewIcon: {fileID: 21300000, guid: c2f8ae1d57ce9574ba386646735f2388, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_armor01
+    partType: 5
+    displayName: B Armor01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 48d51ef74b4e43f48bdfec1f583d9671, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_belt01
+    partType: 8
+    displayName: B Belt01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: f176102438b0a5e4b9f1241741c39074, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_boots01
+    partType: 7
+    displayName: B Boots01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 546a8c7ca4f37a444a931fde9dccbb2c, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_default01
+    partType: 0
+    displayName: B Default01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: c43b33ccf0ded8b47b7f43c7a2db6ca1, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_glove01
+    partType: 6
+    displayName: B Glove01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 4057a1c4d8dcfd8449c5d9092adaa8c0, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_head01
+    partType: 4
+    displayName: B Head01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: ad9ee56b24240604487e7b9230d6a07a, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_weapon_h01
+    partType: 10
+    displayName: B Weapon H01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 297e5187c9f288e4dbba782d346ddefc, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_weapon_s01
+    partType: 10
+    displayName: B Weapon S01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 99d144528bf4e3e4a922978b7dba9b3b, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: B_weapon_w01
+    partType: 10
+    displayName: B Weapon W01
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: e3555f8b70934fe4ebdd9f0655097332, type: 3}
+    linkedItemSO: {fileID: 0}
+  - skinID: a2_armor
+    partType: 5
+    displayName: A2 Armor
+    overlayColor: {r: 1, g: 1, b: 1, a: 1}
+    previewIcon: {fileID: 21300000, guid: 90a29016482b62040983eea657bad5c9, type: 3}
     linkedItemSO: {fileID: 0}

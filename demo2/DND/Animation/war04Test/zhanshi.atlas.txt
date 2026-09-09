@@ -1,0 +1,398 @@
+
+zhanshi.png
+size: 2048,128
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+BaseSkin/Arm_B_L
+  rotate: false
+  xy: 1186, 32
+  size: 39, 45
+  orig: 39, 45
+  offset: 0, 0
+  index: -1
+BaseSkin/Arm_B_R
+  rotate: true
+  xy: 171, 0
+  size: 30, 43
+  orig: 30, 43
+  offset: 0, 0
+  index: -1
+BaseSkin/Belt_B
+  rotate: true
+  xy: 798, 60
+  size: 68, 40
+  orig: 68, 40
+  offset: 0, 0
+  index: -1
+BaseSkin/Body_B
+  rotate: true
+  xy: 489, 48
+  size: 80, 64
+  orig: 80, 64
+  offset: 0, 0
+  index: -1
+BaseSkin/Body_B_back
+  rotate: true
+  xy: 869, 0
+  size: 61, 43
+  orig: 61, 44
+  offset: 0, 0
+  index: -1
+BaseSkin/Calf_B_L
+  rotate: false
+  xy: 1248, 44
+  size: 24, 42
+  orig: 24, 42
+  offset: 0, 0
+  index: -1
+BaseSkin/Calf_B_R
+  rotate: false
+  xy: 1225, 40
+  size: 23, 44
+  orig: 23, 44
+  offset: 0, 0
+  index: -1
+BaseSkin/Foot_B_L
+  rotate: false
+  xy: 1314, 74
+  size: 22, 25
+  orig: 22, 25
+  offset: 0, 0
+  index: -1
+BaseSkin/Foot_B_R
+  rotate: true
+  xy: 1272, 49
+  size: 37, 21
+  orig: 37, 21
+  offset: 0, 0
+  index: -1
+BaseSkin/Glove_B_L
+  rotate: true
+  xy: 125, 0
+  size: 30, 46
+  orig: 30, 46
+  offset: 0, 0
+  index: -1
+BaseSkin/Glove_B_R
+  rotate: false
+  xy: 1222, 84
+  size: 25, 44
+  orig: 26, 44
+  offset: 0, 0
+  index: -1
+BaseSkin/Head_B
+  rotate: false
+  xy: 882, 62
+  size: 49, 66
+  orig: 49, 66
+  offset: 0, 0
+  index: -1
+BaseSkin/Leg_B_L
+  rotate: false
+  xy: 1281, 92
+  size: 29, 36
+  orig: 29, 37
+  offset: 0, 0
+  index: -1
+BaseSkin/Leg_B_R
+  rotate: false
+  xy: 1291, 13
+  size: 27, 36
+  orig: 28, 36
+  offset: 0, 0
+  index: -1
+BaseSkin/armor02
+  rotate: true
+  xy: 125, 30
+  size: 98, 72
+  orig: 99, 72
+  offset: 0, 0
+  index: -1
+BaseSkin/hammer01
+  rotate: true
+  xy: 1122, 65
+  size: 63, 41
+  orig: 63, 42
+  offset: 0, 1
+  index: -1
+BaseSkin/sword01
+  rotate: false
+  xy: 317, 0
+  size: 88, 36
+  orig: 88, 36
+  offset: 0, 0
+  index: -1
+BaseSkin/wand01
+  rotate: true
+  xy: 553, 54
+  size: 74, 42
+  orig: 78, 42
+  offset: 4, 0
+  index: -1
+e5_armor/shenti
+  rotate: true
+  xy: 416, 47
+  size: 81, 73
+  orig: 81, 73
+  offset: 0, 0
+  index: -1
+e5_armor/shenti1
+  rotate: true
+  xy: 710, 57
+  size: 71, 44
+  orig: 71, 44
+  offset: 0, 0
+  index: -1
+e5_armor/youbi
+  rotate: true
+  xy: 1224, 1
+  size: 31, 37
+  orig: 31, 37
+  offset: 0, 0
+  index: -1
+e5_armor/youjian
+  rotate: true
+  xy: 405, 1
+  size: 45, 71
+  orig: 46, 72
+  offset: 1, 1
+  index: -1
+e5_armor/youjian1
+  rotate: false
+  xy: 836, 0
+  size: 33, 60
+  orig: 33, 60
+  offset: 0, 0
+  index: -1
+e5_armor/zoubi
+  rotate: false
+  xy: 1247, 86
+  size: 34, 42
+  orig: 34, 42
+  offset: 0, 0
+  index: -1
+e5_armor/zuojian
+  rotate: false
+  xy: 595, 55
+  size: 59, 73
+  orig: 59, 73
+  offset: 0, 0
+  index: -1
+e5_belt/kuabu
+  rotate: false
+  xy: 504, 0
+  size: 61, 48
+  orig: 61, 48
+  offset: 0, 0
+  index: -1
+e5_belt/youdatui
+  rotate: false
+  xy: 1195, 83
+  size: 27, 45
+  orig: 27, 45
+  offset: 0, 0
+  index: -1
+e5_belt/zuodatui
+  rotate: false
+  xy: 1163, 77
+  size: 32, 51
+  orig: 32, 51
+  offset: 0, 0
+  index: -1
+e5_boots/youjiao
+  rotate: true
+  xy: 1186, 0
+  size: 32, 19
+  orig: 32, 19
+  offset: 0, 0
+  index: -1
+e5_boots/youxiaotui
+  rotate: false
+  xy: 601, 3
+  size: 34, 52
+  orig: 34, 52
+  offset: 0, 0
+  index: -1
+e5_boots/zuojiao
+  rotate: true
+  xy: 1205, 0
+  size: 32, 19
+  orig: 32, 19
+  offset: 0, 0
+  index: -1
+e5_boots/zuoxiaotui
+  rotate: false
+  xy: 701, 5
+  size: 34, 51
+  orig: 34, 51
+  offset: 0, 0
+  index: -1
+e5_cloak/pifeng
+  rotate: false
+  xy: 63, 13
+  size: 62, 115
+  orig: 62, 115
+  offset: 0, 0
+  index: -1
+e5_glove/youshou
+  rotate: false
+  xy: 768, 0
+  size: 32, 57
+  orig: 32, 57
+  offset: 0, 0
+  index: -1
+e5_glove/zoushou
+  rotate: false
+  xy: 735, 0
+  size: 33, 57
+  orig: 33, 57
+  offset: 0, 0
+  index: -1
+e5_helm/tou
+  rotate: false
+  xy: 270, 36
+  size: 72, 92
+  orig: 72, 92
+  offset: 0, 0
+  index: -1
+e5_weapon_s/jian
+  rotate: false
+  xy: 931, 64
+  size: 191, 64
+  orig: 191, 64
+  offset: 0, 0
+  index: -1
+p7_armor/shenti1D
+  rotate: true
+  xy: 754, 57
+  size: 71, 44
+  orig: 71, 44
+  offset: 0, 0
+  index: -1
+p7_armor/shentiD
+  rotate: true
+  xy: 342, 46
+  size: 82, 74
+  orig: 82, 74
+  offset: 0, 0
+  index: -1
+p7_armor/youbiD
+  rotate: false
+  xy: 1261, 5
+  size: 30, 39
+  orig: 30, 39
+  offset: 0, 0
+  index: -1
+p7_armor/youjian1D
+  rotate: false
+  xy: 800, 0
+  size: 36, 60
+  orig: 36, 60
+  offset: 0, 0
+  index: -1
+p7_armor/youjianD
+  rotate: false
+  xy: 838, 61
+  size: 44, 67
+  orig: 44, 67
+  offset: 0, 0
+  index: -1
+p7_armor/zoubiD
+  rotate: true
+  xy: 214, 0
+  size: 35, 43
+  orig: 35, 43
+  offset: 0, 0
+  index: -1
+p7_armor/zuojianD
+  rotate: false
+  xy: 654, 56
+  size: 56, 72
+  orig: 56, 72
+  offset: 0, 0
+  index: -1
+p7_belt/kuabuD
+  rotate: true
+  xy: 912, 0
+  size: 62, 49
+  orig: 62, 49
+  offset: 0, 0
+  index: -1
+p7_belt/youdatuiD
+  rotate: false
+  xy: 476, 0
+  size: 28, 47
+  orig: 28, 47
+  offset: 0, 0
+  index: -1
+p7_belt/zuodatuiD
+  rotate: false
+  xy: 635, 3
+  size: 33, 52
+  orig: 33, 52
+  offset: 0, 0
+  index: -1
+p7_boots/youjiaoD
+  rotate: true
+  xy: 1310, 99
+  size: 29, 20
+  orig: 29, 20
+  offset: 0, 0
+  index: -1
+p7_boots/youxiaotuiD
+  rotate: false
+  xy: 668, 4
+  size: 33, 52
+  orig: 33, 52
+  offset: 0, 0
+  index: -1
+p7_boots/zuojiaoD
+  rotate: true
+  xy: 1293, 59
+  size: 33, 21
+  orig: 33, 21
+  offset: 0, 0
+  index: -1
+p7_boots/zuoxiaotuiD
+  rotate: false
+  xy: 565, 2
+  size: 36, 52
+  orig: 36, 52
+  offset: 0, 0
+  index: -1
+p7_cloak/pifengD
+  rotate: false
+  xy: 0, 12
+  size: 63, 116
+  orig: 63, 116
+  offset: 0, 0
+  index: -1
+p7_glove/youshouD
+  rotate: false
+  xy: 1152, 7
+  size: 34, 58
+  orig: 34, 58
+  offset: 0, 0
+  index: -1
+p7_glove/zoushouD
+  rotate: true
+  xy: 257, 1
+  size: 34, 60
+  orig: 34, 60
+  offset: 0, 0
+  index: -1
+p7_helm/touD
+  rotate: false
+  xy: 197, 35
+  size: 73, 93
+  orig: 73, 93
+  offset: 0, 0
+  index: -1
+p7_weapon_s/jianD
+  rotate: false
+  xy: 961, 0
+  size: 191, 64
+  orig: 191, 64
+  offset: 0, 0
+  index: -1
