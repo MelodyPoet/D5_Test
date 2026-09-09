@@ -134,6 +134,9 @@ namespace demo2.DND.UI
         // Key = SkinBodyPartType (装备部位), Value = 关联的 ItemBaseSO（从 SkinPartEntry.linkedItemSO 获取）
         private Dictionary<SkinBodyPartType, ItemBaseSO> pendingEquipmentItems = new Dictionary<SkinBodyPartType, ItemBaseSO>();
 
+        // 初始/确认装备的统一列表（职业默认 + 用户自选），确认时打包进桥接数据的 initialEquipment
+        private List<ItemBaseSO> initialEquipmentItems = new List<ItemBaseSO>();
+
         // 事件
         public event Action OnConfirm;
         public event Action OnCancel;
@@ -641,6 +644,30 @@ namespace demo2.DND.UI
             if (activeStatRows.Count == 0)
                 CreateStatRows();
 
+            // ---- 套用职业默认武器/护甲皮肤，并收集初始装备 ----
+            // 选职业即"更新默认武器的skin"：把模板上配置的武器/护甲皮肤直接套到预览角色，
+            // 同时把初始装备物品登记进 initialEquipmentItems，确认时一并序列化进桥接数据。
+            if (uiCharacterAppearance != null)
+            {
+                // 先回到模板默认外观（清空上一职业的定制部件），再叠加本职业默认武器/护甲皮肤
+                uiCharacterAppearance.InitializeAppearance();
+                if (!string.IsNullOrEmpty(template.defaultWeaponSkinID))
+                    uiCharacterAppearance.SetPart(SkinBodyPartType.MainHandWeapon, template.defaultWeaponSkinID);
+                if (!string.IsNullOrEmpty(template.defaultArmorSkinID))
+                    uiCharacterAppearance.SetPart(SkinBodyPartType.Armor, template.defaultArmorSkinID);
+            }
+
+            initialEquipmentItems.Clear();
+            if (template.initialEquipment != null)
+            {
+                foreach (var it in template.initialEquipment)
+                {
+                    if (it != null && !initialEquipmentItems.Contains(it))
+                        initialEquipmentItems.Add(it);
+                }
+            }
+            Debug.Log($"[CharacterCustomizationPanel] 职业 {template.characterClass} 初始装备数={initialEquipmentItems.Count}（武器皮肤={template.defaultWeaponSkinID}, 护甲皮肤={template.defaultArmorSkinID}）");
+
             // 刷新属性面板 UI
             RefreshAllStatDisplays();
             UpdatePointsDisplay(pointBuy.AvailablePoints);
@@ -1094,12 +1121,17 @@ namespace demo2.DND.UI
             if (part.linkedItemSO != null)
             {
                 pendingEquipmentItems[part.partType] = part.linkedItemSO;
+                // 同时登记进初始装备列表，确认时随桥接数据一起序列化
+                if (!initialEquipmentItems.Contains(part.linkedItemSO))
+                    initialEquipmentItems.Add(part.linkedItemSO);
                 Debug.Log($"[CharacterCustomizationPanel] 装备映射已缓存: {part.partType} → {part.linkedItemSO.displayName}");
             }
             else if (pendingEquipmentItems.ContainsKey(part.partType))
             {
                 // 用户换成了一个不关联物品的皮肤（如"卸下"），清除缓存
+                var removed = pendingEquipmentItems[part.partType];
                 pendingEquipmentItems.Remove(part.partType);
+                if (removed != null) initialEquipmentItems.Remove(removed);
             }
 
             // 更换部件后，重新调整摄像机以适应新的模型边界
@@ -1221,6 +1253,26 @@ namespace demo2.DND.UI
             }
 
             data.level = StartLevel;
+
+            // ---- 职业 / 种族 / 初始装备：一并序列化进桥接数据 ----
+            data.characterClass = selectedTemplate != null ? selectedTemplate.characterClass : CharacterClass.Fighter;
+            data.race = selectedTemplate != null ? selectedTemplate.race : PointBuySystem.RaceType.Human;
+            data.racialChoices = (pointBuy != null)
+                ? new List<StatType>(pointBuy.RacialBonusChoices)
+                : new List<StatType>();
+            data.selectedTemplate = selectedTemplate;
+            data.selectedTemplateName = selectedTemplate != null ? selectedTemplate.name : "";
+
+            // 初始/确认装备（职业默认 + 用户自选），去重后打包为可序列化条目
+            data.initialEquipment.Clear();
+            foreach (var it in initialEquipmentItems)
+            {
+                if (it == null) continue;
+                if (data.initialEquipment.Exists(x => x.itemId == it.itemId)) continue;
+                data.initialEquipment.Add(new SerializableItem { itemId = it.itemId, runtimeRef = it });
+            }
+            Debug.Log($"[CharacterCustomizationPanel] 打包职业数据: class={data.characterClass}, race={data.race}, " +
+                      $"racialChoices={data.racialChoices.Count}, 初始装备数={data.initialEquipment.Count}");
 
             // 确保桥接器单例存在（惰性创建），并立即标记跨场景存活，
             // 避免 SceneManager.LoadScene 时桥接器随 SpineAni 场景被销毁。

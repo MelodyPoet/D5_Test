@@ -1,5 +1,6 @@
 ﻿﻿using System.Collections.Generic;
 using UnityEngine;
+using demo2.DND.InventoryTetris; // for ItemBaseSO
 
 namespace demo2.DND {
 
@@ -30,6 +31,10 @@ public class CharacterTemplate : ScriptableObject {
     public int intelligence = 10;
     public int wisdom = 10;
     public int charisma = 10;
+
+    [Header("种族加成选择（变体人类：自选2个不同属性各+1；用于非购点模板角色，如队友/敌人）")]
+    [Tooltip("与玩家购点面板中的种族加成选择一致；InitializeFromTemplate 会把这些 +1 叠加到上方六维基础值上形成最终属性。留空表示无种族加成。")]
+    public List<StatType> racialBonusChoices = new List<StatType>();
 
     [Header("购点推荐属性（27点购点法的职业推荐，会作为创建角色时的初始分配）")]
     [Tooltip("若全为0则使用上方默认值；否则按此值预分配购点（总和点数≤27）")]
@@ -62,6 +67,16 @@ public class CharacterTemplate : ScriptableObject {
         }
         return new int[] { pointBuyStr, pointBuyDex, pointBuyCon, pointBuyInt, pointBuyWis, pointBuyCha };
     }
+
+    [Header("默认外观（选择职业时自动套用）")]
+    [Tooltip("选择该职业时，自动套用到主手武器的 Spine 皮肤名（覆盖型）。为空则不改变武器外观。")]
+    public string defaultWeaponSkinID;
+    [Tooltip("选择该职业时，自动套用到身体护甲的 Spine 皮肤名（覆盖型）。为空则不改变护甲外观。")]
+    public string defaultArmorSkinID;
+
+    [Header("初始装备（确认角色时打包进定制数据，战斗场景据此生成到背包并装备）")]
+    [Tooltip("职业初始装备物品模板（武器/护甲/盾牌等）。确认时会被序列化进桥接数据，战斗场景重建 ItemInstance 并装备。")]
+    public List<ItemBaseSO> initialEquipment = new List<ItemBaseSO>();
 
     [Header("生命/护甲")]
     [Tooltip("生命骰 (如 d8 -> 8)")]
@@ -116,28 +131,28 @@ public class CharacterTemplate : ScriptableObject {
         private int GetAbilityModifierForSkill(Skill skill) {
             switch (skill) {
                 case Skill.Athletics:
-                    return (strength - 10) / 2;
+                    return PointBuySystem.GetModifier(strength);
                 case Skill.Acrobatics:
                 case Skill.SleightOfHand:
                 case Skill.Stealth:
-                    return (dexterity - 10) / 2;
+                    return PointBuySystem.GetModifier(dexterity);
                 case Skill.Arcana:
                 case Skill.History:
                 case Skill.Investigation:
                 case Skill.Nature:
                 case Skill.Religion:
-                    return (intelligence - 10) / 2;
+                    return PointBuySystem.GetModifier(intelligence);
                 case Skill.AnimalHandling:
                 case Skill.Insight:
                 case Skill.Medicine:
                 case Skill.Perception:
                 case Skill.Survival:
-                    return (wisdom - 10) / 2;
+                    return PointBuySystem.GetModifier(wisdom);
                 case Skill.Deception:
                 case Skill.Intimidation:
                 case Skill.Performance:
                 case Skill.Persuasion:
-                    return (charisma - 10) / 2;
+                    return PointBuySystem.GetModifier(charisma);
                 default:
                     return 0;
             }
@@ -149,22 +164,22 @@ public class CharacterTemplate : ScriptableObject {
             switch (ability.ToLower()) {
                 case "strength":
                 case "str":
-                    return (strength - 10) / 2;
+                    return PointBuySystem.GetModifier(strength);
                 case "dexterity":
                 case "dex":
-                    return (dexterity - 10) / 2;
+                    return PointBuySystem.GetModifier(dexterity);
                 case "constitution":
                 case "con":
-                    return (constitution - 10) / 2;
+                    return PointBuySystem.GetModifier(constitution);
                 case "intelligence":
                 case "int":
-                    return (intelligence - 10) / 2;
+                    return PointBuySystem.GetModifier(intelligence);
                 case "wisdom":
                 case "wis":
-                    return (wisdom - 10) / 2;
+                    return PointBuySystem.GetModifier(wisdom);
                 case "charisma":
                 case "cha":
-                    return (charisma - 10) / 2;
+                    return PointBuySystem.GetModifier(charisma);
                 default:
                     return 0;
             }
@@ -261,7 +276,15 @@ public class CharacterTemplate : ScriptableObject {
         /// 计算在指定等级下的生命值（DND5e：1级=满生命骰+体质；2级及以上每级=平均骰+体质）。
         /// </summary>
         public int CalculateHitPointsAtLevel(int lvl) {
-            int conMod = (constitution - 10) / 2;
+            return CalculateHitPointsAtLevel(lvl, constitution);
+        }
+
+        /// <summary>
+        /// 按 DND5e 规则根据等级与指定体质分计算生命值。
+        /// 允许传入运行时购点后的体质分，使玩家自定义属性正确反映在生命值上。
+        /// </summary>
+        public int CalculateHitPointsAtLevel(int lvl, int conScore) {
+            int conMod = (conScore - 10) / 2;
             int l = Mathf.Max(1, lvl);
             // 第1级：满生命骰 + 体质（至少1点）
             int firstLevelHp = Mathf.Max(1, hitDie + conMod);

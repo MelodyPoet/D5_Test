@@ -235,6 +235,12 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 10
   charisma: 10
+  racialStrBonus: 0
+  racialDexBonus: 0
+  racialConBonus: 0
+  racialIntBonus: 0
+  racialWisBonus: 0
+  racialChaBonus: 0
   armorClass: 10
 --- !u!114 &1994949910500310956
 MonoBehaviour:
@@ -263,10 +269,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0bb2f14237c4cb085909994d3ba32f6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rows: 4
-  cols: 6
-  initialItems:
-  - {fileID: 11400000, guid: 63b9235b68303c64a9e3ea0db3e33ad8, type: 2}
+  rows: 3
+  cols: 4
+  equippedMainHandId: 
+  equippedArmorId: 
+  equippedShieldId: 
 --- !u!114 &-134981435787175177
 MonoBehaviour:
   m_ObjectHideFlags: 0

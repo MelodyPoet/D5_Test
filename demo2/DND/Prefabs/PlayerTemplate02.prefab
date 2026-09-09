@@ -19,7 +19,6 @@ GameObject:
   - component: {fileID: 6127418272330060883}
   - component: {fileID: 7631019178169470187}
   - component: {fileID: 7986569163332330963}
-  - component: {fileID: 4442379655862900937}
   m_Layer: 0
   m_Name: PlayerTemplate02
   m_TagString: Untagged
@@ -37,7 +36,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -203,23 +202,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8e97f2c7d93060e4db925598648e52c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  template: {fileID: 11400000, guid: a1fd7e528de1a754bbaf49cc66bb0178, type: 2}
+  template: {fileID: 11400000, guid: b948e3645430f5f4997cf3ac444fa3ba, type: 2}
   damageEventChannel: {fileID: 11400000, guid: 6819e7a7bbde1974db43ba605f789246, type: 2}
-  characterName: "\u89D2\u8272"
-  characterClass: 0
+  characterName: "\u73A9\u5BB6\u7267\u5E08"
+  characterClass: 3
   characterLevel: 1
   battleSide: 0
-  strength: 10
-  dexterity: 10
-  constitution: 10
-  intelligence: 10
-  wisdom: 10
-  charisma: 10
+  strength: 14
+  dexterity: 14
+  constitution: 14
+  intelligence: 9
+  wisdom: 13
+  charisma: 8
   racialStrBonus: 0
-  racialDexBonus: 0
+  racialDexBonus: 1
   racialConBonus: 0
   racialIntBonus: 0
-  racialWisBonus: 0
+  racialWisBonus: 1
   racialChaBonus: 0
   armorClass: 10
 --- !u!114 &1582603156932992264
@@ -249,10 +248,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0bb2f14237c4cb085909994d3ba32f6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rows: 4
-  cols: 6
-  initialItems:
-  - {fileID: 11400000, guid: 88f110266ff0b3e42971dcf276867948, type: 2}
+  rows: 3
+  cols: 4
   equippedMainHandId: 
   equippedArmorId: 
   equippedShieldId: 
@@ -282,19 +279,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   skinConfig: {fileID: 11400000, guid: a652147d2d6238448bc253555107a440, type: 2}
   skeletonAnimation: {fileID: 6198074676133392207}
---- !u!114 &4442379655862900937
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5606776123269573531}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 04bc25b0f9044543a5312bc1b179558c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentPosition: 0
-  rowPosition: 0
-  isOccupied: 1
-  showDebugInfo: 0

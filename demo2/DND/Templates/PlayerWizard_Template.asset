@@ -29,12 +29,16 @@ MonoBehaviour:
   pointBuyInt: 15
   pointBuyWis: 14
   pointBuyCha: 10
+  defaultWeaponSkinID: B_weapon_w01
+  defaultArmorSkinID: 
+  initialEquipment:
+  - {fileID: 11400000, guid: 63b9235b68303c64a9e3ea0db3e33ad8, type: 2}
   hitDie: 6
   baseArmorClass: 10
   immunities: 
   resistances: 
   vulnerabilities: 
-  primarySpellAbility: intelligence
+  primarySpellAbility: 0
   defaultAttackType: 1
   defaultCantrip: {fileID: 11400000, guid: 7bd706a546a148b49bb5844776421dae, type: 2}
   unarmedDamageDice:
@@ -47,9 +51,8 @@ MonoBehaviour:
   proficientSkills: 0500000008000000
   proficientSaves:
   - intelligence
-  - wisdom
   proficientSpellAttacks: 1
-  proficientMelee: 1
+  proficientMelee: 0
   proficientRanged: 0
   proficientLightArmor: 0
   proficientMediumArmor: 0

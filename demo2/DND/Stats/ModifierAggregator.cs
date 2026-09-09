@@ -147,7 +147,7 @@ namespace demo2.DND.Stats
             int finalWis = ApplyInt(StatType.Wisdom, baseWis);
             int finalCha = ApplyInt(StatType.Charisma, baseCha);
 
-            int dexMod = (finalDex - 10) / 2;
+            int dexMod = PointBuySystem.GetModifier(finalDex);
 
             // 根据装备/背包计算 5e AC：仅使用装备栏（护甲/盾牌）；未装备按未着甲规则
             int acFromEquipment = baseUnarmoredAc;

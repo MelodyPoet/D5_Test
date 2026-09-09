@@ -32,14 +32,38 @@ namespace demo2.DND
         private Dictionary<SkinBodyPartType, string> cosmeticParts = new Dictionary<SkinBodyPartType, string>();
 
         /// <summary>
-        /// Layer 3: 覆盖型装备 — 装备系统驱动（头盔/铠甲/护手/靴子/腰带/披风）
+        /// Layer 3: 覆盖型装备 — 最终渲染（物品外观优先 + 自定义/职业默认兜底）合并结果。
+        /// 由 MergeAndApply() 根据下方四个来源字典重建，供 ApplyAppearanceToSkeleton 使用。
         /// </summary>
         private Dictionary<EquipmentSlot, string> coveringEquipment = new Dictionary<EquipmentSlot, string>();
 
         /// <summary>
-        /// Layer 4: 叠加型装备 — 装备系统驱动（头环/王冠等饰品）
+        /// Layer 4: 叠加型装备 — 同 coveringEquipment，最终合并渲染结果。
         /// </summary>
         private Dictionary<EquipmentSlot, string> overlayEquipment = new Dictionary<EquipmentSlot, string>();
+
+        // ===== 外观来源拆分：避免“装备同步”清空“自定义/职业默认外观” =====
+        /// <summary>
+        /// 物品自身外观（覆盖型）：由 CharacterEquipment.SyncFromEquipment 驱动。
+        /// 仅在已装备物品携带 appearanceSkinID 时写入，优先级最高。
+        /// </summary>
+        private Dictionary<EquipmentSlot, string> itemCovering = new Dictionary<EquipmentSlot, string>();
+
+        /// <summary>
+        /// 物品自身外观（叠加型）：由 SyncFromEquipment 驱动。
+        /// </summary>
+        private Dictionary<EquipmentSlot, string> itemOverlay = new Dictionary<EquipmentSlot, string>();
+
+        /// <summary>
+        /// 自定义/职业默认外观（覆盖型）：由换装面板 / 职业模板 SetPart 写入，
+        /// 作为“物品未携带自身外观”时的兜底（例如职业默认武器皮肤）。
+        /// </summary>
+        private Dictionary<EquipmentSlot, string> customCovering = new Dictionary<EquipmentSlot, string>();
+
+        /// <summary>
+        /// 自定义/职业默认外观（叠加型）：由 SetPart 写入的兜底外观。
+        /// </summary>
+        private Dictionary<EquipmentSlot, string> customOverlay = new Dictionary<EquipmentSlot, string>();
 
         /// <summary>
         /// 当前应用在骨架上的组合皮肤的名称
@@ -89,6 +113,10 @@ namespace demo2.DND
             }
 
             cosmeticParts.Clear();
+            itemCovering.Clear();
+            itemOverlay.Clear();
+            customCovering.Clear();
+            customOverlay.Clear();
             coveringEquipment.Clear();
             overlayEquipment.Clear();
 
@@ -132,18 +160,23 @@ namespace demo2.DND
             {
                 // FullSkin 清空所有装饰散件和装备外观
                 cosmeticParts.Clear();
+                itemCovering.Clear();
+                itemOverlay.Clear();
+                customCovering.Clear();
+                customOverlay.Clear();
                 coveringEquipment.Clear();
                 overlayEquipment.Clear();
                 cosmeticParts[partType] = skinID;
             }
             else if (IsEquipmentPart(partType))
             {
-                // 外层装备部位 → 写入 coveringEquipment（测试期由面板直接操作）
-                // 后续正式版此处应由 CharacterEquipment.SyncAppearance() 驱动
+                // 外层装备部位 → 写入“自定义/职业默认外观”字典（customCovering）。
+                // 作为物品未携带自身外观时的兜底（例如职业默认武器皮肤）。
+                // 最终渲染由 MergeAndApply() 合并 物品外观(优先) + 自定义外观 得到。
                 var slot = MapPartTypeToEquipmentSlot(partType);
                 if (slot.HasValue)
                 {
-                    coveringEquipment[slot.Value] = skinID;
+                    customCovering[slot.Value] = skinID;
                 }
             }
             else if (cosmeticParts.ContainsKey(SkinBodyPartType.FullSkin))
@@ -158,7 +191,7 @@ namespace demo2.DND
                 cosmeticParts[partType] = skinID;
             }
 
-            ApplyAppearanceToSkeleton();
+            MergeAndApply();
             OnAppearanceChanged?.Invoke(partType, skinID);
             Debug.Log($"[CharacterAppearance] 部件已更新: {partType} → {skinID}");
         }
@@ -231,9 +264,11 @@ namespace demo2.DND
         {
             if (slotMap == null) return;
 
-            // 先清空当前装备外观状态
-            coveringEquipment.Clear();
-            overlayEquipment.Clear();
+            // 仅重建“物品自身外观”来源字典（itemCovering/itemOverlay）。
+            // 注意：这里不再清空 coveringEquipment/overlayEquipment，
+            // 以免丢失由换装面板/职业模板写入的“自定义/职业默认外观”兜底（如职业默认武器皮肤）。
+            itemCovering.Clear();
+            itemOverlay.Clear();
 
             // 遍历所有已装备物品，收集有外观配置的物品
             foreach (var kv in slotMap)
@@ -249,16 +284,38 @@ namespace demo2.DND
                 switch (item.data.appearanceBehavior)
                 {
                     case EquipmentAppearanceBehavior.Cover:
-                        coveringEquipment[slot] = skinID;
+                        itemCovering[slot] = skinID;
                         break;
                     case EquipmentAppearanceBehavior.Overlay:
-                        overlayEquipment[slot] = skinID;
+                        itemOverlay[slot] = skinID;
                         break;
                 }
             }
 
+            MergeAndApply();
+            Debug.Log($"[CharacterAppearance] 装备外观已同步: ItemCover={itemCovering.Count}, ItemOverlay={itemOverlay.Count}");
+        }
+
+        /// <summary>
+        /// 合并外观来源并应用到骨架：
+        ///   coveringEquipment/overlayEquipment = 物品自身外观(优先，后写入覆盖) + 自定义/职业默认外观(兜底)。
+        /// 因此：物品未携带自身外观时，保留职业默认的武器/护甲皮肤；
+        ///       物品携带自身外观时，覆盖职业默认。
+        /// </summary>
+        private void MergeAndApply()
+        {
+            coveringEquipment.Clear();
+            overlayEquipment.Clear();
+
+            // 先写入自定义/职业默认外观（兜底）
+            foreach (var kv in customCovering) coveringEquipment[kv.Key] = kv.Value;
+            foreach (var kv in customOverlay) overlayEquipment[kv.Key] = kv.Value;
+
+            // 再写入物品自身外观（优先级更高，同名 slot 后写入者覆盖）
+            foreach (var kv in itemCovering) coveringEquipment[kv.Key] = kv.Value;
+            foreach (var kv in itemOverlay) overlayEquipment[kv.Key] = kv.Value;
+
             ApplyAppearanceToSkeleton();
-            Debug.Log($"[CharacterAppearance] 装备外观已同步: Cover={coveringEquipment.Count}, Overlay={overlayEquipment.Count}");
         }
 
         /// <summary>

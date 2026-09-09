@@ -18,9 +18,10 @@ namespace demo2.DND.InventoryTetris
         [Range(1, MaxRows)] public int rows = 6;
         [Range(1, MaxCols)] public int cols = 10;
 
-        [Header("初始道具（会自动尝试装备到对应槽位：武器/护甲/盾牌）")]
-        [Tooltip("将初始物品的SO拖入此列表。启动时会创建实例并尝试按类型自动装备：\n- 武器 -> 主手\n- 护甲 -> 护甲位\n- 盾牌 -> 盾牌位\n若槽位已有装备或不满足 CanEquip，将仅放入背包。")]
-        [SerializeField] private List<ItemBaseSO> initialItems = new List<ItemBaseSO>();
+        // 注：初始装备不再由本组件负责。角色初始装备由自定义界面（CharacterCustomizationPanel /
+        // HorizontalBattleFormationManager.EquipInitialItems）决定，进入战斗时创建 ItemInstance 并
+        // 调用 AddInstance + CharacterEquipment.EquipToSlot 完成初始装备。本组件只负责游戏进程中的
+        // 物品/装备“更新”的序列化（AddInstance / RemoveInstance / 装备槽持久化）。
 
         // 运行时实例集合
         private readonly List<ItemInstance> items = new List<ItemInstance>();
@@ -68,19 +69,10 @@ namespace demo2.DND.InventoryTetris
 
         private void Start()
         {
-            // 创建初始物品实例并放入背包
-            if (initialItems != null && initialItems.Count > 0)
-            {
-                for (int i = 0; i < initialItems.Count; i++)
-                {
-                    var so = initialItems[i];
-                    if (so == null) continue;
-                    var inst = new ItemInstance(so);
-                    items.Add(inst);
-                }
-            }
+            // 初始装备不在此处创建：由自定义界面在进入战斗时通过 AddInstance + EquipToSlot 注入。
+            // 本组件启动只做：恢复已保存的装备选择（序列化）、订阅变更、广播就绪、应用一次属性。
 
-            // Attempt to restore previous equip choices (by instance IDs) before auto-equip defaults
+            // Attempt to restore previous equip choices (by instance IDs) from saved fields
             var eqForRestore = GetComponent<CharacterEquipment>()
                          ?? GetComponentInParent<CharacterEquipment>()
                          ?? GetComponentInChildren<CharacterEquipment>(true);
@@ -95,9 +87,6 @@ namespace demo2.DND.InventoryTetris
                 } catch { }
             }
 
-            // 启动时按物品类型自动尝试装备到槽位（不覆盖已存在装备）
-            AutoEquipInitialItems();
-
             // 广播：背包就绪/变更
             if (items.Count > 0) OnInventoryChanged?.Invoke();
             OnAnyInventoryReady?.Invoke(this);
@@ -107,137 +96,8 @@ namespace demo2.DND.InventoryTetris
             ApplyEquipmentModifiers();
         }
 
-        private void AutoEquipInitialItems()
-        {
-            var eq = GetComponent<CharacterEquipment>()
-                     ?? GetComponentInParent<CharacterEquipment>()
-                     ?? GetComponentInChildren<CharacterEquipment>(true);
-            if (eq == null)
-            {
-                Debug.Log($"[CharacterInventory] AutoEquipInitialItems: 未找到 CharacterEquipment 在 {gameObject.name} 的自身/父/子 中。跳过自动装备。");
-                return;
-            }
-
-            Debug.Log($"[CharacterInventory] AutoEquipInitialItems: 找到 Equipment on {eq.gameObject.name}. itemsCount={items?.Count ?? 0}");
-
-            // 清理陈旧的装备槽（若槽位引用的实例不在当前背包中，视为过期并卸下）
-            var mhInst = eq.GetEquipped(EquipmentSlot.MainHand);
-            if (mhInst != null)
-            {
-                if (!items.Contains(mhInst))
-                {
-                    Debug.Log($"[CharacterInventory] Detected stale mainHand reference ({(mhInst?.data != null ? mhInst.data.displayName : mhInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                    eq.UnequipSlot(EquipmentSlot.MainHand);
-                }
-            }
-            var arInst = eq.GetEquipped(EquipmentSlot.Armor);
-            if (arInst != null)
-            {
-                if (!items.Contains(arInst))
-                {
-                    Debug.Log($"[CharacterInventory] Detected stale armor reference ({(arInst?.data != null ? arInst.data.displayName : arInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                    eq.UnequipSlot(EquipmentSlot.Armor);
-                }
-            }
-            var shInst = eq.GetEquipped(EquipmentSlot.OffHand);
-            if (shInst != null)
-            {
-                if (!items.Contains(shInst))
-                {
-                    Debug.Log($"[CharacterInventory] Detected stale shield reference ({(shInst?.data != null ? shInst.data.displayName : shInst?.instanceId ?? "<no-id>")}) on {eq.gameObject.name} - unequipping.");
-                    eq.UnequipSlot(EquipmentSlot.OffHand);
-                }
-            }
-
-            // 新增：打印当前装备槽状态，帮助诊断为何未自动装备（使用 null-safe 访问以避免分析器警告）
-            string mhNameStr = mhInst != null ? (mhInst.data != null ? mhInst.data.displayName : mhInst.instanceId ?? "<no-id>") : "null";
-            string arNameStr = arInst != null ? (arInst.data != null ? arInst.data.displayName : arInst.instanceId ?? "<no-id>") : "null";
-            string shNameStr = shInst != null ? (shInst.data != null ? shInst.data.displayName : shInst.instanceId ?? "<no-id>") : "null";
-            Debug.Log($"[CharacterInventory] Equipment slots at AutoEquip start: mainHand={mhNameStr}, armor={arNameStr}, shield={shNameStr} on GameObject={eq.gameObject.name}");
-
-            ItemInstance firstWeapon = null;
-            ItemInstance firstArmor = null;
-            ItemInstance firstShield = null;
-
-            for (int i = 0; i < items.Count; i++)
-            {
-                var inst = items[i];
-                if (inst == null || inst.data == null) continue;
-                Debug.Log($"[CharacterInventory] Inspect item[{i}] = {inst.data.displayName} (isWeapon={inst.data.isWeapon}, isArmor={inst.data.isArmor}, isShield={inst.data.isShield})");
-
-                if (firstWeapon == null && inst.data.isWeapon && eq.CanEquip(inst))
-                {
-                    firstWeapon = inst;
-                    Debug.Log($"[CharacterInventory] Candidate firstWeapon = {inst.data.displayName}");
-                }
-                if (firstArmor == null && inst.data.isArmor && eq.CanEquip(inst))
-                {
-                    firstArmor = inst;
-                    Debug.Log($"[CharacterInventory] Candidate firstArmor = {inst.data.displayName}");
-                }
-                if (firstShield == null && inst.data.isShield && eq.CanEquip(inst))
-                {
-                    firstShield = inst;
-                    Debug.Log($"[CharacterInventory] Candidate firstShield = {inst.data.displayName}");
-                }
-
-                if (firstWeapon != null && firstArmor != null && firstShield != null)
-                    break;
-            }
-
-            // 若槽位为空则装备；若已有人为预设的起始装备则尊重现状不覆盖
-            if (mhInst == null && firstWeapon != null)
-            {
-                Debug.Log($"[CharacterInventory] Auto-equipping weapon {firstWeapon.data.displayName} to {eq.gameObject.name}");
-                eq.EquipToSlot(EquipmentSlot.MainHand, firstWeapon);
-            }
-            else
-            {
-                if (firstWeapon == null)
-                {
-                    Debug.Log("[CharacterInventory] No candidate weapon found to auto-equip.");
-                }
-                else if (mhInst != null)
-                {
-                    var mhName = mhInst?.data != null ? mhInst.data.displayName : mhInst?.instanceId ?? "<no-id>";
-                    Debug.Log($"[CharacterInventory] Skipping auto-equip weapon because mainHand is already occupied by {mhName} on {eq.gameObject.name}");
-                }
-            }
-            if (arInst == null && firstArmor != null)
-            {
-                Debug.Log($"[CharacterInventory] Auto-equipping armor {firstArmor.data.displayName} to {eq.gameObject.name}");
-                eq.EquipToSlot(EquipmentSlot.Armor, firstArmor);
-            }
-            else
-            {
-                if (firstArmor == null)
-                {
-                    Debug.Log("[CharacterInventory] No candidate armor found to auto-equip.");
-                }
-                else if (arInst != null)
-                {
-                    var arName = arInst?.data != null ? arInst.data.displayName : arInst?.instanceId ?? "<no-id>";
-                    Debug.Log($"[CharacterInventory] Skipping auto-equip armor because armor slot is already occupied by {arName} on {eq.gameObject.name}");
-                }
-            }
-            if (shInst == null && firstShield != null)
-            {
-                Debug.Log($"[CharacterInventory] Auto-equipping shield {firstShield.data.displayName} to {eq.gameObject.name}");
-                eq.EquipToSlot(EquipmentSlot.OffHand, firstShield);
-            }
-            else
-            {
-                if (firstShield == null)
-                {
-                    Debug.Log("[CharacterInventory] No candidate shield found to auto-equip.");
-                }
-                else if (shInst != null)
-                {
-                    var shName = shInst?.data != null ? shInst.data.displayName : shInst?.instanceId ?? "<no-id>";
-                    Debug.Log($"[CharacterInventory] Skipping auto-equip shield because shield slot is already occupied by {shName} on {eq.gameObject.name}");
-                }
-            }
-        }
+        // 注：初始装备的创建与装备已移至自定义界面流程（HorizontalBattleFormationManager.EquipInitialItems），
+        // 通过 inventory.AddInstance(inst) + equipment.EquipToSlot(slot, inst) 完成。本组件不再自动装备。
 
         private void ApplyEquipmentModifiers()
         {
@@ -292,6 +152,68 @@ namespace demo2.DND.InventoryTetris
             bool removed = items.Remove(inst);
             if (removed) OnInventoryChanged?.Invoke();
             return removed;
+        }
+
+        // ==================== 游戏进程入口（拾取 / 装备 / 卸下） ====================
+        // 生命周期约定（供后续“战斗掉落 / 搜索拾取 / 存档读档”等逻辑复用）：
+        //   1) 拾取：调用 AddInstance(inst) —— 仅入背包，更新序列化与属性，不改变外观。
+        //   2) 装备：调用 EquipItem(inst) —— 经 CharacterEquipment.EquipToSlot 触发外观同步，
+        //      角色 Spine 皮肤随装备实时改变（物品自身 appearanceSkinID 优先，否则回落职业默认）。
+        //   3) 卸下：调用 Unequip(slot) —— 同样实时刷新外观，回落到职业默认外观（若有）。
+        // 注意：不要只调 AddInstance 就期望外观变化；外观仅在“装备/卸下”时刷新。
+
+        /// <summary>
+        /// 将一件已入背包的物品装备到其类型对应的槽位（武器→主手 / 盾牌→副手 / 护甲→护甲）。
+        /// 会强制覆盖该槽位现有装备，并实时同步属性与 Spine 外观。
+        /// 返回是否成功装备。
+        /// </summary>
+        public bool EquipItem(ItemInstance inst)
+        {
+            if (inst == null || inst.data == null) return false;
+            var eq = GetComponent<CharacterEquipment>()
+                     ?? GetComponentInParent<CharacterEquipment>()
+                     ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eq == null)
+            {
+                Debug.LogWarning($"[CharacterInventory] EquipItem: 未找到 CharacterEquipment，无法装备 {inst.instanceId}");
+                return false;
+            }
+            if (!eq.CanEquip(inst)) return false;
+
+            EquipmentSlot slot;
+            if (inst.data.isWeapon) slot = EquipmentSlot.MainHand;
+            else if (inst.data.isShield) slot = EquipmentSlot.OffHand;
+            else if (inst.data.isArmor) slot = EquipmentSlot.Armor;
+            else
+            {
+                Debug.LogWarning($"[CharacterInventory] EquipItem: 物品 {inst.data.displayName} 既非武器/盾牌/护甲，无法装备。");
+                return false;
+            }
+            return eq.EquipToSlot(slot, inst); // 内部会触发 SyncAppearance -> 实时刷新外观
+        }
+
+        /// <summary>
+        /// 卸下指定槽位（实时刷新属性与外观）。
+        /// </summary>
+        public bool Unequip(EquipmentSlot slot)
+        {
+            var eq = GetComponent<CharacterEquipment>()
+                     ?? GetComponentInParent<CharacterEquipment>()
+                     ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eq == null) return false;
+            return eq.UnequipSlot(slot); // 内部会触发 SyncAppearance -> 实时刷新外观
+        }
+
+        /// <summary>
+        /// 序列化读档 / 外部逻辑在重建背包与装备后，可调用本方法强制按当前装备状态刷新一次外观。
+        /// （RestoreSavedEquipment 已会按保存的装备 ID 重新装备并触发外观同步。）
+        /// </summary>
+        public void ForceResyncAppearance()
+        {
+            var eq = GetComponent<CharacterEquipment>()
+                     ?? GetComponentInParent<CharacterEquipment>()
+                     ?? GetComponentInChildren<CharacterEquipment>(true);
+            if (eq != null) eq.RefreshAppearance();
         }
 
         private CharacterStats GetOrFindStats()

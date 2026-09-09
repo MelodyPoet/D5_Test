@@ -266,6 +266,15 @@ namespace demo2.DND.InventoryTetris
             }
         }
 
+        /// <summary>
+        /// 公共外观刷新入口：供序列化读档 / 外部逻辑在装备状态已变更后强制重算并渲染外观。
+        /// 内部与 Equip/Unequip 走同一条 SyncFromEquipment 通道（物品外观优先 + 职业默认兜底）。
+        /// </summary>
+        public void RefreshAppearance()
+        {
+            SyncAppearance();
+        }
+
         // Public slot-based API for new enum/dictionary model
         public ItemInstance GetEquipped(EquipmentSlot slot)
         {

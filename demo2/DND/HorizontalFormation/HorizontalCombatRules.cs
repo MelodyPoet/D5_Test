@@ -20,7 +20,7 @@ namespace demo2.DND.HorizontalFormation
             // 移除冗余显式转换
             return c != null ? c.CurrentSnapshot : null;
         }
-        private static int GetAbilityModifier(int score) => (score - 10) / 2;
+        private static int GetAbilityModifier(int score) => PointBuySystem.GetModifier(score);
         private static string NormalizeAbilityName(string input)
         {
             if (string.IsNullOrEmpty(input)) return "strength";

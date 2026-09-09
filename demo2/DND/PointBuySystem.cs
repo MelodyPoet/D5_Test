@@ -372,7 +372,10 @@ namespace demo2.DND
         /// </summary>
         public static int GetModifier(int statValue)
         {
-            return (statValue - 10) / 2;
+            int delta = statValue - 10;
+            // 5e 规则：向下取整（向负无穷），而非 C# 默认的向零截断。
+            // 否则奇数且 <10 的属性（9/7/5/3/1）调整值会偏高一位（如 9→0 应为 -1）。
+            return delta < 0 ? (delta - 1) / 2 : delta / 2;
         }
     }
 

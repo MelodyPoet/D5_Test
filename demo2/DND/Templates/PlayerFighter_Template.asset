@@ -29,6 +29,10 @@ MonoBehaviour:
   pointBuyInt: 8
   pointBuyWis: 10
   pointBuyCha: 12
+  defaultWeaponSkinID: B_weapon_s01
+  defaultArmorSkinID: 
+  initialEquipment:
+  - {fileID: 11400000, guid: 88f110266ff0b3e42971dcf276867948, type: 2}
   hitDie: 10
   baseArmorClass: 10
   immunities: 
@@ -44,10 +48,9 @@ MonoBehaviour:
   unarmedDamageAbilityMode: 0
   unarmedProficient: 1
   unarmedDamageType: 0
-  proficientSkills: 03000000
+  proficientSkills: 0300000011000000
   proficientSaves:
   - strength
-  - constitution
   proficientSpellAttacks: 0
   proficientMelee: 1
   proficientRanged: 1

@@ -38,4 +38,7 @@ MonoBehaviour:
   armorBaseAC: 11
   isShield: 0
   shieldACBonus: 2
+  appearanceSkinID: B_weapon_w01
+  appearanceSlot: 0
+  appearanceBehavior: 0
   modifiers: []

@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using demo2.DND.InventoryTetris; // for ItemInstance / CharacterInventory / CharacterEquipment / ItemBaseSO
 using Spine.Unity;
 using DG.Tweening;
 using System;
@@ -381,6 +382,9 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
+            // ---- 装备初始物品（队友/非定制角色）：由角色自身 CharacterTemplate.initialEquipment 生成 ----
+            EquipInitialItems(instance, null);
+
             // 添加位置组件并设置正确的位置信息
             BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
             if (positionComponent == null)
@@ -450,19 +454,23 @@ namespace demo2.DND.HorizontalFormation
                 Debug.LogError($"自定义玩家角色 {prefab.name} 缺少 CharacterAppearance 组件！");
             }
 
-            // ---- 2. 应用定制属性 ----
+            // ---- 2. 应用定制属性（含职业/种族/种族加成自选） ----
             CharacterStats stats = instance.GetComponent<CharacterStats>();
             if (stats != null)
             {
                 if (data != null)
                 {
-                    stats.strength = data.strength;
-                    stats.dexterity = data.dexterity;
-                    stats.constitution = data.constitution;
-                    stats.intelligence = data.intelligence;
-                    stats.wisdom = data.wisdom;
-                    stats.charisma = data.charisma;
-                    stats.RequestRecalculateStats();
+                    // 使用选中的职业模板驱动战斗规则（HP/熟练/豁免等），并用定制数据初始化属性
+                    if (data.selectedTemplate != null)
+                        stats.template = data.selectedTemplate;
+
+                    var racialChoices = data.racialChoices ?? new List<StatType>();
+                    stats.InitializeFromPointBuy(
+                        data.strength, data.dexterity, data.constitution,
+                        data.intelligence, data.wisdom, data.charisma,
+                        data.race, racialChoices);
+
+                    // 显式按定制数据的等级生效（创建角色通常为1级，满血）
                     stats.SetLevel(data.level, healToFull: true);
                 }
                 stats.battleSide = BattleSide.Player;
@@ -474,6 +482,9 @@ namespace demo2.DND.HorizontalFormation
                 DestroyImmediate(instance);
                 return;
             }
+
+            // ---- 3. 装备初始物品（真实物品：进背包 + 属性修正 + 外观） ----
+            EquipInitialItems(instance, data);
 
             // 位置组件
             BattlePositionComponent positionComponent = instance.GetComponent<BattlePositionComponent>();
@@ -509,6 +520,104 @@ namespace demo2.DND.HorizontalFormation
             }
 
             Debug.Log($"[ReapplyCustomAppearance] 已延迟重新叠加玩家定制外观，部件数={data.appearanceParts.Count}");
+        }
+
+        /// <summary>
+        /// 把定制数据中的初始装备（真实物品）重建为 ItemInstance，加入背包并装备到对应槽位，
+        /// 从而同时获得属性修正与外观。物品模板优先用内存桥的 runtimeRef，缺失时按 itemId 由 ItemDatabase 反查。
+        /// </summary>
+        /// <summary>
+        /// 装备初始物品（真实物品：进背包 + 属性修正 + 外观）。
+        /// 物品来源优先级：
+        ///   1) 定制数据 data.initialEquipment（主控：含职业默认装备 + 玩家自选，经 SerializableItem 携带 runtimeRef）。
+        ///   2) 回落到角色自身模板 CharacterTemplate.initialEquipment（队友 / 非定制角色）。
+        /// 这样无论是“自定义主控”还是“模板队友”，都能在战斗场景生成时由确认/模板数据驱动初始背包与装备。
+        /// </summary>
+        private void EquipInitialItems(GameObject instance, CharacterCustomizationData data)
+        {
+            var inventory = instance.GetComponent<CharacterInventory>();
+            var equipment = instance.GetComponent<CharacterEquipment>();
+            if (inventory == null || equipment == null)
+            {
+                Debug.LogWarning("[EquipInitialItems] 角色缺少背包/装备组件，跳过初始装备");
+                return;
+            }
+
+            // 收集初始装备物品模板
+            var sourceItems = new List<ItemBaseSO>();
+            if (data != null && data.initialEquipment != null && data.initialEquipment.Count > 0)
+            {
+                foreach (var si in data.initialEquipment)
+                {
+                    if (si == null) continue;
+                    var so = si.runtimeRef ?? ItemDatabase.Get(si.itemId);
+                    if (so != null && !sourceItems.Contains(so)) sourceItems.Add(so);
+                }
+            }
+            // 回落：角色自身模板（队友/非定制角色）
+            if (sourceItems.Count == 0)
+            {
+                var stats = instance.GetComponent<CharacterStats>();
+                var tmpl = stats != null ? stats.template : null;
+                if (tmpl != null && tmpl.initialEquipment != null)
+                {
+                    foreach (var so in tmpl.initialEquipment)
+                    {
+                        if (so != null && !sourceItems.Contains(so)) sourceItems.Add(so);
+                    }
+                }
+            }
+
+            if (sourceItems.Count == 0)
+            {
+                Debug.Log($"[EquipInitialItems] 角色 {instance.name} 无可用初始装备（定制数据与模板均为空），跳过");
+                return;
+            }
+
+            int equippedCount = 0;
+            foreach (var itemSO in sourceItems)
+            {
+                var inst = new ItemInstance(itemSO);
+                inventory.AddInstance(inst);
+
+                var slot = MapItemToEquipmentSlot(itemSO);
+                if (slot.HasValue && equipment.CanEquip(inst))
+                {
+                    equipment.EquipToSlot(slot.Value, inst);
+                    equippedCount++;
+                }
+                else
+                {
+                    Debug.Log($"[EquipInitialItems] 物品 {itemSO.displayName} 已入背包但未装备（槽位={slot}）");
+                }
+            }
+
+            Debug.Log($"[EquipInitialItems] 初始装备处理完成：共 {sourceItems.Count} 件，成功装备 {equippedCount} 件（角色 {instance.name}）");
+        }
+
+        /// <summary>
+        /// 根据物品模板类型推导装备槽位（武器→主手，盾牌→副手，护甲→身体）。
+        /// 简化实现，覆盖初始装备的常见情形。
+        /// </summary>
+        private static EquipmentSlot? MapItemToEquipmentSlot(ItemBaseSO item)
+        {
+            if (item == null) return null;
+            if (item.isShield) return EquipmentSlot.OffHand;
+            if (item.isArmor) return EquipmentSlot.Armor;
+            if (item.isWeapon) return EquipmentSlot.MainHand;
+            // 其余按外观部位兜底
+            switch (item.appearanceSlot)
+            {
+                case EquipmentSlot.MainHand: return EquipmentSlot.MainHand;
+                case EquipmentSlot.OffHand: return EquipmentSlot.OffHand;
+                case EquipmentSlot.Armor: return EquipmentSlot.Armor;
+                case EquipmentSlot.Helmet: return EquipmentSlot.Helmet;
+                case EquipmentSlot.Gauntlets: return EquipmentSlot.Gauntlets;
+                case EquipmentSlot.Boots: return EquipmentSlot.Boots;
+                case EquipmentSlot.Belt: return EquipmentSlot.Belt;
+                case EquipmentSlot.Cloak: return EquipmentSlot.Cloak;
+                default: return null;
+            }
         }
 
         /// <summary>

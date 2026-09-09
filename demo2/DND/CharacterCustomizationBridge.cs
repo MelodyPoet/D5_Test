@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using demo2.DND.InventoryTetris; // for ItemBaseSO
 
 namespace demo2.DND
 {
@@ -14,10 +15,28 @@ namespace demo2.DND
     }
 
     /// <summary>
+    /// 可序列化物品条目：落盘时用 itemId 重建 ItemBaseSO；内存桥直接持有 runtimeRef 以避免资源扫描。
+    /// </summary>
+    [System.Serializable]
+    public class SerializableItem
+    {
+        /// <summary>物品模板稳定标识（ItemBaseSO.itemId），用于落盘后反查重建</summary>
+        public string itemId;
+
+        /// <summary>仅内存桥使用，不进入 JSON；落盘重新加载时由 ItemDatabase.Get(itemId) 重建</summary>
+        [System.NonSerialized]
+        public ItemBaseSO runtimeRef;
+    }
+
+    /// <summary>
     /// 玩家定制数据包：跨场景传递的纯数据快照。
     /// 战斗场景基于 PlayerTemplate01 模板实例化玩家后，把本数据包"叠加"到实例上
     /// （即把玩家选的各个部件 skin 添加到模板默认底子（如 p7_alignment）之上），
-    /// 并应用属性值。模板 prefab 保持纯净、不被改写。
+    /// 并应用属性值、职业、种族与初始装备。模板 prefab 保持纯净、不被改写。
+    ///
+    /// 设计：本类整体 [Serializable]，可直接被 JsonUtility 序列化（落盘接口见 SaveManager）。
+    /// 其中 CharacterTemplate / ItemBaseSO 这类 UnityEngine.Object 引用用 [NonSerialized] 排除，
+    /// 改以 characterClass / itemId 等字符串/枚举在磁盘侧重建，内存侧则保留 runtimeRef 引用。
     /// </summary>
     [System.Serializable]
     public class CharacterCustomizationData
@@ -30,6 +49,25 @@ namespace demo2.DND
 
         /// <summary>角色等级</summary>
         public int level = 1;
+
+        /// <summary>职业（确认的职业属性模板来源）</summary>
+        public CharacterClass characterClass;
+
+        /// <summary>种族（当前仅变体人类）</summary>
+        public PointBuySystem.RaceType race;
+
+        /// <summary>种族加成自选属性列表（变体人类：两个不同属性各+1）</summary>
+        public List<StatType> racialChoices = new List<StatType>();
+
+        /// <summary>初始/确认装备（真实物品：含背包与属性修正）。落盘以 itemId 重建。</summary>
+        public List<SerializableItem> initialEquipment = new List<SerializableItem>();
+
+        /// <summary>选中的职业模板（内存桥使用，不落盘；落盘由 characterClass + selectedTemplateName 重建）</summary>
+        [System.NonSerialized]
+        public CharacterTemplate selectedTemplate;
+
+        /// <summary>选中职业模板名称（落盘用，便于 SaveManager 反查或日志）</summary>
+        public string selectedTemplateName;
     }
 
     /// <summary>

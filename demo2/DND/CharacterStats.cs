@@ -52,13 +52,14 @@ namespace demo2.DND
         [HideInInspector] public int racialWisBonus = 0;
         [HideInInspector] public int racialChaBonus = 0;
 
-        // 属性调整值（基于基础值+种族加成）
-        public int StrMod => (strength + racialStrBonus - 10) / 2;
-        public int DexMod => (dexterity + racialDexBonus - 10) / 2;
-        public int ConMod => (constitution + racialConBonus - 10) / 2;
-        public int IntMod => (intelligence + racialIntBonus - 10) / 2;
-        public int WisMod => (wisdom + racialWisBonus - 10) / 2;
-        public int ChaMod => (charisma + racialChaBonus - 10) / 2;
+        // 属性调整值（基于最终属性值；种族加成已在 InitializeFromPointBuy / InitializeFromTemplate
+        // 时烘焙进 strength/dexterity... 字段，故此处直接以字段为准，避免种族加成被重复叠加）
+        public int StrMod => PointBuySystem.GetModifier(strength);
+        public int DexMod => PointBuySystem.GetModifier(dexterity);
+        public int ConMod => PointBuySystem.GetModifier(constitution);
+        public int IntMod => PointBuySystem.GetModifier(intelligence);
+        public int WisMod => PointBuySystem.GetModifier(wisdom);
+        public int ChaMod => PointBuySystem.GetModifier(charisma);
 
         // 新增：对外只读访问器（运行时值）
         public int CurrentHitPoints => currentHitPoints;
@@ -590,7 +591,7 @@ namespace demo2.DND
             ApplyRacialBonusesFromTemplate();
 
             // 计算战斗属性（显式按当前角色等级计算HP）
-            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel);
+            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel, constitution);
             currentHitPoints = maxHitPoints;
             armorClass = template.baseArmorClass;
 
@@ -625,13 +626,16 @@ namespace demo2.DND
             SetRacialBonuses(race, racialChoices);
 
             // 计算战斗属性
-            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel);
+            maxHitPoints = template.CalculateHitPointsAtLevel(characterLevel, constitution);
             currentHitPoints = maxHitPoints;
             armorClass = template.baseArmorClass;
 
             Debug.Log($"[CharacterStats] 购点初始化完成: STR={strength}(+{racialStrBonus}) DEX={dexterity}(+{racialDexBonus}) " +
                       $"CON={constitution}(+{racialConBonus}) INT={intelligence}(+{racialIntBonus}) " +
                       $"WIS={wisdom}(+{racialWisBonus}) CHA={charisma}(+{racialChaBonus})");
+
+            // 立即按最终属性（含种族）刷新快照，避免依赖后续装备事件才更新
+            RequestRecalculateStats();
         }
 
         /// <summary>
@@ -640,7 +644,23 @@ namespace demo2.DND
         private void ApplyRacialBonusesFromTemplate()
         {
             if (template == null) return;
-            SetRacialBonuses(template.race);
+            // 设置显示用种族加成记录（仅作展示/日志用途）
+            SetRacialBonuses(template.race, template.racialBonusChoices);
+            // 将种族加成叠加到属性字段（模板六维为购点前基础值），确保 StrMod / AC 等最终派生值正确。
+            // 注意：SetRacialBonuses 仅写 racialXxxBonus 显示字段，这里负责把 +1 烘焙进 strength/dexterity 等字段，
+            // 与玩家购点路径（FinalStrength 已在面板内烘焙种族）保持一致——最终值 = 基础值 + 种族加成。
+            foreach (var stat in template.racialBonusChoices)
+            {
+                switch (stat)
+                {
+                    case StatType.Strength: strength += 1; break;
+                    case StatType.Dexterity: dexterity += 1; break;
+                    case StatType.Constitution: constitution += 1; break;
+                    case StatType.Intelligence: intelligence += 1; break;
+                    case StatType.Wisdom: wisdom += 1; break;
+                    case StatType.Charisma: charisma += 1; break;
+                }
+            }
         }
 
         /// <summary>
@@ -708,7 +728,7 @@ namespace demo2.DND
             }
 
             int oldMax = maxHitPoints;
-            int newMax = template.CalculateHitPointsAtLevel(Level);
+            int newMax = template.CalculateHitPointsAtLevel(Level, constitution);
             maxHitPoints = newMax;
 
             if (healToFull)
