@@ -21,10 +21,12 @@ MonoBehaviour:
   damageType: 3
   upgradeAtCantriplevel: 1
   upgradeEntries:
-  - characterLevel: 3
+  - characterLevel: 5
     upgradedDice:
       diceCount: 1
       diceSize: 6
       modifier: 0
   requiresAttackRoll: 1
+  saveAbility: constitution
+  saveHalvesOnSuccess: 1
   attackType: Spell Attack

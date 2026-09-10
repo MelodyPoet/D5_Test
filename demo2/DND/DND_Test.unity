@@ -38,7 +38,6 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -456,7 +455,7 @@ GameObject:
   m_Component:
   - component: {fileID: 115786330}
   m_Layer: 0
-  m_Name: EnemyBackCenterSpawn
+  m_Name: EnemyMiddleCenterSpawn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1096,7 +1095,7 @@ GameObject:
   m_Component:
   - component: {fileID: 352052710}
   m_Layer: 0
-  m_Name: PlayerBackCenterSpawn
+  m_Name: PlayerMiddleCenterSpawn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
