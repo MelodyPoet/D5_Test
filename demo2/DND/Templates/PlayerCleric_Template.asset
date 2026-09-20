@@ -15,7 +15,7 @@ MonoBehaviour:
   characterName: "\u73A9\u5BB6\u7267\u5E08"
   characterClass: 3
   race: 0
-  level: 3
+  level: 1
   defaultSide: 0
   strength: 12
   dexterity: 10
@@ -23,6 +23,7 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 16
   charisma: 11
+  racialBonusChoices: 
   pointBuyStr: 14
   pointBuyDex: 8
   pointBuyCon: 13

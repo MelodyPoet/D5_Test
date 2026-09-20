@@ -14,7 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: "\u5DE8\u9B54"
   characterClass: 6
-  level: 4
+  race: 0
+  level: 1
   defaultSide: 1
   strength: 18
   dexterity: 8
@@ -22,11 +23,39 @@ MonoBehaviour:
   intelligence: 6
   wisdom: 9
   charisma: 7
-  baseArmorClass: 14
+  racialBonusChoices: 
+  pointBuyStr: 0
+  pointBuyDex: 0
+  pointBuyCon: 0
+  pointBuyInt: 0
+  pointBuyWis: 0
+  pointBuyCha: 0
+  defaultWeaponSkinID: 
+  defaultArmorSkinID: 
+  initialEquipment: []
   hitDie: 12
-  resistances: 
+  baseArmorClass: 14
   immunities: 
+  resistances: 
   vulnerabilities: 03000000
-  proficiencyBonus: 2
+  primarySpellAbility: 0
+  defaultAttackType: 0
+  defaultCantrip: {fileID: 0}
+  unarmedDamageDice:
+    diceCount: 1
+    diceSize: 4
+    modifier: 0
+  unarmedDamageAbilityMode: 0
+  unarmedProficient: 1
+  unarmedDamageType: 0
   proficientSkills: 0f000000
   proficientSaves: []
+  proficientSpellAttacks: 0
+  proficientMelee: 1
+  proficientRanged: 0
+  proficientLightArmor: 1
+  proficientMediumArmor: 0
+  proficientHeavyArmor: 0
+  proficientShield: 1
+  proficientWeaponClasses: []
+  proficientWeaponTypes: []

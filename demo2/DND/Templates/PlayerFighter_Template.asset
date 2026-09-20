@@ -23,6 +23,7 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 12
   charisma: 9
+  racialBonusChoices: 
   pointBuyStr: 15
   pointBuyDex: 14
   pointBuyCon: 13
