@@ -44,6 +44,12 @@ namespace demo2.DND.InventoryTetris
         [Tooltip("当启用‘伤害能力分离’时生效：力量/敏捷/两者择优（若 isFinesse=true，则仍按 STR/DEX 择优）")]
         public PhysicalHitAbilityMode weaponDamageAbilityMode = PhysicalHitAbilityMode.BestOfStrDex;
 
+        [Tooltip("武器大类：近战/长触及/远程。B 方案据此决定远程武器是否生成箭矢弹道特效；新机制据此计算威胁范围与借机攻击判定。")]
+        public WeaponType weaponType = WeaponType.Melee;
+
+        [Tooltip("远程武器（weaponType==Ranged）攻击时生成的弹道特效 prefab；近战/长触及保持为空。prefab 自身应包含飞行与命中逻辑（实现 IProjectileLauncher 或自包含）。")]
+        public GameObject rangedEffectPrefab;
+
         [Header("护甲/盾牌（可选）")]
         [Tooltip("勾选后，该物品作为护甲参与AC计算")]
         public bool isArmor;

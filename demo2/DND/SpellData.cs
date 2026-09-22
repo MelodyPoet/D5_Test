@@ -17,6 +17,10 @@ namespace demo2.DND
         [TextArea(2, 4)]
         public string spellDescription = "";
 
+        [Header("视觉特效（可选）")]
+        [Tooltip("施法时生成的法术弹道/特效 prefab（B 方案）。位置在施法者 prefab 释放帧生成；prefab 自身应包含飞行与命中逻辑（实现 IProjectileLauncher 或自包含）。")]
+        public GameObject spellCastEffectPrefab;
+
         [Header("伤害配置")]
         [Tooltip("基础伤害骰（如 1d10、2d6 等）")]
         public DiceFormula baseDamageDice = new DiceFormula(1, 10);

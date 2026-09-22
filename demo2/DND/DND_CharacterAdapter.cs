@@ -4,9 +4,19 @@ using UnityEngine;
 using Spine.Unity;
 using Spine;
 using DG.Tweening;
+using demo2.DND.InventoryTetris;
 
 namespace demo2.DND
 {
+    /// <summary>
+    /// 攻击弹道特效 prefab 实现此接口即可被适配器在释放帧驱动飞向目标。
+    /// 若不实现，prefab 仅作为在攻击者位置生成的装饰特效。
+    /// </summary>
+    public interface IProjectileLauncher
+    {
+        void Launch(Vector3 targetWorldPosition, Vector3 fromWorldPosition);
+    }
+
     /// <summary>
     /// DND角色动画适配器 - 统一管理角色动画播放和状态切换
     /// 使用DOTween处理位移 + SpineEvent处理状态切换
@@ -764,6 +774,21 @@ namespace demo2.DND
                     }
                 });
 
+                // B 方案：在“出手/释放帧”于攻击者 prefab 位置生成攻击视觉特效
+                DOVirtual.DelayedCall(attackAnimationDuration * 0.35f, () => {
+                    try
+                    {
+                        if (!IsTerminalState())
+                        {
+                            SpawnAttackVisual(target);
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError($"[{gameObject.name}] 攻击视觉特效生成错误: {ex.Message}");
+                    }
+                });
+
                 // 设置攻击完成调（备用触发也已在下面设置）
                 tempAnimCompleteCallback = () => {
                     try
@@ -809,6 +834,58 @@ namespace demo2.DND
             });
 
             Debug.Log($"[{gameObject.name}] ========== ExecuteAttackAtPosition 设置完成 ==========");
+        }
+
+        /// <summary>
+        /// B 方案：释放帧在攻击者 prefab 位置生成攻击视觉特效。
+        /// 法术（template.defaultAttackType==Spell）→ SpellData.spellCastEffectPrefab；
+        /// 否则取主手武器，仅 weaponType==Ranged → ItemBaseSO.rangedEffectPrefab。
+        /// 位置恒为攻击者自身 transform.position（与阵型排位无关）。
+        /// </summary>
+        private void SpawnAttackVisual(Transform target)
+        {
+            GameObject prefab = ResolveAttackPrefab();
+            if (prefab == null) return;
+
+            // 取攻击者 prefab 实时世界坐标，略抬高避免从脚底冒出
+            Vector3 spawnPos = transform.position + Vector3.up * 0.6f;
+            GameObject proj = Instantiate(prefab, spawnPos, Quaternion.identity);
+            Debug.Log($"[{gameObject.name}] B 方案生成攻击特效: {prefab.name} @ {spawnPos}");
+
+            var launcher = proj.GetComponent<IProjectileLauncher>();
+            if (launcher != null && target != null)
+            {
+                launcher.Launch(target.position, spawnPos);
+            }
+        }
+
+        /// <summary>
+        /// 解析当前攻击应使用的弹道特效 prefab：法术优先，否则主手远程武器。
+        /// 完全基于攻击者自身数据，与阵型排位无关。
+        /// </summary>
+        private GameObject ResolveAttackPrefab()
+        {
+            if (characterStats == null) return null;
+
+            bool isSpell = characterStats.template != null
+                && characterStats.template.defaultAttackType == DefaultAttackType.Spell;
+            if (isSpell)
+            {
+                return characterStats.template.defaultCantrip != null
+                    ? characterStats.template.defaultCantrip.spellCastEffectPrefab : null;
+            }
+
+            // 物理攻击：取主手武器，仅远程类产生弹道特效
+            var eq = GetComponent<CharacterEquipment>()
+                      ?? GetComponentInParent<CharacterEquipment>()
+                      ?? GetComponentInChildren<CharacterEquipment>(true);
+            var mainHand = eq?.GetEquipped(EquipmentSlot.MainHand);
+            var weapon = mainHand?.data;
+            if (weapon != null && weapon.weaponType == WeaponType.Ranged)
+            {
+                return weapon.rangedEffectPrefab;
+            }
+            return null;
         }
 
         /// <summary>

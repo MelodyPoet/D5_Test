@@ -135,6 +135,19 @@ namespace demo2.DND
         BestOfStrDex    // 取 力量/敏捷 中较大者
     }
 
+    /// <summary>
+    /// 武器大类（B 方案视觉弹道特效与新机制威胁范围共用）。
+    /// - Melee：近战武器（剑/斧等），威胁范围 1~2 纵深，无弹道特效。
+    /// - Reach：长触及武器（长矛/长枪等），威胁范围 3 纵深，仍按近战处理（无箭矢特效）。
+    /// - Ranged：远程武器（弓/弩等），可跨位攻击，攻击时生成箭矢等弹道特效。
+    /// 攻击方式只由此字段 + 模板法术攻击优先决定，与阵型排位无关。
+    /// </summary>
+    public enum WeaponType {
+        Melee,
+        Reach,
+        Ranged
+    }
+
     // 注：DiceFormula 已作为独立的 class 定义在 DiceFormula.cs 中
 
     /// <summary>
