@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de79409e84324280bbf96c87ff983e44, type: 3}
+  m_Name: SDS01
+  m_EditorClassIdentifier: 
+  spellName: "\u654C\u4EBA\u8FDC\u7A0B"
+  spellDescription: "\u654C\u4EBA\u9ED8\u8BA4\u8FDC\u7A0B\u4F24\u5BB3"
+  spellCastEffectPrefab: {fileID: 2815496124194402640, guid: a46e089b24ff38e4ea79f78b55be9206, type: 3}
+  baseDamageDice:
+    diceCount: 1
+    diceSize: 6
+    modifier: 0
+  damageType: 1
+  upgradeAtCantriplevel: 0
+  upgradeEntries:
+  - characterLevel: 3
+    upgradedDice:
+      diceCount: 1
+      diceSize: 6
+      modifier: 0
+  requiresAttackRoll: 1
+  saveAbility: constitution
+  saveHalvesOnSuccess: 1
+  attackType: Spell Attack

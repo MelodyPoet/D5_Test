@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: "\u9B54\u5316\u673A\u5175"
   characterClass: 2
+  race: 0
   level: 1
   defaultSide: 1
   strength: 8
@@ -22,17 +23,28 @@ MonoBehaviour:
   intelligence: 10
   wisdom: 8
   charisma: 8
+  racialBonusChoices: 
+  pointBuyStr: 0
+  pointBuyDex: 0
+  pointBuyCon: 0
+  pointBuyInt: 0
+  pointBuyWis: 0
+  pointBuyCha: 0
+  defaultWeaponSkinID: 
+  defaultArmorSkinID: 
+  initialEquipment: []
   hitDie: 7
   baseArmorClass: 12
   immunities: 
   resistances: 
   vulnerabilities: 
-  primarySpellAbility: intelligence
+  primarySpellAbility: 0
   defaultAttackType: 0
-  defaultCantrip: {fileID: 0}
+  defaultCantrip: {fileID: 11400000, guid: c53985f0702238343877f2903258c59d, type: 2}
   unarmedDamageDice:
     diceCount: 1
     diceSize: 6
+    modifier: 0
   unarmedDamageAbilityMode: 1
   unarmedProficient: 1
   unarmedDamageType: 1

@@ -847,16 +847,39 @@ namespace demo2.DND
             GameObject prefab = ResolveAttackPrefab();
             if (prefab == null) return;
 
-            // 取攻击者 prefab 实时世界坐标，略抬高避免从脚底冒出
-            Vector3 spawnPos = transform.position + Vector3.up * 0.6f;
+            // 取攻击者 prefab 实时世界坐标（视觉中心，避免从脚底冒出）
+            Vector3 spawnPos = GetTargetCenter(transform);
             GameObject proj = Instantiate(prefab, spawnPos, Quaternion.identity);
             Debug.Log($"[{gameObject.name}] B 方案生成攻击特效: {prefab.name} @ {spawnPos}");
 
             var launcher = proj.GetComponent<IProjectileLauncher>();
             if (launcher != null && target != null)
             {
-                launcher.Launch(target.position, spawnPos);
+                // 飞向目标 prefab 的视觉中心（而非脚底原点）
+                launcher.Launch(GetTargetCenter(target), spawnPos);
             }
+        }
+
+        /// <summary>
+        /// 计算一个 Transform 的视觉中心世界坐标：优先用所有渲染器包围盒，
+        /// 回退到碰撞体包围盒，最后回退到原点上方 1 单位。避免弹道飞向脚底。
+        /// </summary>
+        private Vector3 GetTargetCenter(Transform t)
+        {
+            if (t == null) return Vector3.zero;
+
+            var renderers = t.GetComponentsInChildren<Renderer>();
+            if (renderers != null && renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                if (b.size.sqrMagnitude > 0f) return b.center;
+            }
+
+            var col = t.GetComponentInChildren<Collider>();
+            if (col != null) return col.bounds.center;
+
+            return t.position + Vector3.up * 1.0f;
         }
 
         /// <summary>
