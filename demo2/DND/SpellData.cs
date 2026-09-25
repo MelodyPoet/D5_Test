@@ -91,6 +91,10 @@ namespace demo2.DND
         [Tooltip("攻击类型（如 attack roll 或 saving throw）")]
         public string attackType = "Spell Attack";
 
+        [Header("专注")]
+        [Tooltip("是否为需要维持的专注类法术（5E 通用专注机制，文档 344/275）：施法时若受借机攻击命中需做体质豁免，失败则施法被打断")]
+        public bool requiresConcentration = false;
+
         /// <summary>
         /// 升级规则数据结构
         /// </summary>

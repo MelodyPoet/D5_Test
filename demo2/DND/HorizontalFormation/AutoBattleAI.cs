@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using DG.Tweening;
 using demo2.DND.InventoryTetris; // for ItemBaseSO / CharacterEquipment / EquipmentSlot
 
 namespace demo2.DND.HorizontalFormation
@@ -28,6 +29,15 @@ namespace demo2.DND.HorizontalFormation
         [Header("先攻系统")]
         public List<InitiativeEntry> initiativeOrder = new List<InitiativeEntry>();
         public int currentTurnIndex;
+
+        [Header("借机攻击时序（秒，手动微调动画节奏）")]
+        [Tooltip("阶段1(攻击者完整动作动画)结束 → 阶段2(借机反应)开始的间隔")]
+        public float oaDelayAttackToReaction = 0.25f;
+        [Tooltip("阶段2(借机挥击) → 阶段3(统一结算伤害/受击)的间隔（挥击命中帧）")]
+        public float oaDelayReactionToResolve = 0.15f;
+        [Tooltip("阶段3(结算完成) → 阶段4(下一先攻单位)的间隔")]
+        public float oaDelayResolveToNext = 0.30f;
+
         public bool isBattleActive;
 
         private bool isProcessingTurn;
@@ -197,9 +207,14 @@ namespace demo2.DND.HorizontalFormation
             onComplete = () => { ClearAttackMarkers(); wrappedOnComplete?.Invoke(); };
             ShowAttackMarkers(attacker);
 
-            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
-            Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}");
+            // ===== E：借机攻击规划（仅找反应器并预留反应资源，不结算伤害，文档 222/224/274/275/276） =====
+            // 规划在阶段1（攻击者动画）开始前完成，确保反应资源唯一消耗、后续阶段可正确调度。
+            CharacterStats oaReactor = PlanOpportunityAttack(attacker, action.target);
 
+            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
+            Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}, 借机反应器: {(oaReactor != null ? oaReactor.GetDisplayName() : "无")}");
+
+            // 宣言行动日志（阶段1前）
             try
             {
                 bool isSpell = attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell;
@@ -228,9 +243,8 @@ namespace demo2.DND.HorizontalFormation
                 try { GameLog.LogAction("系统", $"{attacker.GetDisplayName()} 缺少动画适配器，直接进行命中与伤害结算"); }
                 catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录缺少动画适配器日志失败: {ex.Message}"); }
 
-                bool assumeMelee = IsMeleeStyle(GetAttackStyle(attacker));
-                ProcessAttackHit(attacker, action.target, assumeMelee);
-                onComplete?.Invoke();
+                // 无动画：直接进入阶段3统一结算（含借机）
+                ResolveCombatPhase(attacker, action, oaReactor, false, default, onComplete);
                 return;
             }
 
@@ -238,85 +252,67 @@ namespace demo2.DND.HorizontalFormation
             bool isMeleeAttack = IsMeleeStyle(style);
             Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击类型判断结果(按武器/法术): {GetAttackStylePreview(attacker)}");
 
+            // 阶段1动画完成后进入借机判定与后续时序
+            System.Action enterReactionPhase = () =>
+            {
+                DOVirtual.DelayedCall(oaDelayAttackToReaction, () =>
+                {
+                    // ===== 阶段2：借机反应（次级回合，嵌入当前回合，不推进先攻） =====
+                    if (oaReactor != null)
+                    {
+                        try { GameLog.LogAction(oaReactor.GetDisplayName(), $"对 {attacker.GetDisplayName()} 发动借机攻击"); }
+                        catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录借机攻击日志失败: {ex.Message}"); }
+
+                        // 原地播放反应者的攻击动画（文档 E：借机攻击需表现攻击动作，不移动位置）
+                        var reacAdapter = oaReactor.GetComponent<DND_CharacterAdapter>();
+                        reacAdapter?.PlayAttackAnimation();
+
+                        DOVirtual.DelayedCall(oaDelayReactionToResolve, () =>
+                        {
+                            // 阶段2内：预掷借机攻击 + 专注豁免判定（不在此应用伤害）
+                            bool oaInterrupted;
+                            HorizontalCombatRules.AttackResult oaResult;
+                            ResolveOpportunityReaction(attacker, oaReactor, out oaInterrupted, out oaResult);
+                            // ===== 阶段3：统一结算攻击者自身效果 + 受到的借机伤害 =====
+                            ResolveCombatPhase(attacker, action, oaReactor, oaInterrupted, oaResult, onComplete);
+                        });
+                    }
+                    else
+                    {
+                        // 无借机：直接进入阶段3
+                        ResolveCombatPhase(attacker, action, null, false, default, onComplete);
+                    }
+                });
+            };
+
             if (isMeleeAttack)
             {
-                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行近战攻击序列");
-                bool hitInvoked = false;
+                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行近战攻击序列（阶段1，伤害延后结算）");
                 attackerAdapter.ExecuteMeleeAttack(
                     action.target.transform,
-                    onAttackHit: () =>
-                    {
-                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击命中回调触发");
-                        if (!hitInvoked)
-                        {
-                            hitInvoked = true;
-                            ProcessAttackHit(attacker, action.target, true);
-                        }
-                    },
-                    onComplete: () =>
-                    {
-                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击完成回调触发");
-                        if (!hitInvoked)
-                        {
-                            ProcessAttackHit(attacker, action.target, true);
-                        }
-                        onComplete?.Invoke();
-                    }
+                    onAttackHit: null,
+                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击动画完成，进入借机判定"); enterReactionPhase(); }
                 );
             }
             else
             {
-                bool hitInvoked = false;
+                Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 开始执行远程/法术攻击序列（阶段1，伤害延后结算）");
                 attackerAdapter.ExecuteRangedAttack(
                     action.target.transform,
-                    onAttackHit: () =>
-                    {
-                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击命中回调触发");
-                        if (!hitInvoked)
-                        {
-                            hitInvoked = true;
-                            ProcessAttackHit(attacker, action.target, false);
-                        }
-                    },
-                    onComplete: () =>
-                    {
-                        Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程攻击完成回调触发");
-                        if (!hitInvoked)
-                        {
-                            ProcessAttackHit(attacker, action.target, false);
-                        }
-                        onComplete?.Invoke();
-                    }
+                    onAttackHit: null,
+                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程/法术攻击动画完成，进入借机判定"); enterReactionPhase(); }
                 );
             }
 
-            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 结束 ==========");
+            Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 调度完成（异步时序进行中） ==========");
         }
 
-        private void ProcessAttackHit(CharacterStats attacker, CharacterStats target, bool isMeleeAttack)
+        private HorizontalCombatRules.AttackResult ProcessAttackHit(CharacterStats attacker, CharacterStats target, bool isMeleeAttack, HorizontalCombatRules.AttackResult? presetResult = null)
         {
-            if (attacker == null || target == null) return;
+            if (attacker == null || target == null) return default;
 
-            int advantageFlag = 0;
-            if (target.HasStatusEffect(StatusEffectType.Unconscious))
-            {
-                // 攻击倒地/昏迷目标：近战获优势、远程/法术获劣势（既有规则，优先级最高）
-                advantageFlag = isMeleeAttack ? 1 : -1;
-                Debug.Log($"[DEBUG] 目标处于昏迷：设置攻击掷骰优势标志 = {advantageFlag} (1=优势, -1=劣势)");
-            }
-            else
-            {
-                // D 项：按攻击方式 + 纵深距离计算优势/劣势（文档 222/224/270/272/273）
-                AttackStyle style = GetAttackStyle(attacker);
-                int dist = GetDepthTier(attacker) + GetDepthTier(target) + 1; // 与 ComputeAttackableTargets 同口径
-                advantageFlag = ComputeAttackModifiers(attacker, target, style, dist);
-                if (advantageFlag != 0)
-                {
-                    Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 距离={dist}, 攻击方式={GetAttackStylePreview(attacker)}, 目标方式={GetAttackStylePreview(target)} => {(advantageFlag > 0 ? "优势(2d20取高)" : "劣势(2d20取低)")}");
-                }
-            }
-
-            var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag, isMeleeAttack);
+            // 若已预掷结果（如借机攻击阶段2预掷）则复用，否则现掷（文档 E：先演后算）
+            HorizontalCombatRules.AttackResult attackResult = presetResult ?? ComputeAttack(attacker, target, isMeleeAttack);
 
             if (attackResult.isHit)
             {
@@ -366,7 +362,173 @@ namespace demo2.DND.HorizontalFormation
                     Debug.LogWarning($"AutoBattleAI.ProcessAttackHit: 调用 ShowMiss 时异常 - {ex}");
                 }
             }
+            return attackResult;
         }
+
+        /// <summary>
+        /// 计算一次攻击的命中/伤害结果（掷骰），不应用。供正常攻击与借机攻击预掷复用（文档 E：先演后算）。
+        /// </summary>
+        private HorizontalCombatRules.AttackResult ComputeAttack(CharacterStats attacker, CharacterStats target, bool isMeleeAttack)
+        {
+            int advantageFlag = 0;
+            if (target.HasStatusEffect(StatusEffectType.Unconscious))
+            {
+                // 攻击倒地/昏迷目标：近战获优势、远程/法术获劣势（既有规则，优先级最高）
+                advantageFlag = isMeleeAttack ? 1 : -1;
+                Debug.Log($"[DEBUG] 目标处于昏迷：设置攻击掷骰优势标志 = {advantageFlag} (1=优势, -1=劣势)");
+            }
+            else
+            {
+                // D 项：按攻击方式 + 纵深距离计算优势/劣势（文档 222/224/270/272/273）
+                AttackStyle style = GetAttackStyle(attacker);
+                int dist = GetDepthTier(attacker) + GetDepthTier(target) + 1; // 与 ComputeAttackableTargets 同口径
+                advantageFlag = ComputeAttackModifiers(attacker, target, style, dist);
+                if (advantageFlag != 0)
+                {
+                    Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 距离={dist}, 攻击方式={GetAttackStylePreview(attacker)}, 目标方式={GetAttackStylePreview(target)} => {(advantageFlag > 0 ? "优势(2d20取高)" : "劣势(2d20取低)")}");
+                }
+            }
+
+            return HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag, isMeleeAttack);
+        }
+
+        #region 借机攻击（E：文档 222/224/274/275/276）
+        /// <summary>
+        /// 规划借机攻击：仅判定是否触发并预留反应资源（消耗每轮1次的反应资源），不结算伤害、不播放动画。
+        /// 在阶段1（攻击者动画）开始前调用，确保反应资源唯一消耗、后续阶段可正确调度。返回反应器（无则 null）。
+        /// 暴露规则（文档 274/360-363）：
+        /// - 长触及(Reach)：仅跨位攻击(纵深距离>=2)时暴露；
+        /// - 远程(Ranged)/法术(Spell)：始终暴露，无论攻击哪个位置的敌人；
+        /// - 普通近战(Melee)：不暴露。
+        /// </summary>
+        private CharacterStats PlanOpportunityAttack(CharacterStats mover, CharacterStats target)
+        {
+            if (mover == null || target == null) return null;
+
+            AttackStyle moverStyle = GetAttackStyle(mover);
+            int distToTarget = GetDepthTier(mover) + GetDepthTier(target) + 1;
+
+            // 暴露判定（文档 274/360-363）
+            if (moverStyle == AttackStyle.Reach)
+            {
+                if (distToTarget < 2) return null; // 长触及仅跨位时暴露
+            }
+            else if (moverStyle == AttackStyle.Ranged || moverStyle == AttackStyle.Spell)
+            {
+                // 远程/法术：始终暴露，无需跨位条件
+            }
+            else
+            {
+                return null; // 普通近战不触发借机
+            }
+
+            CharacterStats reactor = FindOpportunityReactor(mover);
+            if (reactor == null) return null;
+
+            var reacEntry = GetInitiativeEntry(reactor);
+            if (reacEntry == null || reacEntry.hasUsedReaction) return null;
+
+            reacEntry.hasUsedReaction = true; // 预留反应资源（每轮1次，文档 340/276）
+            return reactor;
+        }
+
+        /// <summary>
+        /// 结算借机反应（阶段2内调用）：预掷借机攻击结果并做专注豁免判定（文档 275），
+        /// 但【不在此应用伤害】——伤害统一在阶段3（ResolveCombatPhase）结算，以匹配"先演后算"时序。
+        /// out interrupted：攻击者施放的专注类法术是否被借机攻击打断。
+        /// out oaResult：预掷的借机攻击结果（命中/伤害），供阶段3应用。
+        /// </summary>
+        private void ResolveOpportunityReaction(CharacterStats mover, CharacterStats reactor, out bool interrupted, out HorizontalCombatRules.AttackResult oaResult)
+        {
+            interrupted = false;
+            oaResult = ComputeAttack(reactor, mover, true); // 借机为近战攻击，含优势（文档 274/359）
+
+            bool isCastingConcentration = GetAttackStyle(mover) == AttackStyle.Spell
+                && mover.template != null && mover.template.defaultCantrip != null
+                && mover.template.defaultCantrip.requiresConcentration;
+            if (isCastingConcentration && oaResult.isHit)
+            {
+                bool saved = mover.MakeConcentrationSave(oaResult.damage, mover.template.defaultCantrip);
+                if (!saved)
+                {
+                    interrupted = true;
+                    try { GameLog.LogAction(mover.GetDisplayName(), $"{mover.template.defaultCantrip.spellName} 被借机攻击打断，施法失败"); }
+                    catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录打断日志失败: {ex.Message}"); }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 阶段3：统一结算。结算攻击者自身动作效果（专注类法术若被借机打断则不生效），
+        /// 并结算其受到的借机伤害（阶段2已预掷结果，此处应用并播放受击动画）。完成后延时进入阶段4（下一先攻单位）。
+        /// </summary>
+        private void ResolveCombatPhase(CharacterStats attacker, BattleAction action, CharacterStats oaReactor, bool oaInterrupted, HorizontalCombatRules.AttackResult oaResult, System.Action onDone)
+        {
+            // 3a. 攻击者自身动作效果（专注法术被打断则不生效）
+            bool isConcSpell = GetAttackStyle(attacker) == AttackStyle.Spell
+                && attacker.template != null && attacker.template.defaultCantrip != null
+                && attacker.template.defaultCantrip.requiresConcentration;
+            if (isConcSpell && oaInterrupted)
+            {
+                try { GameLog.LogAction(attacker.GetDisplayName(), $"{attacker.template.defaultCantrip.spellName} 被借机攻击打断，施法失败"); }
+                catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录打断日志失败: {ex.Message}"); }
+            }
+            else
+            {
+                ProcessAttackHit(attacker, action.target, IsMeleeStyle(GetAttackStyle(attacker)));
+            }
+
+            // 3b. 受到的借机伤害（阶段2已预掷，此处应用并播放受击动画）
+            // 关键不变式：无论专注豁免是否失败（interrupted），借机攻击自身命中即正常结算伤害；
+            // interrupted 只控制 3a 的施法者自身法术效果是否生效，绝不阻断本次借机伤害。
+            if (oaReactor != null)
+            {
+                ProcessAttackHit(oaReactor, attacker, true, oaResult);
+            }
+
+            // 阶段3完成 → 延时进入阶段4（下一先攻单位）
+            DOVirtual.DelayedCall(oaDelayResolveToNext, () => { onDone?.Invoke(); });
+        }
+
+        /// <summary>
+        /// 寻找借机攻击反应器：与 mover 邻接(dist=1)且持近战/长触及、仍有反应资源的敌方单位，
+        /// 多反应器时按先攻顺序取最高者（文档 276）。
+        /// </summary>
+        private CharacterStats FindOpportunityReactor(CharacterStats mover)
+        {
+            if (mover == null) return null;
+            BattleSide enemySide = (mover.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
+            var manager = FindObjectOfType<HorizontalBattleFormationManager>();
+            var enemies = manager != null ? manager.GetAliveUnits(enemySide) : new List<CharacterStats>();
+
+            CharacterStats best = null;
+            int bestInit = int.MinValue;
+            foreach (var e in enemies)
+            {
+                if (e == null || e == mover) continue;
+                if (e.CurrentHitPoints <= 0 || e.HasStatusEffect(StatusEffectType.Unconscious)) continue;
+                int dist = GetDepthTier(mover) + GetDepthTier(e) + 1; // 邻接 = 1
+                if (dist != 1) continue;
+                AttackStyle es = GetAttackStyle(e);
+                if (es != AttackStyle.Melee && es != AttackStyle.Reach) continue; // 仅近战/长触及可借机（文档 360-363）
+                var entry = GetInitiativeEntry(e);
+                if (entry == null || entry.hasUsedReaction) continue;
+                int init = entry.initiativeValue;
+                if (init > bestInit) { bestInit = init; best = e; }
+            }
+            return best;
+        }
+
+        private InitiativeEntry GetInitiativeEntry(CharacterStats c)
+        {
+            if (c == null) return null;
+            foreach (var e in initiativeOrder)
+            {
+                if (e != null && e.character == c) return e;
+            }
+            return null;
+        }
+        #endregion
 
         private bool IsCharacterInFrontRow(CharacterStats character)
         {

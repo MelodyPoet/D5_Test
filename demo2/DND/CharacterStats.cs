@@ -33,6 +33,10 @@ namespace demo2.DND
         [Header("当前状态效果（运行时）")] // 运行时维护，不在 Inspector 手动配置
         private readonly List<StatusEffectType> statusEffects = new List<StatusEffectType>();
 
+        // 通用专注系统（5E，文档 344/346/891）：正在维持专注法术的标志与对应法术（预留接口，后续持久型专注法术接入）
+        public bool Concentrating { get; set; }
+        public SpellData ActiveConcentrationSpell { get; set; }
+
         // 标记：是否已经进入死亡表现（用于阵型清理与诊断） - 只读属性对外提供
         public bool HasPlayedDeath { get; private set; }
 
@@ -287,6 +291,13 @@ namespace demo2.DND
             }
 
             currentHitPoints = Mathf.Max(0, afterHp);
+
+            // 通用专注系统（文档 344/346/891）：受伤时若正在维持专注法术，进行专注豁免
+            if (Concentrating && damage > 0)
+            {
+                MakeConcentrationSave(damage);
+            }
+
             Debug.Log($"{GetDisplayName()} 受到 {damage} 点 {damageType} 伤害! 剩余生命值: {currentHitPoints}/{maxHitPoints}");
 
             // 如果发生溢出伤害，记录为倒地负值基数
@@ -771,6 +782,34 @@ namespace demo2.DND
         public void TakeDamage(int damage, DamageType damageType, bool isCritical)
         {
             ApplyDamageToSelf(damage, isCritical, damageType);
+        }
+
+        /// <summary>
+        /// 专注豁免（5E 通用专注机制，文档 344/346/891）。
+        /// - 维持专注时受伤（castingSpell=null）：DC=max(10,⌊伤害/2⌋)，体质豁免失败则失去专注。
+        /// - 施法中被借机攻击打断（传入 castingSpell）：仅做豁免判定，失败返回 false 由调用方取消施法（文档 275）。
+        /// </summary>
+        public bool MakeConcentrationSave(int damage, SpellData castingSpell = null)
+        {
+            bool relevant = castingSpell != null ? castingSpell.requiresConcentration : Concentrating;
+            if (!relevant) return true;
+
+            int dc = Mathf.Max(10, Mathf.FloorToInt(damage / 2f));
+            int save = SavingThrow("constitution");
+            bool success = save >= dc;
+
+            try { GameLog.LogAction(GetDisplayName(), $"专注豁免（{save} vs DC{dc}）{(success ? "成功" : "失败")}"); }
+            catch (Exception ex) { Debug.LogWarning($"[CharacterStats] GameLog.LogAction failed: {ex.Message}"); }
+
+            if (!success && castingSpell == null)
+            {
+                Concentrating = false;
+                SpellData lost = ActiveConcentrationSpell;
+                ActiveConcentrationSpell = null;
+                try { GameLog.LogAction(GetDisplayName(), $"失去专注，{(lost != null ? lost.spellName : "法术")} 维持中断"); }
+                catch (Exception ex) { Debug.LogWarning($"[CharacterStats] GameLog.LogAction failed: {ex.Message}"); }
+            }
+            return success;
         }
 
         /// <summary>

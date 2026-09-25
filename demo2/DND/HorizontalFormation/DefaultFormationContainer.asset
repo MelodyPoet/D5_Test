@@ -17,9 +17,9 @@ MonoBehaviour:
     [4]\u540E\u6392\u4E2D\u8DEF [5]\u540E\u6392\u53F3\u7FFC\nnull\u503C\u8868\u793A\u8BE5\u4F4D\u7F6E\u65E0\u89D2\u8272"
   playerFormationPrefabs:
   - {fileID: 0}
-  - {fileID: 5606776123269573531, guid: 8fae9f725cb34a145bffa6e34ca59f69, type: 3}
-  - {fileID: 0}
   - {fileID: 7984810970041705236, guid: d1972121095c54b48999543f02e39513, type: 3}
+  - {fileID: 0}
+  - {fileID: 5606776123269573531, guid: 8fae9f725cb34a145bffa6e34ca59f69, type: 3}
   - {fileID: 0}
   - {fileID: 0}
   enemyWaves:

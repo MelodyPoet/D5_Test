@@ -18,6 +18,7 @@ namespace demo2.DND.HorizontalFormation
         public bool hasActedThisRound;      // 本轮是否已行动
         public bool isDelayingAction;       // 是否延迟行动
         public int delayedInitiative;       // 延迟后的先攻值
+        public bool hasUsedReaction;        // 本轮是否已使用反应动作（借机攻击消耗，每轮1次，文档 340/276）
 
         /// <summary>
         /// 默认构造函数（Unity序列化需要）
@@ -48,6 +49,7 @@ namespace demo2.DND.HorizontalFormation
             hasActedThisRound = false;
             isDelayingAction = false;
             delayedInitiative = initiativeValue;
+            hasUsedReaction = false; // 每轮重置反应资源（文档 340/276）
         }
 
         /// <summary>

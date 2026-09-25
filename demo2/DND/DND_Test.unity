@@ -515,6 +515,9 @@ MonoBehaviour:
   attackMarkerPrefab: {fileID: 967143278094622720, guid: 7bde9cf0e9225f94aa0a6003a397ebc4, type: 3}
   initiativeOrder: []
   currentTurnIndex: 0
+  oaDelayAttackToReaction: 0.2
+  oaDelayReactionToResolve: 0.3
+  oaDelayResolveToNext: 0.3
   isBattleActive: 0
 --- !u!4 &164080473
 Transform:
