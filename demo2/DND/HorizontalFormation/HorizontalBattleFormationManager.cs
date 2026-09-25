@@ -73,6 +73,45 @@ namespace demo2.DND.HorizontalFormation
             return formationContainer.GetEnemyWaveCount();
         }
 
+        /// <summary>
+        /// 获取指定阵营当前实际生成且存活的战斗单位（CharacterStats）。
+        /// 直接读取各阵位实际生成的 prefab 实例（activePlayerCharacters / activeEnemyCharacters），
+        /// 空槽位与已倒下单位会被跳过。供红圈标记/战斗规则等按"实际存在"取目标，
+        /// 而非依赖 FindObjectsOfType 泛扫（可能命中非阵位对象或残留实例）。
+        /// </summary>
+        public List<demo2.DND.CharacterStats> GetAliveUnits(BattleSide side)
+        {
+            var source = side == BattleSide.Player ? activePlayerCharacters : activeEnemyCharacters;
+            var result = new List<demo2.DND.CharacterStats>();
+            foreach (var go in source)
+            {
+                if (go == null) continue;
+                var stats = go.GetComponent<demo2.DND.CharacterStats>();
+                if (stats != null && !stats.IsDownOrDead()) result.Add(stats);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 取某单位实机站立的 Spawn 位置点（场景里的 playerSpawnPoints / enemySpawnPoints Transform）。
+        /// 单位正是在该点生成的，红圈等地面标记应落在这一个权威地面点上，而非依赖根 transform / 网格偏移。
+        /// 用 activePlayerCharacters / activeEnemyCharacters 的数组下标直接对应 spawnPoints，避免 HorizontalPosition 换算出错。
+        /// </summary>
+        public Transform GetSpawnPointForUnit(CharacterStats unit)
+        {
+            if (unit == null) return null;
+            var list = unit.battleSide == BattleSide.Player ? activePlayerCharacters : activeEnemyCharacters;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i] != null && list[i].GetComponent<CharacterStats>() == unit)
+                {
+                    var points = unit.battleSide == BattleSide.Player ? playerSpawnPoints : enemySpawnPoints;
+                    if (i >= 0 && i < points.Length) return points[i];
+                }
+            }
+            return null;
+        }
+
         private void Awake()
         {
             // 确保 HealthBarUIManager 单例存在并与本 manager 的容器/预制体保持一致
@@ -675,6 +714,9 @@ namespace demo2.DND.HorizontalFormation
                 stats.battleSide = battleSide;
                 // 为角色创建并关联血条
                 CreateHealthBarForCharacter(stats);
+                // 应用模板 initialEquipment（与玩家路径一致）：把远程/近战武器装进 MainHand。
+                // 否则敌人即便在模板里配置了武器，运行时也从未装备，会被判为徒手近战而走过去攻击。
+                EquipInitialItems(instance, null);
             }
             else
             {

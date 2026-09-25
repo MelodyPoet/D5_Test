@@ -148,6 +148,21 @@ namespace demo2.DND
         Ranged
     }
 
+    /// <summary>
+    /// 统一攻击方式（B/C 解析用）：由模板法术优先或主手武器 WeaponType 决定。
+    /// - Spell：法术远程弹道（原地）
+    /// - Melee：徒手或近战武器（移动到对方面前）
+    /// - Reach：长触及武器（移动到对方面前，威胁范围更远）
+    /// - Ranged：远程武器（原地，箭矢弹道）
+    /// 玩家与敌人通用。
+    /// </summary>
+    public enum AttackStyle {
+        Melee,
+        Reach,
+        Ranged,
+        Spell
+    }
+
     // 注：DiceFormula 已作为独立的 class 定义在 DiceFormula.cs 中
 
     /// <summary>

@@ -10,22 +10,24 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 28ff9c14580347cd9e1a157933000e3e, type: 3}
-  m_Name: ItemTest03_SO
+  m_Name: Item_Armor01
   m_EditorClassIdentifier: 
-  itemId: Wand01
-  displayName: "\u6CD5\u6756"
-  icon: {fileID: 21300000, guid: 2286c05d2057015419d03332afd1ee5c, type: 3}
-  description: "\u4E00\u628A\u666E\u901A\u7684\u6728\u6756\n\u6B66\u5668\u719F\u7EC3\u9879:\u624B\u6756\n1d6
-    \u949D\u51FB\u4F24\u5BB3"
+  itemId: Armor01
+  displayName: "\u9CDE\u7532"
+  icon: {fileID: 21300000, guid: 4409f5fa99ba3c448a186d4e7393da96, type: 3}
+  description: "\u4E00\u4EF6\u8001\u65E7\u7684\u9CDE\u7532\n\u62A4\u7532\u719F\u7EC3\u9879:\u4E2D\u7532\nAC:14"
   isEquippable: 1
   shapeCoords:
   - {x: 0, y: 0}
   - {x: 0, y: 1}
   - {x: 0, y: 2}
+  - {x: 1, y: 0}
+  - {x: 1, y: 1}
+  - {x: 1, y: 2}
   canRotate: 1
-  isWeapon: 1
+  isWeapon: 0
   isFinesse: 0
-  weaponHitAbilityMode: 0
+  weaponHitAbilityMode: 2
   weaponDamageDice:
     diceCount: 1
     diceSize: 6
@@ -33,12 +35,12 @@ MonoBehaviour:
   weaponDamageType: 0
   useSeparateDamageAbility: 0
   weaponDamageAbilityMode: 2
-  isArmor: 0
-  armorType: 0
-  armorBaseAC: 11
+  isArmor: 1
+  armorType: 1
+  armorBaseAC: 14
   isShield: 0
   shieldACBonus: 2
-  appearanceSkinID: B_weapon_w01
-  appearanceSlot: 0
+  appearanceSkinID: 
+  appearanceSlot: 2
   appearanceBehavior: 0
   modifiers: []

@@ -32,7 +32,8 @@ MonoBehaviour:
   pointBuyCha: 0
   defaultWeaponSkinID: 
   defaultArmorSkinID: 
-  initialEquipment: []
+  initialEquipment:
+  - {fileID: 11400000, guid: a4f9808de77606c4d875619eb85b7632, type: 2}
   hitDie: 7
   baseArmorClass: 12
   immunities: 
@@ -40,7 +41,7 @@ MonoBehaviour:
   vulnerabilities: 
   primarySpellAbility: 0
   defaultAttackType: 0
-  defaultCantrip: {fileID: 11400000, guid: c53985f0702238343877f2903258c59d, type: 2}
+  defaultCantrip: {fileID: 0}
   unarmedDamageDice:
     diceCount: 1
     diceSize: 6

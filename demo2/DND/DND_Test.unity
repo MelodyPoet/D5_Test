@@ -512,6 +512,7 @@ MonoBehaviour:
   positioningPriority: 0.6
   offensivePriority: 0.7
   defensivePriority: 0.5
+  attackMarkerPrefab: {fileID: 967143278094622720, guid: 7bde9cf0e9225f94aa0a6003a397ebc4, type: 3}
   initiativeOrder: []
   currentTurnIndex: 0
   isBattleActive: 0

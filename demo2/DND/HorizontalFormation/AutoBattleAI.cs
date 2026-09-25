@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using demo2.DND.InventoryTetris; // for ItemBaseSO / CharacterEquipment / EquipmentSlot
 
 namespace demo2.DND.HorizontalFormation
 {
@@ -20,6 +21,10 @@ namespace demo2.DND.HorizontalFormation
         [Range(0, 1)] public float offensivePriority = 0.7f;
         [Range(0, 1)] public float defensivePriority = 0.5f;
 
+        [Header("攻击范围标记")]
+        [Tooltip("可攻击目标脚下的红圈 prefab（由策划制作并拖入此字段）")]
+        public GameObject attackMarkerPrefab;
+
         [Header("先攻系统")]
         public List<InitiativeEntry> initiativeOrder = new List<InitiativeEntry>();
         public int currentTurnIndex;
@@ -27,6 +32,9 @@ namespace demo2.DND.HorizontalFormation
 
         private bool isProcessingTurn;
         private float turnTimer;
+
+        // 当前行动者显示的攻击范围红圈实例（行动结束清除）
+        private List<GameObject> activeMarkers = new List<GameObject>();
 
         [System.Serializable]
         private class BattleAction
@@ -181,6 +189,11 @@ namespace demo2.DND.HorizontalFormation
                 return;
             }
 
+            // 显示当前攻击者按其攻击方式（武器/法术）可命中的敌方目标红圈；本次行动结束清除
+            var wrappedOnComplete = onComplete;
+            onComplete = () => { ClearAttackMarkers(); wrappedOnComplete?.Invoke(); };
+            ShowAttackMarkers(attacker);
+
             Debug.Log("[DEBUG] ========== ExecuteBattleActionEvent 开始 ==========");
             Debug.Log($"[DEBUG] 攻击者: {attacker.GetDisplayName()}, 目标: {action.target.GetDisplayName()}");
 
@@ -196,7 +209,7 @@ namespace demo2.DND.HorizontalFormation
                 }
                 else
                 {
-                    string atkTypePreview = IsCharacterInFrontRow(attacker) ? "近战攻击" : "远程攻击";
+                    string atkTypePreview = GetAttackStylePreview(attacker);
                     GameLog.LogAction(attacker.GetDisplayName(), $"对 {action.target.GetDisplayName()} 发动{atkTypePreview}");
                 }
             }
@@ -212,14 +225,15 @@ namespace demo2.DND.HorizontalFormation
                 try { GameLog.LogAction("系统", $"{attacker.GetDisplayName()} 缺少动画适配器，直接进行命中与伤害结算"); }
                 catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录缺少动画适配器日志失败: {ex.Message}"); }
 
-                bool assumeMelee = IsCharacterInFrontRow(attacker);
+                bool assumeMelee = IsMeleeStyle(GetAttackStyle(attacker));
                 ProcessAttackHit(attacker, action.target, assumeMelee);
                 onComplete?.Invoke();
                 return;
             }
 
-            bool isMeleeAttack = IsCharacterInFrontRow(attacker);
-            Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击类型判断结果: {(isMeleeAttack ? "近战攻击" : "远程攻击")}");
+            AttackStyle style = GetAttackStyle(attacker);
+            bool isMeleeAttack = IsMeleeStyle(style);
+            Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击类型判断结果(按武器/法术): {GetAttackStylePreview(attacker)}");
 
             if (isMeleeAttack)
             {
@@ -369,6 +383,189 @@ namespace demo2.DND.HorizontalFormation
             Debug.Log($"[DEBUG] {character.GetDisplayName()} 使用默认判断：前排（近战）");
             return true;
         }
+
+        #region 攻击方式解析与可攻击范围（B/C：基于武器/法术，与排位无关）
+        /// <summary>
+        /// 统一攻击方式解析：法术优先；否则读主手武器的 WeaponType；无武器视为徒手近战。
+        /// 玩家与敌人通用（都按各自持有的武器或模板法术能力走，不再按前/后排判定）。
+        /// </summary>
+        private AttackStyle GetAttackStyle(CharacterStats attacker)
+        {
+            if (attacker == null) return AttackStyle.Melee;
+
+            // 法术优先（需模板声明法术攻击）；其余完全按"主手武器 WeaponType"判定，
+            // 不得因 template 为空而把持远程武器的单位误判为近战（见文档 268：按持有武器/模板区分）。
+            if (attacker.template != null && attacker.template.defaultAttackType == DefaultAttackType.Spell) return AttackStyle.Spell;
+
+            var weapon = GetMainHandWeapon(attacker);
+            if (weapon != null)
+            {
+                switch (weapon.weaponType)
+                {
+                    case WeaponType.Ranged: return AttackStyle.Ranged;
+                    case WeaponType.Reach:  return AttackStyle.Reach;
+                    default:                return AttackStyle.Melee;
+                }
+            }
+            return AttackStyle.Melee; // 徒手
+        }
+
+        private bool IsMeleeStyle(AttackStyle style)
+        {
+            return style == AttackStyle.Melee || style == AttackStyle.Reach;
+        }
+
+        private string GetAttackStylePreview(CharacterStats attacker)
+        {
+            switch (GetAttackStyle(attacker))
+            {
+                case AttackStyle.Spell:  return "施放法术";
+                case AttackStyle.Ranged: return "远程攻击";
+                case AttackStyle.Reach:  return "长触及攻击";
+                default:                return "近战攻击";
+            }
+        }
+
+        private ItemBaseSO GetMainHandWeapon(CharacterStats c)
+        {
+            if (c == null) return null;
+            var eq = c.GetComponent<CharacterEquipment>()
+                      ?? c.GetComponentInParent<CharacterEquipment>()
+                      ?? c.GetComponentInChildren<CharacterEquipment>(true);
+            var inst = eq != null ? eq.GetEquipped(EquipmentSlot.MainHand) : null;
+            return inst != null ? inst.data : null;
+        }
+
+        /// <summary>
+        /// 由 BattlePositionComponent.currentPosition 还原文档的三层纵深（Front=0 / Middle=1 / Back=2）。
+        /// 代码中 Middle 对应 *BackCenter（索引4/10），其余 *BackLeft/Right 为 Back。
+        /// </summary>
+        private int GetDepthTier(CharacterStats c)
+        {
+            var pc = c != null ? c.GetComponent<BattlePositionComponent>() : null;
+            if (pc == null) return 0;
+            switch (pc.currentPosition)
+            {
+                case HorizontalPosition.PlayerFrontLeft:
+                case HorizontalPosition.PlayerFrontCenter:
+                case HorizontalPosition.PlayerFrontRight:
+                case HorizontalPosition.EnemyFrontLeft:
+                case HorizontalPosition.EnemyFrontCenter:
+                case HorizontalPosition.EnemyFrontRight:
+                    return 0;
+                case HorizontalPosition.PlayerBackCenter:
+                case HorizontalPosition.EnemyBackCenter:
+                    return 1;
+                default:
+                    return 2;
+            }
+        }
+
+        /// <summary>
+        /// 按攻击方式与纵深层级计算当前攻击者可以攻击到的敌方目标列表。
+        /// 近战：纵深差<=1；长触及：<=2；远程/法术：任意（全图）。
+        /// </summary>
+        private List<CharacterStats> ComputeAttackableTargets(CharacterStats attacker)
+        {
+            var result = new List<CharacterStats>();
+            if (attacker == null) return result;
+            AttackStyle style = GetAttackStyle(attacker);
+            int atkTier = GetDepthTier(attacker);
+            int maxDiff = style == AttackStyle.Melee ? 1 : (style == AttackStyle.Reach ? 2 : 99);
+
+            // 从阵型管理器读取当前波次实际生成且存活的敌方单位（即真实存在的敌人 prefab 实例），
+            // 红圈只标在这些敌人 prefab 脚下，而不是固定在阵型槽位上。
+            BattleSide enemySide = (attacker.battleSide == BattleSide.Player) ? BattleSide.Enemy : BattleSide.Player;
+            var manager = FindObjectOfType<HorizontalBattleFormationManager>();
+            var enemies = manager != null ? manager.GetAliveUnits(enemySide) : new List<CharacterStats>();
+            foreach (var c in enemies)
+            {
+                if (c == null || c == attacker) continue;
+                if (Mathf.Abs(GetDepthTier(c) - atkTier) <= maxDiff) result.Add(c);
+            }
+            return result;
+        }
+
+        private void ShowAttackMarkers(CharacterStats attacker)
+        {
+            ClearAttackMarkers();
+            if (attackMarkerPrefab == null)
+            {
+                Debug.LogWarning("[AutoBattleAI] attackMarkerPrefab 未配置，跳过红圈显示");
+                return;
+            }
+            var targets = ComputeAttackableTargets(attacker);
+            var manager = FindObjectOfType<HorizontalBattleFormationManager>();
+            foreach (var t in targets)
+            {
+                // 首选：目标 prefab 下统一的 "Target" 空挂点（已统一添加，正好是 Spine 网格脚底坐标）。
+                // 兜底：场景 Spawn 位置点 -> 目标视觉中心地面投影。
+                Vector3 pos;
+                var targetAnchor = FindChildByName(t.transform, "Target");
+                if (targetAnchor != null)
+                {
+                    pos = targetAnchor.position;
+                }
+                else if (manager != null)
+                {
+                    var spawn = manager.GetSpawnPointForUnit(t);
+                    pos = spawn != null ? spawn.position : GetUnitGroundPosition(t.transform);
+                    pos.y = 0.05f; // 贴地，避免与地面 z-fighting
+                }
+                else
+                {
+                    pos = GetUnitGroundPosition(t.transform);
+                }
+                var m = Instantiate(attackMarkerPrefab, pos, Quaternion.identity);
+                activeMarkers.Add(m);
+            }
+            Debug.Log($"[AutoBattleAI] {attacker.GetDisplayName()} 攻击方式={GetAttackStylePreview(attacker)}，红圈标记可攻击目标 {targets.Count} 个");
+        }
+
+        /// <summary>
+        /// 递归查找名为 name 的子节点（含自身），找不到返回 null。
+        /// 用于在目标 prefab 下定位统一的 "Target" 空挂点（Spine 网格脚底坐标）。
+        /// </summary>
+        private static Transform FindChildByName(Transform root, string name)
+        {
+            if (root == null) return null;
+            if (root.name == name) return root;
+            foreach (Transform child in root)
+            {
+                var found = FindChildByName(child, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 计算一个单位 prefab 的"脚下地面位置"：用所有渲染器包围盒求视觉中心，
+        /// 取其中 x/z，y 固定贴地（0.05）。这样红圈始终落在真实模型脚下，
+        /// 不受根 transform / 网格局部偏移影响。
+        /// </summary>
+        private Vector3 GetUnitGroundPosition(Transform t)
+        {
+            if (t == null) return Vector3.zero;
+            var renderers = t.GetComponentsInChildren<Renderer>();
+            if (renderers != null && renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                if (b.size.sqrMagnitude > 0f)
+                    return new Vector3(b.center.x, 0.05f, b.center.z);
+            }
+            // 回退：无渲染器时直接用根坐标贴地
+            Vector3 p = t.position;
+            p.y = 0.05f;
+            return p;
+        }
+
+        private void ClearAttackMarkers()
+        {
+            foreach (var m in activeMarkers) if (m != null) Destroy(m);
+            activeMarkers.Clear();
+        }
+        #endregion
 
         private InitiativeEntry GetCurrentInitiativeEntry()
         {
