@@ -176,6 +176,9 @@ namespace demo2.DND.HorizontalFormation
             }
             else
             {
+                // 228：当前攻击方式威胁范围内无目标 => 本轮无法执行攻击动作，跳过并提示玩家。
+                try { GameLog.LogAction(character.GetDisplayName(), "当前攻击方式无法执行，跳过本轮行动"); }
+                catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录无法攻击日志失败: {ex.Message}"); }
                 currentEntry.MarkAsActed();
                 AdvanceToNextTurn();
             }
@@ -297,8 +300,20 @@ namespace demo2.DND.HorizontalFormation
             int advantageFlag = 0;
             if (target.HasStatusEffect(StatusEffectType.Unconscious))
             {
+                // 攻击倒地/昏迷目标：近战获优势、远程/法术获劣势（既有规则，优先级最高）
                 advantageFlag = isMeleeAttack ? 1 : -1;
                 Debug.Log($"[DEBUG] 目标处于昏迷：设置攻击掷骰优势标志 = {advantageFlag} (1=优势, -1=劣势)");
+            }
+            else
+            {
+                // D 项：按攻击方式 + 纵深距离计算优势/劣势（文档 222/224/270/272/273）
+                AttackStyle style = GetAttackStyle(attacker);
+                int dist = GetDepthTier(attacker) + GetDepthTier(target) + 1; // 与 ComputeAttackableTargets 同口径
+                advantageFlag = ComputeAttackModifiers(attacker, target, style, dist);
+                if (advantageFlag != 0)
+                {
+                    Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击 {target.GetDisplayName()}: 距离={dist}, 攻击方式={GetAttackStylePreview(attacker)}, 目标方式={GetAttackStylePreview(target)} => {(advantageFlag > 0 ? "优势(2d20取高)" : "劣势(2d20取低)")}");
+                }
             }
 
             var attackResult = HorizontalCombatRules.ResolveAttack(attacker, target, advantageFlag, isMeleeAttack);
@@ -407,6 +422,9 @@ namespace demo2.DND.HorizontalFormation
                     default:                return AttackStyle.Melee;
                 }
             }
+            // A 项规则：无武器 = 徒手近战，攻击模式等同近战武器（不可像长触及/远程跨位攻击）。
+            // 命中/伤害一律走 template 的 unarmedDamage* 参数（见 HorizontalCombatRules）。
+            // 不引入 intrinsicAttackType：徒手恒为 Melee，由 GetDepthTier 威胁范围限制为邻接1纵深。
             return AttackStyle.Melee; // 徒手
         }
 
@@ -463,15 +481,20 @@ namespace demo2.DND.HorizontalFormation
 
         /// <summary>
         /// 按攻击方式与纵深层级计算当前攻击者可以攻击到的敌方目标列表。
-        /// 近战：纵深差<=1；长触及：<=2；远程/法术：任意（全图）。
+        /// 纵深距离 = 攻击者纵深 + 目标纵深 + 1（敌我前排贴面邻接，间隔 1 个纵深单位），
+        /// 纵深取值：前排=0 / 中场=1 / 后排=2（见 GetDepthTier 对文档三层模型的还原）。
+        /// 威胁上限（纵深距离）：近战 <=2；长触及 <=3；远程/法术 = 全图。
+        /// 例：前排近战(0)→敌前排(0)=1、敌中场(1)=2 命中，敌后排(2)=3 超出；
+        ///     中场近战(1)→敌前排(0)=2 命中，其余超出；后排近战(2)→无目标（按 228 跳过攻击）。
         /// </summary>
         private List<CharacterStats> ComputeAttackableTargets(CharacterStats attacker)
         {
             var result = new List<CharacterStats>();
             if (attacker == null) return result;
             AttackStyle style = GetAttackStyle(attacker);
-            int atkTier = GetDepthTier(attacker);
-            int maxDiff = style == AttackStyle.Melee ? 1 : (style == AttackStyle.Reach ? 2 : 99);
+            int atkDepth = GetDepthTier(attacker);
+            // 威胁范围（纵深距离上限）：近战<=2、长触及<=3、远程/法术全图。
+            int maxDist = style == AttackStyle.Melee ? 2 : (style == AttackStyle.Reach ? 3 : 99);
 
             // 从阵型管理器读取当前波次实际生成且存活的敌方单位（即真实存在的敌人 prefab 实例），
             // 红圈只标在这些敌人 prefab 脚下，而不是固定在阵型槽位上。
@@ -481,9 +504,46 @@ namespace demo2.DND.HorizontalFormation
             foreach (var c in enemies)
             {
                 if (c == null || c == attacker) continue;
-                if (Mathf.Abs(GetDepthTier(c) - atkTier) <= maxDiff) result.Add(c);
+                int dist = atkDepth + GetDepthTier(c) + 1; // 敌我前排贴面，间隔 1
+                if (dist <= maxDist) result.Add(c);
             }
             return result;
+        }
+
+        /// <summary>
+        /// D 项：优势/劣势判定（文档 222/224/270/272/273）。
+        /// 返回 +1=优势 / -1=劣势 / 0=正常；优势与劣势同时成立时按 273 抵消为 0。
+        ///  - 远程/法术攻击者：dist<=1（抵近邻接,272）或 dist>4（超射程,270/222） => 劣势(-1)
+        ///  - 近战/长触及攻击者：目标为远程/法术且 dist<=武器威胁上限(近战2/长触及3,224/222镜像) => 优势(+1)
+        /// 说明：两规则按“攻击者自身方式”分别判定，不会并存；与 228 的“无法攻击跳过”解耦
+        ///       （无法攻击指威胁范围内无目标，而非劣势——劣势仍可攻击但掷骰取低）。
+        /// </summary>
+        private int ComputeAttackModifiers(CharacterStats attacker, CharacterStats target, AttackStyle style, int dist)
+        {
+            bool isRangedOrSpell = style == AttackStyle.Ranged || style == AttackStyle.Spell;
+            bool isMeleeOrReach  = style == AttackStyle.Melee || style == AttackStyle.Reach;
+
+            bool hasAdvantage = false;
+            bool hasDisadvantage = false;
+
+            if (isRangedOrSpell)
+            {
+                // 远程/法术：抵近邻接(<=1) 或 超射程(>4) => 劣势
+                if (dist <= 1 || dist > 4) hasDisadvantage = true;
+            }
+            else if (isMeleeOrReach)
+            {
+                // 近战/长触及：目标为远程/法术且在其威胁范围内 => 优势
+                AttackStyle targetStyle = GetAttackStyle(target);
+                bool targetRangedOrSpell = targetStyle == AttackStyle.Ranged || targetStyle == AttackStyle.Spell;
+                int maxDist = style == AttackStyle.Melee ? 2 : 3; // 长触及=3
+                if (targetRangedOrSpell && dist <= maxDist) hasAdvantage = true;
+            }
+
+            if (hasAdvantage && hasDisadvantage) return 0; // 273 抵消
+            if (hasAdvantage) return 1;
+            if (hasDisadvantage) return -1;
+            return 0;
         }
 
         private void ShowAttackMarkers(CharacterStats attacker)
@@ -663,24 +723,16 @@ namespace demo2.DND.HorizontalFormation
 
         private CharacterStats FindBestTarget(CharacterStats actor)
         {
-            var all = FindObjectsOfType<CharacterStats>();
-            if (all == null || all.Length == 0) return null;
-
-            var livingOpponents = all
-                .Where(c => c != null && c.battleSide != actor.battleSide && c.CurrentHitPoints > 0)
-                .ToList();
-
-            var downedOpponents = all
-                .Where(c => c != null && c.battleSide != actor.battleSide && c.CurrentHitPoints <= 0 && c.HasStatusEffect(StatusEffectType.Unconscious))
-                .ToList();
-
-            List<CharacterStats> pool = livingOpponents.Count > 0 ? livingOpponents : downedOpponents;
-            if (pool.Count == 0) return null;
+            // 只从“当前攻击方式威胁范围内”的敌方目标中挑选（D/228：超出威胁范围视为无法攻击，本轮跳过）。
+            // 与 ShowAttackMarkers / ComputeAttackableTargets 同口径，保证红圈、可攻击判定、实际攻击三者一致。
+            var inRange = ComputeAttackableTargets(actor);
+            if (inRange == null || inRange.Count == 0) return null;
 
             CharacterStats best = null;
             float bestDist = float.MaxValue;
-            foreach (var c in pool)
+            foreach (var c in inRange)
             {
+                if (c == null) continue;
                 float d = Vector3.Distance(actor.transform.position, c.transform.position);
                 if (d < bestDist)
                 {

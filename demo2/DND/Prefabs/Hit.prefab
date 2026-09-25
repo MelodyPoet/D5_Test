@@ -11,9 +11,8 @@ GameObject:
   - component: {fileID: 3940785875722763578}
   - component: {fileID: 8803320703366448084}
   - component: {fileID: 1343262874982463540}
-  - component: {fileID: 1574312358569894305}
   m_Layer: 0
-  m_Name: FireSpark
+  m_Name: Hit
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1436,7 +1435,7 @@ ParticleSystem:
         m_NumAlphaKeys: 4
   UVModule:
     serializedVersion: 2
-    enabled: 0
+    enabled: 1
     mode: 0
     timeMode: 0
     fps: 30
@@ -1547,8 +1546,8 @@ ParticleSystem:
         m_PostInfinity: 2
         m_RotationOrder: 4
     speedRange: {x: 0, y: 1}
-    tilesX: 1
-    tilesY: 1
+    tilesX: 2
+    tilesY: 2
     animationType: 0
     rowIndex: 0
     cycles: 1
@@ -4845,7 +4844,7 @@ ParticleSystemRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2d21fd6b42fad9949bf835153c6f23f8, type: 2}
+  - {fileID: 2100000, guid: 88ab3a188dddfff4ba88140588f10f76, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4898,19 +4897,3 @@ ParticleSystemRenderer:
   m_MeshWeighting2: 1
   m_MeshWeighting3: 1
   m_MaskInteraction: 0
---- !u!114 &1574312358569894305
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4735879980663109856}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 42f3bd2b40ba7f44b86036c7342f130e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  speed: 20
-  destroyDelay: 0.05
-  hitEffectPrefab: {fileID: 4735879980663109856, guid: 59bd910907e048546ab57237fbc40b4f, type: 3}
-  faceMovement: 1
