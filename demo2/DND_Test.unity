@@ -508,16 +508,13 @@ MonoBehaviour:
   enableAutoBattle: 1
   decisionDelay: 1
   showAIThoughts: 1
-  healingPriority: 0.8
-  positioningPriority: 0.6
-  offensivePriority: 0.7
-  defensivePriority: 0.5
   attackMarkerPrefab: {fileID: 967143278094622720, guid: 7bde9cf0e9225f94aa0a6003a397ebc4, type: 3}
   initiativeOrder: []
   currentTurnIndex: 0
-  oaDelayAttackToReaction: 0.2
-  oaDelayReactionToResolve: 0.3
-  oaDelayResolveToNext: 0.3
+  oaReactionLead: 1.4
+  oaReactionToImpact: 2.4
+  oaResolveToNext: 0.6
+  oaAttackAnimDuration: 1
   isBattleActive: 0
 --- !u!4 &164080473
 Transform:
@@ -976,11 +973,12 @@ RectTransform:
   - {fileID: 677461884}
   - {fileID: 851680073}
   - {fileID: 986898199}
+  - {fileID: 1764471986}
   m_Father: {fileID: 1604332383}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -526, y: -300}
+  m_AnchoredPosition: {x: -508, y: -286}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &311070948
@@ -1677,6 +1675,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   damageNumberPrefab: {fileID: 3627337939812853302, guid: 962f4bc2fd1425440bce62b9d09a0228, type: 3}
   missPrefab: {fileID: 3627337939812853302, guid: f2e02bd81f2cde54c9975b71f2619d46, type: 3}
+  oaTextPrefab: {fileID: 3627337939812853302, guid: 42b745fecb0766a4c926ba01f002a3c4, type: 3}
   uiCanvas: {fileID: 1641010537}
   headOffset: {x: 0, y: 2, z: 0}
   displayDuration: 2
@@ -4142,7 +4141,6 @@ RectTransform:
   - {fileID: 2036385660}
   - {fileID: 1769203472}
   - {fileID: 874020768}
-  - {fileID: 1764471986}
   - {fileID: 1604332383}
   - {fileID: 289197163}
   m_Father: {fileID: 0}
@@ -4425,16 +4423,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1764471985}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1641010538}
+  m_Father: {fileID: 311070947}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -527.1, y: -350}
+  m_AnchoredPosition: {x: -1.1000366, y: -50}
   m_SizeDelta: {x: 60, y: 60}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1764471987

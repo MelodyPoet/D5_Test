@@ -34,7 +34,7 @@ MonoBehaviour:
   defaultArmorSkinID: 
   initialEquipment:
   - {fileID: 11400000, guid: 63b9235b68303c64a9e3ea0db3e33ad8, type: 2}
-  hitDie: 6
+  hitDie: 100
   baseArmorClass: 10
   immunities: 
   resistances: 

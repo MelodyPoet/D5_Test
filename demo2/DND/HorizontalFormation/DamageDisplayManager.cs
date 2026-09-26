@@ -19,6 +19,8 @@ namespace demo2.DND.HorizontalFormation
         public GameObject damageNumberPrefab;
         [Tooltip("MISS显示预制体")]
         public GameObject missPrefab;
+        [Tooltip("借机攻击提示预制体（在发动借机攻击的角色头顶冒出“借机攻击”字样）")]
+        public GameObject oaTextPrefab;
 
         [Header("UI设置")]
         [Tooltip("UI画布 - 伤害数字显示的画布")]
@@ -188,6 +190,66 @@ namespace demo2.DND.HorizontalFormation
 
             // 使用DOTween播放动画
             PlayDamageAnimationDOTween(missObj, textComponent);
+        }
+
+        /// <summary>
+        /// 显示借机攻击提示：在发动借机攻击的角色头顶冒出"借机攻击"字样。
+        /// 复用统一的头部坐标转换与 DOTween 上浮/淡出动画，颜色用醒目橙黄与伤害/MISS 区分。
+        /// </summary>
+        public void ShowOpportunityAttack(Transform character)
+        {
+            if (character == null)
+            {
+                Debug.LogError("DamageDisplayManager.ShowOpportunityAttack: character参数为空");
+                return;
+            }
+
+            if (uiCanvas == null)
+            {
+                Debug.LogError("DamageDisplayManager.ShowOpportunityAttack: uiCanvas未设置，请在Inspector中拖入Canvas");
+                return;
+            }
+
+            GameObject prefabToUse = oaTextPrefab != null ? oaTextPrefab : damageNumberPrefab;
+            if (prefabToUse == null)
+            {
+                Debug.LogError("DamageDisplayManager: 缺少 OA 预制体配置，请在Inspector中配置 oaTextPrefab 或 damageNumberPrefab");
+                return;
+            }
+
+            GameObject oaObj = CreateDamageUI(character, prefabToUse);
+            if (oaObj == null) return;
+
+            // 设置文本与颜色（若预制体未自带则统一填"借机攻击"；无论 Text 或 TMP 都兼容）
+            Text textComponent = oaObj.GetComponentInChildren<Text>(true);
+            Color oaColor = new Color(1f, 0.82f, 0.2f); // 醒目橙黄
+
+            if (textComponent != null)
+            {
+                string cur = textComponent.text;
+                if (string.IsNullOrEmpty(cur) || cur == "0" || cur == "Text" || cur == "MISS")
+                    textComponent.text = "借机攻击";
+                textComponent.color = oaColor;
+            }
+            else
+            {
+                var tmpType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro");
+                if (tmpType != null)
+                {
+                    var tmpComp = oaObj.GetComponentInChildren(tmpType, true);
+                    if (tmpComp != null)
+                    {
+                        var textProp = tmpType.GetProperty("text");
+                        string cur = textProp?.GetValue(tmpComp) as string;
+                        if (string.IsNullOrEmpty(cur) || cur == "Text" || cur == "MISS")
+                            textProp?.SetValue(tmpComp, "借机攻击");
+                        var colorProp = tmpType.GetProperty("color");
+                        colorProp?.SetValue(tmpComp, oaColor);
+                    }
+                }
+            }
+
+            PlayDamageAnimationDOTween(oaObj, textComponent);
         }
 
         /// <summary>

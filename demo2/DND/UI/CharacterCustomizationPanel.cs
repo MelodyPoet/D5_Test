@@ -625,12 +625,10 @@ namespace demo2.DND.UI
 
             Debug.Log($"[CharacterCustomizationPanel] 选择职业: {template.characterClass}");
 
-            // 如果面板还没初始化（首次选择），先初始化
-            if (pointBuy == null)
-            {
-                InitializePointBuyPanel();
-                return;
-            }
+            // 首帧面板尚未初始化（pointBuy 仍为 null）时，仅记录所选职业即返回，
+            // 不在此处初始化/加载职业默认——统一交由 OnEnable 的 InitializePointBuyPanel 处理，
+            // 避免两处重复初始化导致事件被订阅两次。
+            if (pointBuy == null) return;
 
             // 重置购点系统并加载职业推荐属性
             pointBuy.Reset();
@@ -729,7 +727,12 @@ namespace demo2.DND.UI
                     pointBuy.ApplyRacialBonus(PointBuySystem.RaceType.Human);
             }
 
-            // 订阅购点事件
+            // 订阅购点事件（先退订再订阅，保证幂等）：
+            // 本方法可能被 OnEnable(显式) 与 SelectClass(首次 pointBuy 为 null 时内部) 重复调用，
+            // 若只 += 会导致三个事件各被订阅两次、回调触发两遍。先 -= 可彻底避免重复订阅。
+            pointBuy.OnStatChanged -= OnPointBuyStatChanged;
+            pointBuy.OnPointsChanged -= OnPointBuyPointsChanged;
+            pointBuy.OnRacialBonusChanged -= OnPointBuyRacialBonusChanged;
             pointBuy.OnStatChanged += OnPointBuyStatChanged;
             pointBuy.OnPointsChanged += OnPointBuyPointsChanged;
             pointBuy.OnRacialBonusChanged += OnPointBuyRacialBonusChanged;

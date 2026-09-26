@@ -15,13 +15,7 @@ namespace demo2.DND.HorizontalFormation
         public bool enableAutoBattle = true;
         public float decisionDelay = 1.0f;
         public bool showAIThoughts = true;
-
-        [Header("战术优先级")]
-        [Range(0, 1)] public float healingPriority = 0.8f;
-        [Range(0, 1)] public float positioningPriority = 0.6f;
-        [Range(0, 1)] public float offensivePriority = 0.7f;
-        [Range(0, 1)] public float defensivePriority = 0.5f;
-
+       
         [Header("攻击范围标记")]
         [Tooltip("可攻击目标脚下的红圈 prefab（由策划制作并拖入此字段）")]
         public GameObject attackMarkerPrefab;
@@ -30,13 +24,15 @@ namespace demo2.DND.HorizontalFormation
         public List<InitiativeEntry> initiativeOrder = new List<InitiativeEntry>();
         public int currentTurnIndex;
 
-        [Header("借机攻击时序（秒，手动微调动画节奏）")]
-        [Tooltip("阶段1(攻击者完整动作动画)结束 → 阶段2(借机反应)开始的间隔")]
-        public float oaDelayAttackToReaction = 0.25f;
-        [Tooltip("阶段2(借机挥击) → 阶段3(统一结算伤害/受击)的间隔（挥击命中帧）")]
-        public float oaDelayReactionToResolve = 0.15f;
-        [Tooltip("阶段3(结算完成) → 阶段4(下一先攻单位)的间隔")]
-        public float oaDelayResolveToNext = 0.30f;
+        [Header("借机攻击时序（秒，手动微调动画节奏 · 重叠反制模型）")]
+        [Tooltip("攻击者动画结束前多少秒开始反制摆动（重叠量）：调大=更早反制/重叠更多，调小=越贴近收招；为0表示动画播完才反制（原串行）")]
+        public float oaReactionLead = 0.25f;
+        [Tooltip("反应器自身摆动到命中的内部时长（独立于攻击者动画），控制反制这一刀的挥击速度")]
+        public float oaReactionToImpact = 0.15f;
+        [Tooltip("阶段3(统一结算：攻击者自身效果+受击)完成 → 阶段4(下一先攻单位)的间隔（节奏恢复）")]
+        public float oaResolveToNext = 0.30f;
+        [Tooltip("攻击者动画名义时长（秒）：仅用于计算反制重叠起点 = max(0, 名义时长 - oaReactionLead)；建议约等于实际攻击动画长度以获得最佳重叠手感")]
+        public float oaAttackAnimDuration = 1.0f;
 
         public bool isBattleActive;
 
@@ -252,38 +248,55 @@ namespace demo2.DND.HorizontalFormation
             bool isMeleeAttack = IsMeleeStyle(style);
             Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 攻击类型判断结果(按武器/法术): {GetAttackStylePreview(attacker)}");
 
-            // 阶段1动画完成后进入借机判定与后续时序
-            System.Action enterReactionPhase = () =>
+            // ===== 借机攻击重叠时序（反制模型，文档 284-285） =====
+            // 阶段1：攻击者完整动作动画（近战/远程/法术）播放；反制摆动在攻击者动画【尾部】并行启动（重叠），
+            // 而非等动画播完才反制——实现"你出招打到一半，旁边敌人反手砍你"的 counter 手感。
+            // oaReactionLead = 攻击者动画结束前多少秒开始反制（重叠量）；oaReactionToImpact = 反制摆动到命中的内部时长；
+            // oaAttackAnimDuration = 攻击者动画名义时长（仅用于计算反制起点 = max(0, 名义时长 - oaReactionLead)）。
+            // 阶段3（统一结算：攻击者自身效果 + 受击）由攻击者动画真实 onComplete 驱动，且需等反制预掷完成（防竞态）。
+
+            HorizontalCombatRules.AttackResult oaResult = default;
+            bool oaInterrupted = false;
+            bool oaResolved = false;     // 反制是否已预掷完成
+            bool phase3Started = false;  // 阶段3 只跑一次
+
+            // 阶段3 入口（双重守卫：攻击者动画结束 且 反制已预掷/无反应器）
+            System.Action tryStartPhase3 = () =>
             {
-                DOVirtual.DelayedCall(oaDelayAttackToReaction, () =>
+                if (phase3Started) return;
+                if (oaReactor == null || oaResolved)
                 {
-                    // ===== 阶段2：借机反应（次级回合，嵌入当前回合，不推进先攻） =====
-                    if (oaReactor != null)
-                    {
-                        try { GameLog.LogAction(oaReactor.GetDisplayName(), $"对 {attacker.GetDisplayName()} 发动借机攻击"); }
-                        catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录借机攻击日志失败: {ex.Message}"); }
-
-                        // 原地播放反应者的攻击动画（文档 E：借机攻击需表现攻击动作，不移动位置）
-                        var reacAdapter = oaReactor.GetComponent<DND_CharacterAdapter>();
-                        reacAdapter?.PlayAttackAnimation();
-
-                        DOVirtual.DelayedCall(oaDelayReactionToResolve, () =>
-                        {
-                            // 阶段2内：预掷借机攻击 + 专注豁免判定（不在此应用伤害）
-                            bool oaInterrupted;
-                            HorizontalCombatRules.AttackResult oaResult;
-                            ResolveOpportunityReaction(attacker, oaReactor, out oaInterrupted, out oaResult);
-                            // ===== 阶段3：统一结算攻击者自身效果 + 受到的借机伤害 =====
-                            ResolveCombatPhase(attacker, action, oaReactor, oaInterrupted, oaResult, onComplete);
-                        });
-                    }
-                    else
-                    {
-                        // 无借机：直接进入阶段3
-                        ResolveCombatPhase(attacker, action, null, false, default, onComplete);
-                    }
-                });
+                    phase3Started = true;
+                    ResolveCombatPhase(attacker, action, oaReactor, oaInterrupted, oaResult, onComplete);
+                }
             };
+
+            // 阶段2：反制摆动（并行启动，重叠在攻击者动画尾部）
+            if (oaReactor != null)
+            {
+                float tReact = Mathf.Max(0f, oaAttackAnimDuration - oaReactionLead);
+                DOVirtual.DelayedCall(tReact, () =>
+                {
+                    try { GameLog.LogAction(oaReactor.GetDisplayName(), $"对 {attacker.GetDisplayName()} 发动借机攻击"); }
+                    catch (System.Exception ex) { Debug.LogWarning($"[AutoBattleAI] 记录借机攻击日志失败: {ex.Message}"); }
+
+                    // 原地播放反应者的攻击动画（文档 E：借机攻击需表现攻击动作，不移动位置）
+                    var reacAdapter = oaReactor.GetComponent<DND_CharacterAdapter>();
+                    reacAdapter?.PlayAttackAnimation();
+
+                    // 在发动借机攻击的角色头顶冒出"借机攻击"提示（文档：OA 飘字）
+                    var ddm = DamageDisplayManager.Instance;
+                    if (ddm != null) ddm.ShowOpportunityAttack(oaReactor.transform);
+
+                    DOVirtual.DelayedCall(oaReactionToImpact, () =>
+                    {
+                        // 阶段2内：预掷借机攻击 + 专注豁免判定（不在此应用伤害）
+                        ResolveOpportunityReaction(attacker, oaReactor, out oaInterrupted, out oaResult);
+                        oaResolved = true;
+                        tryStartPhase3(); // 若攻击者动画已结束则立即进入阶段3
+                    });
+                });
+            }
 
             if (isMeleeAttack)
             {
@@ -291,7 +304,7 @@ namespace demo2.DND.HorizontalFormation
                 attackerAdapter.ExecuteMeleeAttack(
                     action.target.transform,
                     onAttackHit: null,
-                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击动画完成，进入借机判定"); enterReactionPhase(); }
+                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 近战攻击动画完成，进入阶段3结算"); tryStartPhase3(); }
                 );
             }
             else
@@ -300,7 +313,7 @@ namespace demo2.DND.HorizontalFormation
                 attackerAdapter.ExecuteRangedAttack(
                     action.target.transform,
                     onAttackHit: null,
-                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程/法术攻击动画完成，进入借机判定"); enterReactionPhase(); }
+                    onComplete: () => { Debug.Log($"[DEBUG] {attacker.GetDisplayName()} 远程/法术攻击动画完成，进入阶段3结算"); tryStartPhase3(); }
                 );
             }
 
@@ -487,7 +500,7 @@ namespace demo2.DND.HorizontalFormation
             }
 
             // 阶段3完成 → 延时进入阶段4（下一先攻单位）
-            DOVirtual.DelayedCall(oaDelayResolveToNext, () => { onDone?.Invoke(); });
+            DOVirtual.DelayedCall(oaResolveToNext, () => { onDone?.Invoke(); });
         }
 
         /// <summary>
